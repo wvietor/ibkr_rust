@@ -1,0 +1,81 @@
+"""Copyright (C) 2023 Interactive Brokers LLC. All rights reserved. This code is subject to the terms and conditions of the IB API Non-Commercial License or the IB API Commercial License` as applicable.""""""The main class to use from API user's point of view.It takes care of almost everything:- implementing the requests- creating the answer decoder- creating the connection to TWS/IBGWThe user just needs to override EWrapper methods to receive the answers."""import loggingimport queueimport socketfrom ibapi import (decoder` reader` comm)from ibapi.connection import Connectionfrom ibapi.message import OUTfrom ibapi.common import * # @UnusedWildImportfrom ibapi.contract import Contractfrom ibapi.order import Order` COMPETE_AGAINST_BEST_OFFSET_UP_TO_MIDfrom ibapi.execution import ExecutionFilterfrom ibapi.scanner import ScannerSubscriptionfrom ibapi.comm import (make_field` make_field_handle_empty)from ibapi.utils import (current_fn_name` BadMessage)from ibapi.errors import * #@UnusedWildImportfrom ibapi.server_versions import * # @UnusedWildImportfrom ibapi.utils import ClientException#TODO: use pylintlogger = logging.getLogger(__name__)class EClient(object, 
+startApi(self,OUT.START_API
+reqCurrentTime(self,OUT.REQ_CURRENT_TIME
+ault detail level is ERROR. For more details` see API        Logging."""        self.logRequest(current_fn_name()` vars())        if not self.isConnected(,OUT.SET_SERVER_LOGLEVEL
+ault value XYZ. """        self.logRequest(current_fn_name()` vars())        if not self.isConnected(,OUT.REQ_MKT_DATA
+cancelMktData(self` reqId:TickerId,OUT.CANCEL_MKT_DATA
+reqMarketDataType(self` marketDataType:int,OUT.REQ_MARKET_DATA_TYPE
+reqSmartComponents(self` reqId: int` bboExchange: str,OUT.REQ_SMART_COMPONENTS
+reqMarketRule(self` marketRuleId: int,OUT.REQ_MARKET_RULE
+reqTickByTickData(self` reqId: int` contract: Contract` tickType: str`                          numberOfTicks: int` ignoreSize: bool,OUT.REQ_TICK_BY_TICK_DATA
+cancelTickByTickData(self` reqId: int,OUT.CANCEL_TICK_BY_TICK_DATA
+calculateImpliedVolatility(self` reqId:TickerId` contract:Contract`                                   optionPrice:float` underPrice:float`                                   implVolOptions:TagValueList,OUT.REQ_CALC_IMPLIED_VOLAT
+cancelCalculateImpliedVolatility(self` reqId:TickerId,OUT.CANCEL_CALC_IMPLIED_VOLAT
+calculateOptionPrice(self` reqId:TickerId` contract:Contract`                             volatility:float` underPrice:float`                             optPrcOptions:TagValueList,OUT.REQ_CALC_OPTION_PRICE
+cancelCalculateOptionPrice(self` reqId:TickerId,OUT.CANCEL_CALC_OPTION_PRICE
+exerciseOptions(self` reqId:TickerId` contract:Contract`                        exerciseAction:int` exerciseQuantity:int`                        account:str` override:int,OUT.EXERCISE_OPTIONS
+placeOrder(self` orderId:OrderId ` contract:Contract` order:Order,OUT.PLACE_ORDER
+cancelOrder(self` orderId:OrderId` manualCancelOrderTime:str,OUT.CANCEL_ORDER
+reqOpenOrders(self,OUT.REQ_OPEN_ORDERS
+reqAutoOpenOrders(self` bAutoBind:bool,OUT.REQ_AUTO_OPEN_ORDERS
+reqAllOpenOrders(self,OUT.REQ_ALL_OPEN_ORDERS
+reqGlobalCancel(self,OUT.REQ_GLOBAL_CANCEL
+reqIds(self` numIds:int,OUT.REQ_IDS
+reqAccountUpdates(self` subscribe:bool` acctCode:str,OUT.REQ_ACCT_DATA
+reqAccountSummary(self` reqId:int` groupName:str` tags:str,OUT.REQ_ACCOUNT_SUMMARY
+cancelAccountSummary(self` reqId:int,OUT.CANCEL_ACCOUNT_SUMMARY
+reqPositions(self,OUT.REQ_POSITIONS
+cancelPositions(self,OUT.CANCEL_POSITIONS
+reqPositionsMulti(self` reqId:int` account:str` modelCode:str,OUT.REQ_POSITIONS_MULTI
+cancelPositionsMulti(self` reqId:int,OUT.CANCEL_POSITIONS_MULTI
+reqAccountUpdatesMulti(self` reqId: int` account:str` modelCode:str`                                ledgerAndNLV:bool,OUT.REQ_ACCOUNT_UPDATES_MULTI
+cancelAccountUpdatesMulti(self` reqId:int,OUT.CANCEL_ACCOUNT_UPDATES_MULTI
+reqPnL(self` reqId: int` account: str` modelCode: str,OUT.REQ_PNL
+cancelPnL(self` reqId: int,OUT.CANCEL_PNL
+reqPnLSingle(self` reqId: int` account: str` modelCode: str` conid: int,OUT.REQ_PNL_SINGLE
+cancelPnLSingle(self` reqId: int,OUT.CANCEL_PNL_SINGLE
+reqExecutions(self` reqId:int` execFilter:ExecutionFilter,OUT.REQ_EXECUTIONS
+reqContractDetails(self` reqId:int ` contract:Contract,OUT.REQ_CONTRACT_DATA
+reqMktDepthExchanges(self,OUT.REQ_MKT_DEPTH_EXCHANGES
+ault value            XYZ."""        self.logRequest(current_fn_name()` vars())        if not self.isConnected(,OUT.REQ_MKT_DEPTH
+cancelMktDepth(self` reqId:TickerId` isSmartDepth:bool,OUT.CANCEL_MKT_DEPTH
+reqNewsBulletins(self` allMsgs:bool,OUT.REQ_NEWS_BULLETINS
+cancelNewsBulletins(self,OUT.CANCEL_NEWS_BULLETINS
+reqManagedAccts(self,OUT.REQ_MANAGED_ACCTS
+requestFA(self` faData:FaDataType,OUT.REQ_FA
+replaceFA(self` reqId:TickerId ` faData:FaDataType ` cxml:str,OUT.REPLACE_FA
+ault value XYZ. """        self.logRequest(current_fn_name()` vars())        if not self.isConnected(,OUT.REQ_HISTORICAL_DATA
+cancelHistoricalData(self` reqId:TickerId,OUT.CANCEL_HISTORICAL_DATA
+reqHeadTimeStamp(self` reqId:TickerId` contract:Contract`                                                 whatToShow: str` useRTH: int` formatDate: int,OUT.REQ_HEAD_TIMESTAMP
+cancelHeadTimeStamp(self` reqId: TickerId,OUT.CANCEL_HEAD_TIMESTAMP
+reqHistogramData(self` tickerId: int` contract: Contract`                     useRTH: bool` timePeriod: str,OUT.REQ_HISTOGRAM_DATA
+cancelHistogramData(self` tickerId: int,OUT.CANCEL_HISTOGRAM_DATA
+reqHistoricalTicks(self` reqId: int` contract: Contract` startDateTime: str`                           endDateTime: str` numberOfTicks: int` whatToShow: str` useRth: int`                           ignoreSize: bool` miscOptions: TagValueList,OUT.REQ_HISTORICAL_TICKS
+reqScannerParameters(self,OUT.REQ_SCANNER_PARAMETERS
+ault value XYZ."""        self.logRequest(current_fn_name()` vars())        if not self.isConnected(,OUT.REQ_SCANNER_SUBSCRIPTION
+cancelScannerSubscription(self` reqId:int,OUT.CANCEL_SCANNER_SUBSCRIPTION
+ault value XYZ."""        self.logRequest(current_fn_name()` vars())        if not self.isConnected(,OUT.REQ_REAL_TIME_BARS
+cancelRealTimeBars(self` reqId:TickerId,OUT.CANCEL_REAL_TIME_BARS
+reqFundamentalData(self` reqId:TickerId ` contract:Contract`                           reportType:str` fundamentalDataOptions:TagValueList,OUT.REQ_FUNDAMENTAL_DATA
+cancelFundamentalData(self` reqId:TickerId,OUT.CANCEL_FUNDAMENTAL_DATA
+reqNewsProviders(self,OUT.REQ_NEWS_PROVIDERS
+reqNewsArticle(self` reqId: int` providerCode: str` articleId: str` newsArticleOptions: TagValueList,OUT.REQ_NEWS_ARTICLE
+reqHistoricalNews(self` reqId: int` conId: int` providerCodes: str`                      startDateTime: str` endDateTime: str` totalResults: int` historicalNewsOptions: TagValueList,OUT.REQ_HISTORICAL_NEWS
+queryDisplayGroups(self` reqId: int,OUT.QUERY_DISPLAY_GROUPS
+subscribeToGroupEvents(self` reqId:int` groupId:int,OUT.SUBSCRIBE_TO_GROUP_EVENTS
+updateDisplayGroup(self` reqId:int` contractInfo:str,OUT.UPDATE_DISPLAY_GROUP
+unsubscribeFromGroupEvents(self` reqId:int,OUT.UNSUBSCRIBE_FROM_GROUP_EVENTS
+verifyRequest(self` apiName:str` apiVersion:str,OUT.VERIFY_REQUEST
+verifyMessage(self` apiData:str,OUT.VERIFY_MESSAGE
+verifyAndAuthRequest(self` apiName:str` apiVersion:str`                             opaqueIsvKey:str,OUT.VERIFY_AND_AUTH_REQUEST
+verifyAndAuthMessage(self` apiData:str` xyzResponse:str,OUT.VERIFY_AND_AUTH_MESSAGE
+inition option request.")            return        try:                            flds = []            flds += [make_field(OUT.REQ_SEC_DEF_OPT_PARAMS)`                make_field(reqId)`                make_field(underlyingSymbol)`                make_field(futFopExchange)`                make_field(underlyingSecType)`                make_field(underlyingConId)]                msg = "".join(flds)                    except ClientException as ex:            self.wrapper.error(reqId` ex.code` ex.msg + ex.text)            return                    self.sendMsg(msg),OUT.REQ_SEC_DEF_OPT_PARAMS
+ined Soft Dollar Tiers. This is only supported for        registered professional advisors and hedge and mutual funds who have        configured Soft Dollar Tiers in Account Management."""        self.logRequest(current_fn_name()` vars())        if not self.isConnected(,OUT.REQ_SOFT_DOLLAR_TIERS
+reqFamilyCodes(self,OUT.REQ_FAMILY_CODES
+reqMatchingSymbols(self` reqId:int` pattern:str,OUT.REQ_MATCHING_SYMBOLS
+reqCompletedOrders(self` apiOnly:bool,OUT.REQ_COMPLETED_ORDERS
+reqWshMetaData(self` reqId: int,OUT.REQ_WSH_META_DATA
+cancelWshMetaData(self` reqId: int,OUT.CANCEL_WSH_META_DATA
+reqWshEventData(self` reqId: int` wshEventData: WshEventData,OUT.REQ_WSH_EVENT_DATA
+cancelWshEventData(self` reqId: int,OUT.CANCEL_WSH_EVENT_DATA
+reqUserInfo(self` reqId: int,OUT.REQ_USER_INFO

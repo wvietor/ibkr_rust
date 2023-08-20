@@ -1,0 +1,124 @@
+﻿EClient (EWrapper wrapper)
+SetConnectOptions (string connectOptions)
+DisableUseV100Plus ()
+IsConnected ()
+startApi ()
+Close ()
+eDisconnect (bool resetState=true)
+reqCompletedOrders (bool apiOnly)
+cancelTickByTickData (int requestId)
+"reqTickByTickData (int requestId, Contract contract, string tickType, int numberOfTicks, bool ignoreSize)"
+cancelHistoricalData (int reqId)
+"calculateImpliedVolatility (int reqId, Contract contract, double optionPrice, double underPrice, List< TagValue > impliedVolatilityOptions)"
+"calculateOptionPrice (int reqId, Contract contract, double volatility, double underPrice, List< TagValue > optionPriceOptions)"
+cancelAccountSummary (int reqId)
+cancelCalculateImpliedVolatility (int reqId)
+cancelCalculateOptionPrice (int reqId)
+cancelFundamentalData (int reqId)
+cancelMktData (int tickerId)
+"cancelMktDepth (int tickerId, bool isSmartDepth)"
+cancelNewsBulletin ()
+"cancelOrder (int orderId, string manualOrderCancelTime)"
+cancelPositions ()
+cancelRealTimeBars (int tickerId)
+cancelScannerSubscription (int tickerId)
+"exerciseOptions (int tickerId, Contract contract, int exerciseAction, int exerciseQuantity, string account, int ovrd)"
+"placeOrder (int id, Contract contract, Order order)"
+"replaceFA (int reqId, int faDataType, string xml)"
+requestFA (int faDataType)
+"reqAccountSummary (int reqId, string group, string tags)"
+"reqAccountUpdates (bool subscribe, string acctCode)"
+reqAllOpenOrders ()
+reqAutoOpenOrders (bool autoBind)
+"reqContractDetails (int reqId, Contract contract)"
+reqCurrentTime ()
+"reqExecutions (int reqId, ExecutionFilter filter)"
+"reqFundamentalData (int reqId, Contract contract, string reportType, List< TagValue > fundamentalDataOptions)"
+reqGlobalCancel ()
+"reqHistoricalData (int tickerId, Contract contract, string endDateTime, string durationStr, string barSizeSetting, string whatToShow, int useRTH, int formatDate, bool keepUpToDate, List< TagValue > chartOptions)"
+reqIds (int numIds)
+reqManagedAccts ()
+"reqMktData (int tickerId, Contract contract, string genericTickList, bool snapshot, bool regulatorySnaphsot, List< TagValue > mktDataOptions)"
+reqMarketDataType (int marketDataType)
+"reqMarketDepth (int tickerId, Contract contract, int numRows, bool isSmartDepth, List< TagValue > mktDepthOptions)"
+reqNewsBulletins (bool allMessages)
+reqOpenOrders ()
+reqPositions ()
+"reqRealTimeBars (int tickerId, Contract contract, int barSize, string whatToShow, bool useRTH, List< TagValue > realTimeBarsOptions)"
+reqScannerParameters ()
+"reqScannerSubscription (int reqId, ScannerSubscription subscription, List< TagValue > scannerSubscriptionOptions, List< TagValue > scannerSubscriptionFilterOptions)"
+"reqScannerSubscription (int reqId, ScannerSubscription subscription, string scannerSubscriptionOptions, string scannerSubscriptionFilterOptions)"
+setServerLogLevel (int logLevel)
+"verifyRequest (string apiName, string apiVersion)"
+verifyMessage (string apiData)
+"verifyAndAuthRequest (string apiName, string apiVersion, string opaqueIsvKey)"
+"verifyAndAuthMessage (string apiData, string xyzResponse)"
+queryDisplayGroups (int requestId)
+"subscribeToGroupEvents (int requestId, int groupId)"
+"updateDisplayGroup (int requestId, string contractInfo)"
+unsubscribeFromGroupEvents (int requestId)
+"reqPositionsMulti (int requestId, string account, string modelCode)"
+cancelPositionsMulti (int requestId)
+"reqAccountUpdatesMulti (int requestId, string account, string modelCode, bool ledgerAndNLV)"
+cancelAccountUpdatesMulti (int requestId)
+"reqSecDefOptParams (int reqId, string underlyingSymbol, string futFopExchange, string underlyingSecType, int underlyingConId)"
+reqSoftDollarTiers (int reqId)
+reqFamilyCodes ()
+"reqMatchingSymbols (int reqId, string pattern)"
+reqMktDepthExchanges ()
+"reqSmartComponents (int reqId, string bboExchange)"
+reqNewsProviders ()
+"reqNewsArticle (int requestId, string providerCode, string articleId, List< TagValue > newsArticleOptions)"
+"reqHistoricalNews (int requestId, int conId, string providerCodes, string startDateTime, string endDateTime, int totalResults, List< TagValue > historicalNewsOptions)"
+"reqHeadTimestamp (int tickerId, Contract contract, string whatToShow, int useRTH, int formatDate)"
+cancelHeadTimestamp (int tickerId)
+"reqHistogramData (int tickerId, Contract contract, bool useRTH, string period)"
+cancelHistogramData (int tickerId)
+reqMarketRule (int marketRuleId)
+"reqPnL (int reqId, string account, string modelCode)"
+cancelPnL (int reqId)
+"reqPnLSingle (int reqId, string account, string modelCode, int conId)"
+cancelPnLSingle (int reqId)
+"reqHistoricalTicks (int reqId, Contract contract, string startDateTime, string endDateTime, int numberOfTicks, string whatToShow, int useRth, bool ignoreSize, List< TagValue > miscOptions)"
+reqWshMetaData (int reqId)
+cancelWshMetaData (int reqId)
+"reqWshEventData (int reqId, WshEventData wshEventData)"
+cancelWshEventData (int reqId)
+reqUserInfo (int reqId)
+IsDataAvailable ()
+ReadInt ()
+ReadAtLeastNBytes (int msgSize)
+ReadByteArray (int msgSize)
+prepareBuffer (BinaryWriter paramsList)
+sendConnectRequest ()
+CheckServerVersion (int requiredVersion)
+"CheckServerVersion (int requestId, int requiredVersion)"
+"CheckServerVersion (int requiredVersion, string updatetail)"
+"CheckServerVersion (int tickerId, int requiredVersion, string updatetail)"
+"CloseAndSend (BinaryWriter paramsList, uint lengthPos, CodeMsgPair error)"
+"CloseAndSend (int reqId, BinaryWriter paramsList, uint lengthPos, CodeMsgPair error)"
+"CloseAndSend (BinaryWriter request, uint lengthPos)"
+CheckConnection ()
+"ReportError (int reqId, CodeMsgPair error, string tail)"
+"ReportUpdateTWS (int reqId, string tail)"
+ReportUpdateTWS (string tail)
+"ReportError (int reqId, int code, string message)"
+"SendCancelRequest (OutgoingMessages msgType, int version, int reqId, CodeMsgPair errorMessage)"
+"SendCancelRequest (OutgoingMessages msgType, int version, CodeMsgPair errorMessage)"
+"VerifyOrderContract (Contract contract, int id)"
+"VerifyOrder (Order order, int id, bool isBagOrder)"
+serverVersion
+socketTransport
+wrapper
+isConnected
+clientId
+extraAuth
+useV100Plus = true
+allowRedirect
+tcpStream
+Wrapper [get]
+"AllowRedirect [get, set]"
+ServerVersion [get]
+"ServerTime [get, set]"
+"optionalCapabilities [get, set]"
+"AsyncEConnect [get, set]"

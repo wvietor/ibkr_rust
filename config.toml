@@ -1,0 +1,21 @@
+address = "127.0.0.1"
+
+[Ports]
+tws_live = 7496
+tws_paper = 7497
+
+gateway_live = 4001
+gateway_paper = 4002
+
+# =============
+# === Usage ===
+# =============
+# 
+# address: std::net::Ipv4Addr
+#
+# [Ports]
+# tws_live: u16
+# tws_paper: u16
+
+# gateway_live: u16
+# gateway_paper: u16

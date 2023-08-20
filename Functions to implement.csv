@@ -1,0 +1,179 @@
+﻿void ,reqCompletedOrders (bool apiOnly)
+,Requests completed orders.
+,.  More...
+,
+void ,"calculateImpliedVolatility (int reqId, Contract contract, double optionPrice, double underPrice, List< TagValue > impliedVolatilityOptions)"
+,Calculate the volatility for an option.
+,Request the calculation of the implied volatility based on hypothetical option and its underlying prices.
+,The calculation will be return in EWrapper's tickOptionComputation callback.
+,.  More...
+,
+void ,"calculateOptionPrice (int reqId, Contract contract, double volatility, double underPrice, List< TagValue > optionPriceOptions)"
+,Calculates an option's price based on the provided volatility and its underlying's price. 
+,The calculation will be return in EWrapper's tickOptionComputation callback.
+,.  More...
+,
+void ,cancelAccountSummary (int reqId)
+,"Cancels the account's summary request. After requesting an account's summary, invoke this function to cancel it.  More..."
+,
+void ,cancelCalculateImpliedVolatility (int reqId)
+,Cancels an option's implied volatility calculation request.  More...
+,
+void ,cancelCalculateOptionPrice (int reqId)
+,Cancels an option's price calculation request.  More...
+,
+void ,cancelFundamentalData (int reqId)
+,Cancels Fundamental data request.  More...
+,
+void ,cancelNewsBulletin ()
+,Cancels IB's news bulletin subscription.  More...
+,
+void ,cancelRealTimeBars (int tickerId)
+,Cancels Real Time Bars' subscription.  More...
+,
+void ,"exerciseOptions (int tickerId, Contract contract, int exerciseAction, int exerciseQuantity, string account, int ovrd)"
+,Exercises an options contract
+,Note: this function is affected by a TWS setting which specifies if an exercise request must be finalized.  More...
+,
+void ,"replaceFA (int reqId, int faDataType, string xml)"
+,Replaces Financial Advisor's settings A Financial Advisor can define three different configurations:  More...
+,
+void ,requestFA (int faDataType)
+,Requests the FA configuration A Financial Advisor can define three different configurations:  More...
+,
+void ,"reqAccountSummary (int reqId, string group, string tags)"
+,Requests a specific account's summary.
+,This method will subscribe to the account summary as presented in the TWS' Account Summary tab. The data is returned at EWrapper::accountSummary
+,https://www.interactivebrokers.com/en/software/tws/accountwindowtop.htm.  More...
+,
+void ,"reqAccountUpdates (bool subscribe, string acctCode)"
+,"Subscribes to a specific account's information and portfolio. Through this method, a single account's subscription can be started/stopped. As a result from the subscription, the account's information, portfolio and last update time will be received at EWrapper::updateAccountValue, EWrapper::updateAccountPortfolio, EWrapper::updateAccountTime respectively. All account values and positions will be returned initially, and then there will only be updates when there is a change in a position, or to an account value every 3 minutes if it has changed. Only one account can be subscribed at a time. A second subscription request for another account when the previous one is still active will cause the first one to be canceled in favour of the second one. Consider user reqPositions if you want to retrieve all your accounts' portfolios directly. More..."
+,
+void ,reqAllOpenOrders ()
+,Requests all current open orders in associated accounts at the current moment. The existing orders will be received via the openOrder and orderStatus events. Open orders are returned once; this function does not initiate a subscription.  More...
+,
+void ,reqAutoOpenOrders (bool autoBind)
+,Requests status updates about future orders placed from TWS. Can only be used with client ID 0.  More...
+,
+void ,"reqContractDetails (int reqId, Contract contract)"
+,Requests contract information.
+,This method will provide all the contracts matching the contract provided. It can also be used to retrieve complete options and futures chains. This information will be returned at EWrapper:contractDetails. Though it is now (in API version > 9.72.12) advised to use reqSecDefOptParams for that purpose. 
+,.  More...
+,
+void ,"reqExecutions (int reqId, ExecutionFilter filter)"
+,"Requests current day's (since midnight) executions matching the filter. Only the current day's executions can be retrieved. Along with the executions, the CommissionReport will also be returned. The execution details will arrive at EWrapper:execDetails.  More..."
+,
+void ,"reqFundamentalData (int reqId, Contract contract, string reportType, List< TagValue > fundamentalDataOptions)"
+,Legacy/DEPRECATED. Requests the contract's fundamental data. Fundamental data is returned at EWrapper::fundamentalData.  More...
+,
+void ,reqNewsBulletins (bool allMessages)
+,Subscribes to IB's News Bulletins.  More...
+,
+void ,reqOpenOrders ()
+,"Requests all open orders places by this specific API client (identified by the API client id). For client ID 0, this will bind previous manual TWS orders.  More..."
+,
+void ,reqPositions ()
+,"Subscribes to position updates for all accessible accounts. All positions sent initially, and then only updates as positions change.  More..."
+,
+void ,reqScannerParameters ()
+,Requests an XML list of scanner parameters valid in TWS. 
+,Not all parameters are valid from API scanner.  More...
+,
+void ,"reqScannerSubscription (int reqId, ScannerSubscription subscription, List< TagValue > scannerSubscriptionOptions, List< TagValue > scannerSubscriptionFilterOptions)"
+,Starts a subscription to market scan results based on the provided parameters.  More...
+,
+void ,"reqScannerSubscription (int reqId, ScannerSubscription subscription, string scannerSubscriptionOptions, string scannerSubscriptionFilterOptions)"
+,
+void ,setServerLogLevel (int logLevel)
+,Changes the TWS/GW log level. The default is 2 = ERROR
+,5 = DETAIL is required for capturing all API messages and troubleshooting API programs
+,Valid values are:
+,1 = SYSTEM
+,2 = ERROR
+,3 = WARNING
+,4 = INFORMATION
+,5 = DETAIL
+,. 
+,
+void ,queryDisplayGroups (int requestId)
+,Requests all available Display Groups in TWS.  More...
+,
+void ,"subscribeToGroupEvents (int requestId, int groupId)"
+,Integrates API client and TWS window grouping.  More...
+,
+void ,"updateDisplayGroup (int requestId, string contractInfo)"
+,Updates the contract displayed in a TWS Window Group.  More...
+,
+void ,unsubscribeFromGroupEvents (int requestId)
+,Cancels a TWS Window Group subscription. 
+,
+void ,"reqPositionsMulti (int requestId, string account, string modelCode)"
+,"Requests position subscription for account and/or model Initially all positions are returned, and then updates are returned for any position changes in real time.  More..."
+,
+void ,cancelPositionsMulti (int requestId)
+,Cancels positions request for account and/or model.  More...
+,
+void ,"reqAccountUpdatesMulti (int requestId, string account, string modelCode, bool ledgerAndNLV)"
+,Requests account updates for account and/or model.  More...
+,
+void ,cancelAccountUpdatesMulti (int requestId)
+,Cancels account updates request for account and/or model.  More...
+,
+void ,"reqSecDefOptParams (int reqId, string underlyingSymbol, string futFopExchange, string underlyingSecType, int underlyingConId)"
+,Requests security definition option parameters for viewing a contract's option chain.  More...
+,
+void ,reqSoftDollarTiers (int reqId)
+,Requests pre-defined Soft Dollar Tiers. This is only supported for registered professional advisors and hedge and mutual funds who have configured Soft Dollar Tiers in Account Management. Refer to: https://www.interactivebrokers.com/en/software/am/am/manageaccount/requestsoftdollars.htm?Highlight=soft%20dollar%20tier.  More...
+,
+void ,reqFamilyCodes ()
+,"Requests family codes for an account, for instance if it is a FA, IBroker, or associated account.  More..."
+,
+void ,"reqMatchingSymbols (int reqId, string pattern)"
+,Requests matching stock symbols.  More...
+,
+,
+void ,"reqSmartComponents (int reqId, string bboExchange)"
+,Returns the mapping of single letter codes to exchange names given the mapping identifier.  More...
+,
+void ,reqNewsProviders ()
+,Requests news providers which the user has subscribed to.  More...
+,
+void ,"reqNewsArticle (int requestId, string providerCode, string articleId, List< TagValue > newsArticleOptions)"
+,Requests news article body given articleId.  More...
+,
+void ,"reqHistoricalNews (int requestId, int conId, string providerCodes, string startDateTime, string endDateTime, int totalResults, List< TagValue> historicalNewsOptions)"
+,Requests historical news headlines.  More...
+,
+void ,reqMarketRule (int marketRuleId)
+,Requests details about a given market rule
+,The market rule for an instrument on a particular exchange provides details about how the minimum price increment changes with price
+,A list of market rule ids can be obtained by invoking reqContractDetails on a particular contract. The returned market rule ID list will provide the market rule ID for the instrument in the correspond valid exchange list in contractDetails.
+,.  More...
+,
+void ,"reqPnL (int reqId, string account, string modelCode)"
+,Creates subscription for real time daily PnL and unrealized PnL updates.  More...
+,
+void ,cancelPnL (int reqId)
+,cancels subscription for real time updated daily PnL params reqId 
+,
+void ,"reqPnLSingle (int reqId, string account, string modelCode, int conId)"
+,Requests real time updates for daily PnL of individual positions.  More...
+,
+void ,cancelPnLSingle (int reqId)
+,Cancels real time subscription for a positions daily PnL information.  More...
+,
+void ,reqWshMetaData (int reqId)
+,Requests metadata from the WSH calendar.  More...
+,
+void ,cancelWshMetaData (int reqId)
+,Cancels pending request for WSH metadata.  More...
+,
+void ,"reqWshEventData (int reqId, WshEventData wshEventData)"
+,Requests event data from the wSH calendar.  More...
+,
+void ,cancelWshEventData (int reqId)
+,Cancels pending WSH event data request.  More...
+,
+void ,reqUserInfo (int reqId)
+,Requests user info.  More...
+,
