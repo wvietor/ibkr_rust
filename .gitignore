@@ -1,2 +1,5 @@
 # contains binaries and other non-source code
 target/
+
+# macos files
+.DS_Store
