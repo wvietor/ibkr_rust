@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut client = Builder::from_config_file(
         Mode::Paper,
         Host::Gateway,
-        Some("../config.toml"),
+        Some("config.toml"),
     )?
     .connect(0, DefaultWrapper)
     .await?
