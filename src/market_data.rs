@@ -559,6 +559,9 @@ pub mod live_ticks {
 
     // === Data types ===
 
+    /// Re-export of [`super::historical_ticks::NumberOfTicks`] for convenience.
+    pub type NumberOfTicks = super::historical_ticks::NumberOfTicks;
+
     /// Contains the potential data types for a [`crate::client::Client::req_tick_by_tick_data`] request.
     pub mod data_types {
         use crate::contract::{

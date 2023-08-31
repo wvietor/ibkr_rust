@@ -9,9 +9,9 @@ use std::str::FromStr;
 //         $( #[doc = $name_doc] )?
 //         #[derive(Debug, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 //         pub struct $name(pub String);
-
+//
 //         impl std::error::Error for $name {}
-
+//
 //         impl std::fmt::Display for $name {
 //             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> std::fmt::Result {
 //                 write!(f, "{}: {}", $msg, self.0)
@@ -216,7 +216,7 @@ pub struct HistoricalBarCore {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-/// A single historical bar
+/// A single historical bar.
 pub enum HistoricalBar {
     /// The ordinary bar data returned from non [`crate::market_data::historical_bar::data_types::Trades`] requests.
     Ordinary(HistoricalBarCore),
@@ -231,4 +231,40 @@ pub enum HistoricalBar {
         /// The number of trades during the bar's timespan.
         trade_count: u64,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+/// A historical or live tick.
+pub enum Tick {
+    /// A tick representing a midpoint price.
+    Midpoint {
+        /// The timestamp of the tick.
+        datetime: NaiveDateTime,
+        /// The midpoint price.
+        price: f64
+    },
+    /// A tick representing the current best bid / ask prices.
+    BidAsk {
+        /// The timestamp of the tick.
+        datetime: NaiveDateTime,
+        /// The bid price.
+        bid_price: f64,
+        /// The ask price.
+        ask_price: f64,
+        /// The bid size.
+        bid_size: f64,
+        /// The ask size.
+        ask_size: f64,
+    },
+    /// A tick representing the last trade.
+    Last {
+        /// The timestamp of the tick.
+        datetime: NaiveDateTime,
+        /// The last traded price.
+        price: f64,
+        /// The last traded size.
+        size: f64,
+        /// The last traded exchange.
+        exchange: crate::exchange::Primary
+    }
 }

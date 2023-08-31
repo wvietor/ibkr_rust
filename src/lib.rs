@@ -241,10 +241,12 @@ pub mod default_wrapper {
             println!("Look at some interesting parameters for Req ID: {req_id}. It has min_tick {min_tick}, SMART components {exchange_id:?}. We have permissions {snapshot_permissions}")
         }
 
+        #[inline]
         fn market_data_class(&mut self, class: crate::payload::MarketDataClass) {
             println!("The market data class is {class:?}");
         }
 
+        #[inline]
         fn update_market_depth(
             &mut self,
             req_id: i64,
@@ -255,6 +257,7 @@ pub mod default_wrapper {
             );
         }
 
+        #[inline]
         fn histogram(
             &mut self,
             req_id: i64,
@@ -263,14 +266,31 @@ pub mod default_wrapper {
             println!("New histogram from Req ID: {req_id}. It is as follows: {histogram:?}");
         }
 
+        #[inline]
         fn historical_bars(&mut self, req_id: i64, bars: Vec<crate::payload::HistoricalBar>) {
             println!("Some cool historical data from Req ID: {req_id}. The bars are {bars:?}");
         }
 
+        #[inline]
         fn updating_historical_bar(&mut self, req_id: i64, bar: crate::payload::HistoricalBar) {
             println!(
                 "We're updating our historical data from Req ID: {req_id}. The bar is {bar:?}"
             );
+        }
+
+        #[inline]
+        fn head_timestamp(&mut self, req_id: i64, timestamp: chrono::NaiveDateTime) {
+            println!("The first timestamp for Req ID: {req_id} is {timestamp}");
+        }
+
+        #[inline]
+        fn historical_ticks(&mut self, req_id: i64, ticks: Vec<crate::payload::Tick>) {
+            println!("The historical ticks for Req ID: {req_id} are {ticks:?}");
+        }
+
+        #[inline]
+        fn live_tick(&mut self, req_id: i64, tick: crate::payload::Tick) {
+            println!("New live tick for Req ID: {req_id}! {tick:?}");
         }
     }
 }

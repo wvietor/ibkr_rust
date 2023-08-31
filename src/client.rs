@@ -512,7 +512,7 @@ impl<W: 'static + Wrapper> Client<indicators::Inactive<W>> {
                                         Ok(InMsg::MarketRule) => decode::market_rule_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "market rule msg"),
                                         Ok(InMsg::Pnl) => decode::pnl_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "pnl msg"),
                                         Ok(InMsg::PnlSingle) => decode::pnl_single_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "pnl single msg"),
-                                        Ok(InMsg::HistoricalTicks) => decode::historical_ticks_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical ticks msg"),
+                                        Ok(InMsg::HistoricalTicks) => decode::historical_ticks_midpoint_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical ticks msg"),
                                         Ok(InMsg::HistoricalTicksBidAsk) => decode::historical_ticks_bid_ask_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical ticks bid ask msg"),
                                         Ok(InMsg::HistoricalTicksLast) => decode::historical_ticks_last_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical ticks last msg"),
                                         Ok(InMsg::TickByTick) => decode::tick_by_tick_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick by tick msg"),
@@ -1025,7 +1025,7 @@ impl Client<indicators::Active> {
         &mut self,
         security: &S,
         tick_data: D,
-        number_of_historical_ticks: u32,
+        number_of_historical_ticks: live_ticks::NumberOfTicks,
         ignore_size: bool,
     ) -> IdResult
     where
