@@ -7,7 +7,6 @@ use tokio::{
     sync::mpsc,
 };
 
-use crate::order::Order;
 use crate::{
     constants,
     contract::{ContractId, Security},
@@ -18,6 +17,7 @@ use crate::{
     reader::Reader,
     wrapper::Wrapper,
 };
+use crate::{order::Order, payload::ExchangeId};
 
 // ======================================
 // === Types for Handling Config File ===
@@ -676,6 +676,53 @@ impl Client<indicators::Active> {
         Ok(id)
     }
 
+    /// Request historical bar data taht remains updated for a given security.
+    /// See [`historical_bar`] for types and traits that are used in this funciton.
+    ///
+    /// # Arguments
+    /// * `security` - The security for which to request data.
+    /// * `duration` - The duration for which historical data be returned (ie. the difference
+    /// between the first bar's datetime and the last bar's datetime).
+    /// * `bar_size` - The size of each individual bar.
+    /// * `data` - The type of data that to return (price, volume, volatility, etc.).
+    /// * `regular_trading_hours_only` - When [`true`], only return bars from regular trading hours.
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
+    ///
+    /// # Returns
+    /// Returns the unique ID associated with the request.
+    pub async fn req_updating_historical_bar<S, D>(
+        &mut self,
+        security: &S,
+        duration: historical_bar::Duration,
+        bar_size: historical_bar::Size,
+        data: D,
+        regular_trading_hours_only: bool,
+    ) -> IdResult
+    where
+        S: Security,
+        D: historical_bar::data_types::DataType<S>,
+    {
+        let id = self.get_next_req_id();
+        let msg = make_msg!(
+            OutMsg::ReqHistoricalData,
+            id,
+            security,
+            u8::from(false),
+            "",
+            bar_size,
+            duration,
+            u8::from(regular_trading_hours_only),
+            data,
+            1,
+            u8::from(true),
+            ""
+        );
+        self.writer.write_all(msg.as_bytes()).await?;
+        Ok(id)
+    }
+
     /// Cancel an existing [`historical_bar`] data request.
     ///
     /// # Arguments
@@ -1063,6 +1110,24 @@ impl Client<indicators::Active> {
         const VERSION: u8 = 1;
         let msg = make_msg!(OutMsg::CancelMktDepth, VERSION, req_id);
         self.writer.write_all(msg.as_bytes()).await
+    }
+
+    /// Request exchanges comprising the aggregate SMART exchange
+    ///
+    /// # Arguments
+    /// * `exchange_id` - The identifier containing information about
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
+    ///
+    /// # Returns
+    /// Returns the unique ID associated with the request.
+    pub async fn req_smart_components(&mut self, exchange_id: ExchangeId) -> IdResult {
+        let id = self.get_next_req_id();
+        let msg = make_msg!(OutMsg::ReqSmartComponents, id, exchange_id);
+        self.writer.write_all(msg.as_bytes()).await?;
+
+        Ok(id)
     }
 
     // === Orders and order management ===

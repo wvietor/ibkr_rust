@@ -92,7 +92,7 @@ pub mod default_wrapper {
             error_string: String,
             advanced_order_reject_json: String,
         ) {
-            println!("Oh no, an error occured! Req ID: {req_id}, Error Code {error_code}: {error_string} {advanced_order_reject_json}");
+            println!("Oh no, an error occurred! Req ID: {req_id}, Error Code {error_code}: {error_string} {advanced_order_reject_json}");
         }
 
         #[inline]
@@ -227,6 +227,49 @@ pub mod default_wrapper {
         fn real_time_volume(&mut self, req_id: i64, volume: RealTimeVolume) {
             println!(
                 "Look how fast the real time volume from Req ID: {req_id} is coming! {volume:?}"
+            );
+        }
+
+        #[inline]
+        fn tick_params(
+            &mut self,
+            req_id: i64,
+            min_tick: f64,
+            exchange_id: crate::payload::ExchangeId,
+            snapshot_permissions: u32,
+        ) {
+            println!("Look at some interesting parameters for Req ID: {req_id}. It has min_tick {min_tick}, SMART components {exchange_id:?}. We have permissions {snapshot_permissions}")
+        }
+
+        fn market_data_class(&mut self, class: crate::payload::MarketDataClass) {
+            println!("The market data class is {class:?}");
+        }
+
+        fn update_market_depth(
+            &mut self,
+            req_id: i64,
+            operation: crate::payload::market_depth::Operation,
+        ) {
+            println!(
+                "New market depth info from Req ID: {req_id}. We're supposed to do {operation:?}"
+            );
+        }
+
+        fn histogram(
+            &mut self,
+            req_id: i64,
+            histogram: std::collections::HashMap<usize, crate::payload::HistogramEntry>,
+        ) {
+            println!("New histogram from Req ID: {req_id}. It is as follows: {histogram:?}");
+        }
+
+        fn historical_bars(&mut self, req_id: i64, bars: Vec<crate::payload::HistoricalBar>) {
+            println!("Some cool historical data from Req ID: {req_id}. The bars are {bars:?}");
+        }
+
+        fn updating_historical_bar(&mut self, req_id: i64, bar: crate::payload::HistoricalBar) {
+            println!(
+                "We're updating our historical data from Req ID: {req_id}. The bar is {bar:?}"
             );
         }
     }

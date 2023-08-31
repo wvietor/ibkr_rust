@@ -1,8 +1,11 @@
-use crate::tick::{
-    self, Accessibility, AuctionData, Class, Dividends, ExtremeValue, Ipo, MarkPrice, News,
-    OpenInterest, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
-    SecOptionCalculationSource, SecOptionVolume, Size, SummaryVolume, TimeStamp, TradeCount,
-    Volatility, Volume, Yield,
+use crate::{
+    payload::{self, ExchangeId, HistogramEntry, HistoricalBar},
+    tick::{
+        self, Accessibility, AuctionData, Class, Dividends, ExtremeValue, Ipo, MarkPrice, News,
+        OpenInterest, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
+        SecOptionCalculationSource, SecOptionVolume, Size, SummaryVolume, TimeStamp, TradeCount,
+        Volatility, Volume, Yield,
+    },
 };
 use chrono::NaiveDateTime;
 
@@ -68,4 +71,26 @@ pub trait Wrapper: Send + Sync {
     fn volume(&mut self, req_id: i64, volume: Volume);
     /// The callback message containing information about real-time volume from [`crate::client::Client::req_market_data`].
     fn real_time_volume(&mut self, req_id: i64, volume: RealTimeVolume);
+    /// The callback message containing information about the parameters of a market data request from [`crate::client::Client::req_market_data`].
+    fn tick_params(
+        &mut self,
+        req_id: i64,
+        min_tick: f64,
+        exchange_id: ExchangeId,
+        snapshot_permissions: u32,
+    );
+    /// The callback message containing informaiton about the class of data that will be returned from [`crate::client::Client::req_market_data`].
+    fn market_data_class(&mut self, class: payload::MarketDataClass);
+    /// The callback message contaiing information about updating an existing order book from [`crate::client::Client::req_market_depth`].
+    fn update_market_depth(&mut self, req_id: i64, operation: payload::market_depth::Operation);
+    /// The callback message containing a complete histogram from [`crate::client::Client::req_histogram_data`].
+    fn histogram(
+        &mut self,
+        req_id: i64,
+        histogram: std::collections::HashMap<usize, HistogramEntry>,
+    );
+    /// The callback message containing historical bar data from [`crate::client::Client::req_historical_bar`].
+    fn historical_bars(&mut self, req_id: i64, bars: Vec<HistoricalBar>);
+    /// The callback message containing an updated historical bar from [`crate::client::Client::req_updating_historical_bar`].
+    fn updating_historical_bar(&mut self, req_id: i64, bar: HistoricalBar);
 }

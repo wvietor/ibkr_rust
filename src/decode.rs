@@ -1,12 +1,15 @@
 use anyhow::Context;
 use chrono::{NaiveDate, NaiveDateTime};
 
-use crate::payload::CalculationResult;
+use crate::payload::{
+    market_depth::{CompleteEntry, Entry, Operation},
+    CalculationResult, ExchangeId, HistogramEntry, HistoricalBar, HistoricalBarCore,
+};
 use crate::tick::{
-    Accessibility, AuctionData, Class, Dividends, ExtremeValue, Ipo, MarkPrice, OpenInterest,
-    Period, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume, RealTimeVolumeBase,
-    SecOptionCalculationResults, SecOptionCalculationSource, SecOptionCalculations,
-    SecOptionVolume, Size, SummaryVolume, TimeStamp, Volatility, Yield,
+    Accessibility, AuctionData, Class, Dividends, EtfNav, ExtremeValue, Ipo, MarkPrice,
+    OpenInterest, Period, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
+    RealTimeVolumeBase, SecOptionCalculationResults, SecOptionCalculationSource,
+    SecOptionCalculations, SecOptionVolume, Size, SummaryVolume, TimeStamp, Volatility, Yield,
 };
 use crate::{
     contract::{
@@ -16,7 +19,6 @@ use crate::{
     currency::Currency,
     exchange::Routing,
     message::{ToClient, ToWrapper},
-    tick::EtfNav,
     wrapper::Wrapper,
 };
 
@@ -448,13 +450,55 @@ pub fn execution_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> a
 
 #[inline]
 pub fn market_depth_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(
+        fields =>
+            req_id @ 1: i64,
+            position @ 0: u64,
+            operation @ 0: i64,
+            side @ 0: u32,
+            price @ 0: f64,
+            size @ 0: f64
+    );
+
+    let entry = CompleteEntry::Ordinary(Entry::try_from((side, position, price, size))?);
+    let operation = Operation::try_from((operation, entry))?;
+
+    wrapper.update_market_depth(req_id, operation);
     Ok(())
 }
 
 #[inline]
 pub fn market_depth_l2_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(
+        fields =>
+            req_id @ 2: i64,
+            position  @ 0: u64,
+            market_maker @ 0: String,
+            operation @ 0: i64,
+            side @ 0: u32,
+            price @ 0: f64,
+            size @ 0: f64,
+            is_smart @ 0: i32
+    );
+    let entry = Entry::try_from((side, position, price, size))?;
+    let entry = match is_smart {
+        0 => CompleteEntry::MarketMaker {
+            market_maker: market_maker
+                .chars()
+                .take(4)
+                .collect::<Vec<char>>()
+                .try_into()
+                .map_err(|_| anyhow::Error::msg("Invalid Mpid encountered"))?,
+            entry,
+        },
+        _ => CompleteEntry::SmartDepth {
+            exchange: market_maker.parse()?,
+            entry,
+        },
+    };
+    let operation = Operation::try_from((operation, entry))?;
+
+    wrapper.update_market_depth(req_id, operation);
     Ok(())
 }
 
@@ -490,7 +534,40 @@ pub fn receive_fa_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyho
 
 #[inline]
 pub fn historical_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(
+        fields =>
+            req_id @ 1: i64,
+            start_date_str @ 0: String,
+            end_date_str @ 0: String,
+            count @ 0: usize
+    );
+    let mut bars = Vec::with_capacity(count);
+    for chunk in fields.collect::<Vec<String>>().chunks(8) {
+        if let [date, open, high, low, close, volume, wap, trade_count] = chunk {
+            let bar;
+            let core = HistoricalBarCore {
+                datetime: chrono::NaiveDateTime::parse_and_remainder(date, "%Y%m%d %T")?.0,
+                open: open.parse()?,
+                high: high.parse()?,
+                low: low.parse()?,
+                close: close.parse()?,
+            };
+            let (volume, wap, trade_count) =
+                (volume.parse()?, wap.parse()?, trade_count.parse::<i64>()?);
+            if volume > 0. && wap > 0. && trade_count > 0 {
+                bar = HistoricalBar::Trades {
+                    bar: core,
+                    volume,
+                    wap,
+                    trade_count: trade_count.try_into()?,
+                }
+            } else {
+                bar = HistoricalBar::Ordinary(core)
+            }
+            bars.push(bar)
+        }
+    }
+    wrapper.historical_bars(req_id, bars);
     Ok(())
 }
 
@@ -998,7 +1075,14 @@ pub fn mkt_depth_exchanges_msg<W: Wrapper>(
 
 #[inline]
 pub fn tick_req_params_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(
+        fields =>
+            req_id @ 1: i64,
+            min_tick @ 0: f64,
+            exchange_id @ 0: ExchangeId,
+            snapshot_permissions @ 0: u32
+    );
+    wrapper.tick_params(req_id, min_tick, exchange_id, snapshot_permissions);
     Ok(())
 }
 
@@ -1052,7 +1136,24 @@ pub fn head_timestamp_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> a
 
 #[inline]
 pub fn histogram_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(
+        fields =>
+            req_id @ 1: i64,
+            num_points @ 0: usize
+    );
+    let mut hist = std::collections::HashMap::with_capacity(num_points);
+    for (bin, chunk) in fields
+        .take(num_points * 2)
+        .map(|v| v.parse())
+        .collect::<Result<Vec<f64>, _>>()?
+        .chunks_exact(2)
+        .enumerate()
+    {
+        if let [price, size] = *chunk {
+            hist.insert(bin, HistogramEntry { price, size });
+        }
+    }
+    wrapper.histogram(req_id, hist);
     Ok(())
 }
 
@@ -1061,7 +1162,37 @@ pub fn historical_data_update_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(
+        fields =>
+            req_id @ 1: i64,
+            trade_count @ 0: i64,
+            datetime_str @ 0: String,
+            open @ 0: f64,
+            high @ 0: f64,
+            low @ 0: f64,
+            close @ 0: f64,
+            wap @ 0: f64,
+            volume @ 0: f64
+    );
+    let core = HistoricalBarCore {
+        datetime: chrono::NaiveDateTime::parse_and_remainder(datetime_str.as_str(), "%Y%m%d %T")?.0,
+        open,
+        high,
+        low,
+        close,
+    };
+    let bar;
+    if trade_count > 0 && wap > 0. && volume > 0. {
+        bar = HistoricalBar::Trades {
+            bar: core,
+            volume,
+            wap,
+            trade_count: trade_count.try_into()?,
+        }
+    } else {
+        bar = HistoricalBar::Ordinary(core)
+    }
+    wrapper.updating_historical_bar(req_id, bar);
     Ok(())
 }
 

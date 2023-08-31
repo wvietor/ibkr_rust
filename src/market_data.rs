@@ -428,6 +428,10 @@ pub mod live_data {
         DelayedFrozen,
     }
 
+    #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    /// An error type that represents an invalid [`Class`] has been received.
+    pub struct ParseClassError;
+
     // === Type implementations ===
 
     impl ToString for RefreshType {
@@ -449,6 +453,20 @@ pub mod live_data {
                 Self::DelayedFrozen => "4",
             }
             .to_owned()
+        }
+    }
+
+    impl std::str::FromStr for Class {
+        type Err = ParseClassError;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            Ok(match s {
+                "1" => Self::Live,
+                "2" => Self::Frozen,
+                "3" => Self::Delayed,
+                "4" => Self::DelayedFrozen,
+                _ => return Err(ParseClassError),
+            })
         }
     }
 

@@ -3,21 +3,17 @@ use ibapi::{
     contract::{self, Contract, ContractId, Forex, SecOption, Stock},
     contract_dispatch,
     default_wrapper::DefaultWrapper,
-    market_data::live_data,
+    market_data::historical_bar,
 };
 
 #[tokio::test(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\x1B[34mMain test beginnning!\x1B[0m");
-    let mut client = Builder::from_config_file(
-        Mode::Paper,
-        Host::Gateway,
-        Some("config.toml"),
-    )?
-    .connect(0, DefaultWrapper)
-    .await?
-    .run()
-    .await;
+    let mut client = Builder::from_config_file(Mode::Paper, Host::Gateway, Some("config.toml"))?
+        .connect(0, DefaultWrapper)
+        .await?
+        .run()
+        .await;
 
     client.req_current_time().await?;
 
@@ -36,20 +32,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ),
         (
             "aapl_opt",
-            contract::new::<SecOption>(&mut client, ContractId(606_333_854))
+            contract::new::<SecOption>(&mut client, ContractId(621_534_856))
                 .await?
                 .into(),
         ),
     ]);
 
-    for con in cons.values() {
-        contract_dispatch! {
-            con =>
-                async (Client::req_market_data)
-                (&mut client)
-                (vec![live_data::data_types::Empty], live_data::RefreshType::Streaming, false)
-        }?;
-    }
+    // for con in cons.values() {
+    //     contract_dispatch! {
+    //         con =>
+    //             async (Client::req_market_depth)
+    //             (&mut client)
+    //             (10)
+    //     }?;
+    // }
+    match cons.get("qqq") {
+        Some(Contract::Stock(stk)) => {
+            client
+                .req_updating_historical_bar(
+                    stk,
+                    historical_bar::Duration::Day(3),
+                    historical_bar::Size::Minutes(historical_bar::MinuteSize::Thirty),
+                    historical_bar::data_types::Trades,
+                    false,
+                )
+                .await?;
+        }
+        _ => (),
+    };
 
     std::thread::sleep(std::time::Duration::from_secs(20));
     match client.disconnect().await {
