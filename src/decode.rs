@@ -1135,7 +1135,10 @@ pub fn head_timestamp_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> a
             req_id @ 1: i64,
             timestamp @ 0: String
     );
-    wrapper.head_timestamp(req_id, chrono::NaiveDateTime::parse_from_str(timestamp.as_str(), "%Y%m%d-%T")?);
+    wrapper.head_timestamp(
+        req_id,
+        chrono::NaiveDateTime::parse_from_str(timestamp.as_str(), "%Y%m%d-%T")?,
+    );
     Ok(())
 }
 
@@ -1248,11 +1251,16 @@ pub fn historical_ticks_midpoint_msg<W: Wrapper>(
             tick_count @ 0: usize
     );
     let mut ticks = Vec::with_capacity(tick_count);
-    for chunk in fields.take(tick_count * 4).collect::<Vec<String>>().chunks_exact(4) {
+    for chunk in fields
+        .take(tick_count * 4)
+        .collect::<Vec<String>>()
+        .chunks_exact(4)
+    {
         if let [time, _, price, size] = chunk {
             ticks.push(Tick::Midpoint {
-                datetime: NaiveDateTime::from_timestamp_opt(time.parse()?, 0).ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
-                price: price.parse()?
+                datetime: NaiveDateTime::from_timestamp_opt(time.parse()?, 0)
+                    .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
+                price: price.parse()?,
             })
         }
     }
@@ -1271,14 +1279,19 @@ pub fn historical_ticks_bid_ask_msg<W: Wrapper>(
             tick_count @ 0: usize
     );
     let mut ticks = Vec::with_capacity(tick_count);
-    for chunk in fields.take(tick_count * 6).collect::<Vec<String>>().chunks_exact(6) {
+    for chunk in fields
+        .take(tick_count * 6)
+        .collect::<Vec<String>>()
+        .chunks_exact(6)
+    {
         if let [time, _, bid_price, ask_price, bid_size, ask_size] = chunk {
-            ticks.push(Tick::BidAsk { 
-                datetime: NaiveDateTime::from_timestamp_opt(time.parse()?, 0).ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
+            ticks.push(Tick::BidAsk {
+                datetime: NaiveDateTime::from_timestamp_opt(time.parse()?, 0)
+                    .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
                 bid_price: bid_price.parse()?,
-                ask_price: ask_price.parse()?, 
-                bid_size: bid_size.parse()?, 
-                ask_size: ask_size.parse()?
+                ask_price: ask_price.parse()?,
+                bid_size: bid_size.parse()?,
+                ask_size: ask_size.parse()?,
             });
         }
     }
@@ -1297,13 +1310,18 @@ pub fn historical_ticks_last_msg<W: Wrapper>(
             tick_count @ 0: usize
     );
     let mut ticks = Vec::with_capacity(tick_count);
-    for chunk in fields.take(tick_count * 6).collect::<Vec<String>>().chunks_exact(6) {
+    for chunk in fields
+        .take(tick_count * 6)
+        .collect::<Vec<String>>()
+        .chunks_exact(6)
+    {
         if let [time, _, price, size, exchange, _] = chunk {
             ticks.push(Tick::Last {
-                datetime: NaiveDateTime::from_timestamp_opt(time.parse()?, 0).ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
+                datetime: NaiveDateTime::from_timestamp_opt(time.parse()?, 0)
+                    .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
                 price: price.parse()?,
                 size: size.parse()?,
-                exchange: exchange.parse()?
+                exchange: exchange.parse()?,
             });
         }
     }
@@ -1319,13 +1337,14 @@ pub fn tick_by_tick_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> any
             tick_type @ 0: u8,
             timestamp @ 0: i64
     );
-    let datetime = NaiveDateTime::from_timestamp_opt(timestamp, 0).ok_or_else(|| anyhow::Error::msg("Invalid timestamp"))?;
+    let datetime = NaiveDateTime::from_timestamp_opt(timestamp, 0)
+        .ok_or_else(|| anyhow::Error::msg("Invalid timestamp"))?;
     let tick = match tick_type {
         1 | 2 => Tick::Last {
             datetime,
             price: nth(fields, 0)?.parse()?,
             size: nth(fields, 0)?.parse()?,
-            exchange: nth(fields, 1)?.parse()?
+            exchange: nth(fields, 1)?.parse()?,
         },
         3 => {
             decode_fields!(
@@ -1343,8 +1362,11 @@ pub fn tick_by_tick_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> any
                 ask_size,
             }
         }
-        4 => Tick::Midpoint { datetime, price: nth(fields, 0)?.parse()? },
-        _ => Err(anyhow::Error::msg("Unexpected tick type"))?
+        4 => Tick::Midpoint {
+            datetime,
+            price: nth(fields, 0)?.parse()?,
+        },
+        _ => Err(anyhow::Error::msg("Unexpected tick type"))?,
     };
     wrapper.live_tick(req_id, tick);
     Ok(())

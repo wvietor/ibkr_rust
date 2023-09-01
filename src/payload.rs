@@ -241,7 +241,7 @@ pub enum Tick {
         /// The timestamp of the tick.
         datetime: NaiveDateTime,
         /// The midpoint price.
-        price: f64
+        price: f64,
     },
     /// A tick representing the current best bid / ask prices.
     BidAsk {
@@ -265,6 +265,6 @@ pub enum Tick {
         /// The last traded size.
         size: f64,
         /// The last traded exchange.
-        exchange: crate::exchange::Primary
-    }
+        exchange: crate::exchange::Primary,
+    },
 }

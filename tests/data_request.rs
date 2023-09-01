@@ -1,9 +1,7 @@
 use ibapi::{
-    client::{Builder, Client, Host, Mode},
+    client::{Builder, Host, Mode},
     contract::{self, Contract, ContractId, Forex, SecOption, Stock},
-    contract_dispatch,
     default_wrapper::DefaultWrapper,
-    market_data::historical_bar,
 };
 
 #[tokio::test(flavor = "multi_thread")]
@@ -48,12 +46,58 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // }
     match cons.get("qqq") {
         Some(Contract::Stock(stk)) => {
-            client
-                .req_updating_historical_bar(
+            let mut req_id;
+            _ = client
+                .req_historical_bar(
                     stk,
-                    historical_bar::Duration::Day(3),
-                    historical_bar::Size::Minutes(historical_bar::MinuteSize::Thirty),
-                    historical_bar::data_types::Trades,
+                    ibapi::market_data::historical_bar::EndDateTime::Present,
+                    ibapi::market_data::historical_bar::Duration::Day(3),
+                    ibapi::market_data::historical_bar::Size::Hours(
+                        ibapi::market_data::historical_bar::HourSize::One,
+                    ),
+                    ibapi::market_data::historical_bar::data_types::BidAsk,
+                    false,
+                )
+                .await?;
+            std::thread::sleep(std::time::Duration::from_secs(2));
+
+            req_id = client
+                .req_histogram_data(stk, false, ibapi::market_data::histogram::Duration::Day(1))
+                .await?;
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            client.cancel_histogram_data(req_id).await?;
+
+            client
+                .req_historical_ticks(
+                    stk,
+                    ibapi::market_data::historical_ticks::TimeStamp::EndDateTime(
+                        chrono::NaiveDateTime::parse_from_str(
+                            "2023-08-31 16:00:00",
+                            "%Y-%m-%d %T",
+                        )?,
+                    ),
+                    ibapi::market_data::historical_ticks::NumberOfTicks::new(10),
+                    ibapi::market_data::historical_ticks::data_types::BidAsk,
+                    false,
+                )
+                .await?;
+
+            req_id = client
+                .req_market_data(
+                    stk,
+                    vec![ibapi::market_data::live_data::data_types::Empty],
+                    ibapi::market_data::live_data::RefreshType::Streaming,
+                    false,
+                )
+                .await?;
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            client.cancel_market_data(req_id).await?;
+
+            client
+                .req_tick_by_tick_data(
+                    stk,
+                    ibapi::market_data::live_ticks::data_types::AllLast,
+                    ibapi::market_data::live_ticks::NumberOfTicks::new(100),
                     false,
                 )
                 .await?;
