@@ -50,11 +50,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             req_id = client
                 .req_updating_historical_bar(
                     stk,
-                    ibapi::market_data::historical_bar::Duration::Second(300),
-                    ibapi::market_data::historical_bar::Size::Minutes(
-                        ibapi::market_data::historical_bar::MinuteSize::One,
+                    ibapi::market_data::updating_historical_bar::Duration::Second(300),
+                    ibapi::market_data::updating_historical_bar::Size::Minutes(
+                        ibapi::market_data::updating_historical_bar::MinuteSize::One
                     ),
-                    ibapi::market_data::historical_bar::data_types::SecOptionImpliedVolatility,
+                    ibapi::market_data::updating_historical_bar::data_types::Midpoint,
                     false,
                 )
                 .await?;
