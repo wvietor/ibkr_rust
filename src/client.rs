@@ -11,7 +11,7 @@ use crate::{
     constants,
     contract::{ContractId, Security},
     decode, make_msg,
-    market_data::{histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks},
+    market_data::{histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks, updating_historical_bar},
     message::{InMsg, OutMsg, ToClient, ToWrapper},
     order::Executable,
     reader::Reader,
@@ -695,14 +695,14 @@ impl Client<indicators::Active> {
     pub async fn req_updating_historical_bar<S, D>(
         &mut self,
         security: &S,
-        duration: historical_bar::Duration,
-        bar_size: historical_bar::Size,
+        duration: updating_historical_bar::Duration,
+        bar_size: updating_historical_bar::Size,
         data: D,
         regular_trading_hours_only: bool,
     ) -> IdResult
     where
         S: Security,
-        D: historical_bar::data_types::DataType<S>,
+        D: updating_historical_bar::data_types::DataType<S>,
     {
         let id = self.get_next_req_id();
         let msg = make_msg!(
