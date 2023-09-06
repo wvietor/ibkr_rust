@@ -47,7 +47,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match cons.get("qqq") {
         Some(Contract::Stock(stk)) => {
             let mut req_id;
-            _ = client
+            req_id = client
+                .req_updating_historical_bar(
+                    stk,
+                    ibapi::market_data::historical_bar::Duration::Second(300),
+                    ibapi::market_data::historical_bar::Size::Minutes(
+                        ibapi::market_data::historical_bar::MinuteSize::One,
+                    ),
+                    ibapi::market_data::historical_bar::data_types::SecOptionImpliedVolatility,
+                    false,
+                )
+                .await?;
+            std::thread::sleep(std::time::Duration::from_secs(10));
+            client.cancel_updating_historical_bar(req_id).await?;
+
+            client
                 .req_historical_bar(
                     stk,
                     ibapi::market_data::historical_bar::EndDateTime::Present,
@@ -93,7 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::thread::sleep(std::time::Duration::from_secs(2));
             client.cancel_market_data(req_id).await?;
 
-            client
+            req_id = client
                 .req_tick_by_tick_data(
                     stk,
                     ibapi::market_data::live_ticks::data_types::AllLast,
@@ -101,11 +115,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     false,
                 )
                 .await?;
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            client.cancel_tick_by_tick_data(req_id).await?;
+
+            req_id = client.req_market_depth(stk, 5).await?;
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            client.cancel_market_depth(req_id).await?;
         }
         _ => (),
     };
 
-    std::thread::sleep(std::time::Duration::from_secs(20));
+    std::thread::sleep(std::time::Duration::from_secs(10));
     match client.disconnect().await {
         Ok(_) => {
             println!("\x1B[32mOk shutdown!\x1B[0m");
