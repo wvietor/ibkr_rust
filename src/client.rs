@@ -730,7 +730,7 @@ impl Client<indicators::Active> {
     ///
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
-    pub async fn cancel_historical_bar(&mut self, req_id: i64) -> ReqResult {
+    pub async fn cancel_updating_historical_bar(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
         let msg = make_msg!(OutMsg::CancelHistoricalData, VERSION, req_id);
         self.writer.write_all(msg.as_bytes()).await

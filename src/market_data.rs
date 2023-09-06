@@ -246,6 +246,67 @@ pub mod historical_bar {
     }
 }
 
+/// Contains types and traits used by [`crate::client::Client::req_updating_historical_bar`].
+pub mod updating_historical_bar {
+    use super::historical_bar;
+
+    // === Type definitions ===
+
+    /// Re-export of [`historical_bar::Duration`]
+    pub type Duration = historical_bar::Duration;
+
+    /// Re-export of [`historical_bar::Size`]
+    pub type Size = historical_bar::Size;
+
+    /// Re-export of [`historical_bar::SecondSize`]
+    pub type SecondSize = historical_bar::SecondSize;
+
+    /// Re-export of [`historical_bar::MinuteSize`]
+    pub type MinuteSize = historical_bar::MinuteSize;
+
+    /// Re-export of [`historical_bar::HourSize`]
+    pub type HourSize = historical_bar::HourSize;
+
+    // === Data types ===
+
+    /// Contains the potential data types for a [`crate::client::Client::req_updating_historical_bar`] request.
+    pub mod data_types {
+        use crate::contract::{
+            Commodity, Crypto, Forex, Index, SecFuture, SecOption, Security, Stock,
+        };
+
+        make_variants!(
+            /// The actual traded prices during the bar interval.
+            Trades: "TRADES",
+            /// The posted midpoint price during the bar interval.
+            Midpoint: "MIDPOINT",
+            /// The posted bid price during the bar interval.
+            Bid: "BID",
+            /// The posted ask price during the bar interval.
+            Ask: "ASK"
+        );
+
+        impl_data_type!(
+            (Trades, Midpoint, Bid, Ask);
+            (Stock)
+        );
+
+        impl_data_type!(
+            (Trades);
+            (Index)
+        );
+
+        impl_data_type!(
+            (Trades, Midpoint, Bid, Ask);
+            (SecOption, SecFuture, Crypto)
+        );
+        impl_data_type!(
+            (Midpoint, Bid, Ask);
+            (Forex, Commodity)
+        );
+    }
+}
+
 /// Contains types and traits used by [`crate::client::Client::req_historical_ticks`] and
 /// [`crate::client::Client::req_head_timestamp`].
 pub mod historical_ticks {
@@ -564,9 +625,7 @@ pub mod live_ticks {
 
     /// Contains the potential data types for a [`crate::client::Client::req_tick_by_tick_data`] request.
     pub mod data_types {
-        use crate::contract::{
-            Commodity, Crypto, Forex, Index, SecFuture, SecOption, Security, Stock,
-        };
+        use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, Security, Stock};
 
         make_variants!(
             /// All the last actual trades since prior tick (and size)
@@ -581,7 +640,7 @@ pub mod live_ticks {
 
         impl_data_type!(
             (AllLast, Last, BidAsk, Midpoint);
-            (Stock, Forex, SecOption, SecFuture, Crypto, Index, Commodity)
+            (Stock, Forex, SecFuture, Crypto, Index, Commodity)
         );
     }
 }

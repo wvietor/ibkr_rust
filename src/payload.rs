@@ -87,7 +87,7 @@ impl FromStr for ExchangeId {
     }
 }
 
-/// Re-export of the market_data Class
+/// Re-export of [`crate::market_data::live_data::Class`].
 pub type MarketDataClass = crate::market_data::live_data::Class;
 
 /// Contains types related to market depth updates from [`crate::client::Client::req_market_depth`]

@@ -238,7 +238,7 @@ pub mod default_wrapper {
             exchange_id: crate::payload::ExchangeId,
             snapshot_permissions: u32,
         ) {
-            println!("Look at some interesting parameters for Req ID: {req_id}. It has min_tick {min_tick}, SMART components {exchange_id:?}. We have permissions {snapshot_permissions}")
+            println!("Look at some interesting parameters for Req ID: {req_id}. It has min_tick {min_tick}, SMART components {exchange_id:?}. We have permissions {snapshot_permissions}");
         }
 
         #[inline]

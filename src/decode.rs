@@ -544,7 +544,6 @@ pub fn historical_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> 
     let mut bars = Vec::with_capacity(count);
     for chunk in fields.collect::<Vec<String>>().chunks(8) {
         if let [date, open, high, low, close, volume, wap, trade_count] = chunk {
-            let bar;
             let core = HistoricalBarCore {
                 datetime: chrono::NaiveDateTime::parse_and_remainder(date, "%Y%m%d %T")?.0,
                 open: open.parse()?,
@@ -554,17 +553,17 @@ pub fn historical_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> 
             };
             let (volume, wap, trade_count) =
                 (volume.parse()?, wap.parse()?, trade_count.parse::<i64>()?);
-            if volume > 0. && wap > 0. && trade_count > 0 {
-                bar = HistoricalBar::Trades {
+            let bar = if volume > 0. && wap > 0. && trade_count > 0 {
+                HistoricalBar::Trades {
                     bar: core,
                     volume,
                     wap,
                     trade_count: trade_count.try_into()?,
                 }
             } else {
-                bar = HistoricalBar::Ordinary(core)
-            }
-            bars.push(bar)
+                HistoricalBar::Ordinary(core)
+            };
+            bars.push(bar);
         }
     }
     wrapper.historical_bars(req_id, bars);
@@ -1189,17 +1188,17 @@ pub fn historical_data_update_msg<W: Wrapper>(
         low,
         close,
     };
-    let bar;
+    let bar =
     if trade_count > 0 && wap > 0. && volume > 0. {
-        bar = HistoricalBar::Trades {
+        HistoricalBar::Trades {
             bar: core,
             volume,
             wap,
             trade_count: trade_count.try_into()?,
         }
     } else {
-        bar = HistoricalBar::Ordinary(core)
-    }
+        HistoricalBar::Ordinary(core)
+    };
     wrapper.updating_historical_bar(req_id, bar);
     Ok(())
 }
@@ -1261,7 +1260,7 @@ pub fn historical_ticks_midpoint_msg<W: Wrapper>(
                 datetime: NaiveDateTime::from_timestamp_opt(time.parse()?, 0)
                     .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
                 price: price.parse()?,
-            })
+            });
         }
     }
     wrapper.historical_ticks(req_id, ticks);
