@@ -128,16 +128,12 @@ pub mod default_wrapper {
 
         #[inline]
         fn extreme_data(&mut self, req_id: i64, value: ExtremeValue) {
-            println!(
-                "We got some interesting extreme value data with Req ID: {req_id}, its size is {value:?}"
-            );
+            println!("We got some interesting extreme value data with Req ID: {req_id}, its size is {value:?}");
         }
 
         #[inline]
         fn sec_option_computation(&mut self, req_id: i64, calc: Class<SecOptionCalculationSource>) {
-            println!(
-                "We got some interesting option computation data with Req ID: {req_id}, its size is {calc:?}"
-            );
+            println!("We got some interesting option computation data with Req ID: {req_id}, its size is {calc:?}");
         }
 
         #[inline]

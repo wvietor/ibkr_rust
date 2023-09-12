@@ -1188,8 +1188,7 @@ pub fn historical_data_update_msg<W: Wrapper>(
         low,
         close,
     };
-    let bar =
-    if trade_count > 0 && wap > 0. && volume > 0. {
+    let bar = if trade_count > 0 && wap > 0. && volume > 0. {
         HistoricalBar::Trades {
             bar: core,
             volume,

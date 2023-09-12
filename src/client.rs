@@ -11,7 +11,10 @@ use crate::{
     constants,
     contract::{ContractId, Security},
     decode, make_msg,
-    market_data::{histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks, updating_historical_bar},
+    market_data::{
+        histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks,
+        updating_historical_bar,
+    },
     message::{InMsg, OutMsg, ToClient, ToWrapper},
     order::Executable,
     reader::Reader,

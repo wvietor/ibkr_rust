@@ -52,7 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     stk,
                     ibapi::market_data::updating_historical_bar::Duration::Second(300),
                     ibapi::market_data::updating_historical_bar::Size::Minutes(
-                        ibapi::market_data::updating_historical_bar::MinuteSize::One
+                        ibapi::market_data::updating_historical_bar::MinuteSize::One,
                     ),
                     ibapi::market_data::updating_historical_bar::data_types::Midpoint,
                     false,
