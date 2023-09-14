@@ -459,7 +459,7 @@ impl<W: 'static + Wrapper> Client<indicators::Inactive<W>> {
                                         Ok(InMsg::MarketDepth) => decode::market_depth_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "market depth msg"),
                                         Ok(InMsg::MarketDepthL2) => decode::market_depth_l2_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "market depth l2 msg"),
                                         Ok(InMsg::NewsBulletins) => decode::news_bulletins_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "news bulletins msg"),
-                                        Ok(InMsg::ManagedAccts) => decode::managed_accts_msg(&mut fields.into_iter(), &mut wrapper, &mut tx, &mut rx).await.with_context(|| "managed accts msg"),
+                                        Ok(InMsg::ManagedAccts) => decode::managed_accts_msg(&mut fields.into_iter(), &mut wrapper, &mut tx, &mut rx).await.with_context(|| "managed accounts msg"),
                                         Ok(InMsg::ReceiveFa) => decode::receive_fa_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "receive fa msg"),
                                         Ok(InMsg::HistoricalData) => decode::historical_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical data msg"),
                                         Ok(InMsg::BondContractData) => decode::bond_contract_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "bond contract data msg"),
@@ -544,7 +544,7 @@ impl<W: 'static + Wrapper> Client<indicators::Inactive<W>> {
         let (mut managed_accounts, mut valid_id) = (None, None);
         while managed_accounts.is_none() || valid_id.is_none() {
             match self.status.client_rx.recv().await {
-                Some(ToClient::StartApiManagedAccts(accts)) => managed_accounts = Some(accts),
+                Some(ToClient::StartApiManagedAccts(accounts)) => managed_accounts = Some(accounts),
                 Some(ToClient::StartApiNextValidId(id)) => valid_id = Some(id..),
                 _ => (),
             }
@@ -618,20 +618,168 @@ impl Client<indicators::Active> {
     // === Methods That Make API Calls ===
     // ===================================
 
+    // === General Functions ===
+
     /// Request the current time from the server.
     ///
     /// # Errors
-    /// Returns any error encountered while writing the outgoing message
+    /// Returns any error encountered while writing the outgoing message.
     pub async fn req_current_time(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
         let msg = make_msg!(OutMsg::ReqCurrentTime, VERSION);
         self.writer.write_all(msg.as_bytes()).await
     }
 
+    /// Requests the accounts to which the logged user has access to.
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
+    pub async fn req_managed_accounts(&mut self) -> ReqResult {
+        const VERSION: u8 = 1;
+        let msg = make_msg!(OutMsg::ReqManagedAccts, VERSION);
+        self.writer.write_all(msg.as_bytes()).await
+    }
+
+    /// Creates a subscription to the TWS through which account and portfolio information is
+    /// delivered. This information is the exact same as the one displayed within the TWS' Account
+    /// Window.
+    ///
+    /// # Arguments
+    /// * `account_number` - The account number for which to subscribe to account data (optional for
+    /// single account structures)
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message. Additionally, returns an
+    /// error if a provided `account_number` is not in the client's managed accounts.
+    pub async fn req_account_updates(&mut self, account_number: Option<String>) -> ReqResult {
+        const VERSION: u8 = 2;
+        let acct_num = match account_number {
+            Some(acct) => check_valid_account(self, acct)?,
+            None => String::default(),
+        };
+
+        let msg = make_msg!(OutMsg::ReqAcctData, VERSION, 1, acct_num);
+        self.writer.write_all(msg.as_bytes()).await
+    }
+
+    /// Cancels an existing subscription to receive account updates.
+    ///
+    /// # Arguments
+    /// * `account_number` - The account number for which to subscribe to account data (optional for
+    /// single account structures)
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message. Additionally, returns an
+    /// error if a provided `account_number` is not in the client's managed accounts.
+    pub async fn cancel_account_updates(&mut self, account_number: Option<String>) -> ReqResult {
+        const VERSION: u8 = 2;
+        let acct_num = match account_number {
+            Some(acct) => check_valid_account(self, acct)?,
+            None => String::default(),
+        };
+
+        let msg = make_msg!(OutMsg::ReqAcctData, VERSION, 0, acct_num);
+        self.writer.write_all(msg.as_bytes()).await
+    }
+
+    /// Subscribes to position updates for all accessible accounts. All positions sent initially,
+    /// and then only updates as positions change.
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
+    pub async fn req_positions(&mut self) -> ReqResult {
+        const VERSION: u8 = 1;
+        let msg = make_msg!(OutMsg::ReqPositions, VERSION);
+        self.writer.write_all(msg.as_bytes()).await
+    }
+
+    /// Cancels a previous position subscription request made with [`Client::req_positions`].
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
+    pub async fn cancel_positions(&mut self) -> ReqResult {
+        const VERSION: u8 = 1;
+        let msg = make_msg!(OutMsg::CancelPositions, VERSION);
+        self.writer.write_all(msg.as_bytes()).await
+    }
+
+    /// Creates subscription for real time daily P&L and unrealized P&L updates.
+    ///
+    /// # Arguments
+    /// * `account_number` - The account number with which to create the subscription.
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message. Additionally, returns an
+    /// error if a provided `account_number` is not in the client's managed accounts.
+    pub async fn req_pnl(&mut self, account_number: String) -> IdResult {
+        let req_id = self.get_next_req_id();
+        let account_number = check_valid_account(self, account_number)?;
+        let msg = make_msg!(OutMsg::ReqPnl, req_id, account_number, "");
+
+        self.writer.write_all(msg.as_bytes()).await?;
+        Ok(req_id)
+    }
+
+    /// Cancel subscription for real-time updates created by [`Client::req_pnl`]
+    ///
+    /// # Arguments
+    /// * `req_id` - The ID of the [`Client::req_pnl`] subscription to cancel.
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
+    pub async fn cancel_pnl(&mut self, req_id: i64) -> ReqResult {
+        let msg = make_msg!(OutMsg::CancelPnl, req_id);
+
+        self.writer.write_all(msg.as_bytes()).await
+    }
+
+    /// Creates subscription for real time daily P&L and unrealized P&L updates, but only for a
+    /// specific position.
+    ///
+    /// # Arguments
+    /// * `account_number` - The account number with which to create the subscription.
+    /// * `contract_id` - The contract ID to create a subscription to changes for a specific
+    /// security
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message. Additionally, returns an
+    /// error if a provided `account_number` is not in the client's managed accounts.
+    pub async fn req_pnl_single(
+        &mut self,
+        account_number: String,
+        contract_id: ContractId,
+    ) -> IdResult {
+        let req_id = self.get_next_req_id();
+        let account_number = check_valid_account(self, account_number)?;
+        let msg = make_msg!(
+            OutMsg::ReqPnlSingle,
+            req_id,
+            account_number,
+            "",
+            contract_id.0
+        );
+
+        self.writer.write_all(msg.as_bytes()).await?;
+        Ok(req_id)
+    }
+
+    /// Cancel subscription for real-time updates created by [`Client::req_pnl_single`]
+    ///
+    /// # Arguments
+    /// * `req_id` - The ID of the [`Client::req_pnl`] subscription to cancel.
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
+    pub async fn cancel_pnl_single(&mut self, req_id: i64) -> ReqResult {
+        let msg = make_msg!(OutMsg::CancelPnl, req_id);
+
+        self.writer.write_all(msg.as_bytes()).await
+    }
+
     // === Historical Market Data ===
 
     /// Request historical bar data for a given security. See [`historical_bar`] for
-    /// types and traits that are used in this funciton.
+    /// types and traits that are used in this function.
     ///
     /// # Arguments
     /// * `security` - The security for which to request data.
@@ -679,8 +827,8 @@ impl Client<indicators::Active> {
         Ok(id)
     }
 
-    /// Request historical bar data taht remains updated for a given security.
-    /// See [`historical_bar`] for types and traits that are used in this funciton.
+    /// Request historical bar data that remains updated for a given security.
+    /// See [`historical_bar`] for types and traits that are used in this function.
     ///
     /// # Arguments
     /// * `security` - The security for which to request data.
@@ -836,7 +984,7 @@ impl Client<indicators::Active> {
     }
 
     /// Request historical ticks for a given security. See [`historical_ticks`] for
-    /// types and traits that are used in this funciton.
+    /// types and traits that are used in this function.
     ///
     /// # Arguments
     /// * `security` - The security for which to request data.
@@ -1279,5 +1427,24 @@ impl Client<indicators::Active> {
             port: self.port,
             address: self.address,
         }))
+    }
+}
+
+#[inline]
+fn check_valid_account(
+    client: &Client<indicators::Active>,
+    account_number: String,
+) -> Result<String, std::io::Error> {
+    if client
+        .status
+        .managed_accounts
+        .contains(account_number.as_str())
+    {
+        Ok(account_number)
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Invalid account number provided to req_account_updates",
+        ))
     }
 }

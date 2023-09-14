@@ -121,6 +121,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             req_id = client.req_market_depth(stk, 5).await?;
             std::thread::sleep(std::time::Duration::from_secs(2));
             client.cancel_market_depth(req_id).await?;
+
+            req_id = client
+                .req_real_time_bars(
+                    stk,
+                    ibapi::market_data::live_bar::data_types::Midpoint,
+                    false,
+                )
+                .await?;
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            client.cancel_real_time_bars(req_id).await?;
         }
         _ => (),
     };
