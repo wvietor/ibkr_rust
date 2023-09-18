@@ -18,6 +18,8 @@
 pub mod client;
 #[macro_use]
 mod comm;
+/// Contains types related to account information.
+mod account;
 mod constants;
 /// Contains the definitions of all [`contract::Security`] implementors, which represent tradeable
 /// contracts.

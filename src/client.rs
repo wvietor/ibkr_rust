@@ -1266,7 +1266,8 @@ impl Client<indicators::Active> {
     /// Request exchanges comprising the aggregate SMART exchange
     ///
     /// # Arguments
-    /// * `exchange_id` - The identifier containing information about
+    /// * `exchange_id` - The identifier containing information about the component exchanges, which
+    /// is attained from an initial market data callback.
     ///
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.

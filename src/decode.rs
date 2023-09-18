@@ -3,24 +3,18 @@ use chrono::{NaiveDate, NaiveDateTime};
 
 use crate::payload::{
     market_depth::{CompleteEntry, Entry, Operation},
-    CalculationResult, ExchangeId, HistogramEntry, HistoricalBar, HistoricalBarCore, Tick,
+    ExchangeId, HistogramEntry, HistoricalBar, HistoricalBarCore, Tick,
 };
 use crate::tick::{
-    Accessibility, AuctionData, Class, Dividends, EtfNav, ExtremeValue, Ipo, MarkPrice,
-    OpenInterest, Period, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
+    Accessibility, AuctionData, CalculationResult, Class, Dividends, EtfNav, ExtremeValue, Ipo,
+    MarkPrice, OpenInterest, Period, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
     RealTimeVolumeBase, SecOptionCalculationResults, SecOptionCalculationSource,
     SecOptionCalculations, SecOptionVolume, Size, SummaryVolume, TimeStamp, Volatility, Yield,
 };
-use crate::{
-    contract::{
-        Commodity, Contract, ContractId, Crypto, Forex, Index, SecFuture, SecOption,
-        SecOptionInner, SecurityId, Stock,
-    },
-    currency::Currency,
-    exchange::Routing,
-    message::{ToClient, ToWrapper},
-    wrapper::Wrapper,
-};
+use crate::{account, contract::{
+    Commodity, Contract, ContractId, Crypto, Forex, Index, SecFuture, SecOption,
+    SecOptionInner, SecurityId, Stock,
+}, currency::Currency, exchange::Routing, message::{ToClient, ToWrapper}, wrapper::Wrapper};
 
 type Tx = tokio::sync::mpsc::Sender<ToClient>;
 type Rx = tokio::sync::mpsc::Receiver<ToWrapper>;
@@ -38,6 +32,24 @@ macro_rules! decode_fields {
         $(
             let $f_name = decode_fields!($fields => $ind: $f_type);
         )*
+    };
+}
+
+macro_rules! expand_seg_variants {
+    ($root_name: literal) => {
+        $root_name | concat!($root_name, "-C") | concat!($root_name, "-P") | concat!($root_name, "-S")
+    };
+}
+
+macro_rules! impl_seg_variants {
+    ($root_name: literal, $name: expr, $value: expr) => {
+        match $name.as_str() {
+            $root_name => account::Segment::Total($value.parse()?),
+            concat!($root_name, "-C") => account::Segment::Commodity($value.parse()?),
+            concat!($root_name, "-P") => account::Segment::P($value.parse()?),
+            concat!($root_name, "-S") => account::Segment::Security($value.parse()?),
+            _ => return Err(anyhow::Error::msg(format!("Could not match {} in {} segment parsing", $name, $root_name))),
+        }
     };
 }
 
@@ -201,7 +213,32 @@ pub fn open_order_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyho
 
 #[inline]
 pub fn acct_value_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(
+        fields =>
+            name @ 2: String,
+            value @ 0: String,
+            currency @ 0: String,
+            account_number @ 0: String
+    );
+    let acct_msg = match name.as_str() {
+        "AccountCode" => account::Value::AccountCode(value),
+        "AccountOrGroup" => {
+            match value.as_str() {
+                "All" => account::Value::AccountOrGroup(account::Group::All, currency.parse()?),
+                name => account::Value::AccountOrGroup(account::Group::Name(name.to_owned()), currency.parse()?),
+            }
+        },
+        "AccountReady" => account::Value::AccountReady(value.parse()?),
+        "AccountType" => account::Value::AccountType(value),
+        expand_seg_variants!("AccruedCash") => {
+            account::Value::AccruedCash(impl_seg_variants!("AccruedCash", name, value), currency.parse()?)
+        },
+        _ => todo!()
+
+        // "BuyingPower" => account::Value::BuyingPower(value.parse()?, currency.parse()?),
+
+    };
+
     Ok(())
 }
 

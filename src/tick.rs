@@ -1,5 +1,6 @@
-use crate::payload::CalculationResult;
 use chrono::{NaiveDate, NaiveDateTime};
+use std::num::ParseFloatError;
+use std::str::FromStr;
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 /// The types of ticks related to ETF Net Asset Value (NAV).
@@ -320,4 +321,28 @@ pub(crate) mod indicators {
     impl Valid for super::TimeStamp {}
 
     impl Valid for f64 {}
+}
+
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+/// The result of an option calculation.
+pub enum CalculationResult {
+    /// The computed value.
+    Computed(f64),
+    /// Indicates that the computation has not been computed yet but will be at some point.
+    NotYetComputed,
+    /// Indicates that the computation will not be computed.
+    NotComputed,
+}
+
+impl FromStr for CalculationResult {
+    type Err = ParseFloatError;
+
+    #[inline]
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "-1" => Self::NotComputed,
+            "-2" => Self::NotYetComputed,
+            s => Self::Computed(s.parse()?),
+        })
+    }
 }
