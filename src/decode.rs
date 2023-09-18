@@ -11,10 +11,17 @@ use crate::tick::{
     RealTimeVolumeBase, SecOptionCalculationResults, SecOptionCalculationSource,
     SecOptionCalculations, SecOptionVolume, Size, SummaryVolume, TimeStamp, Volatility, Yield,
 };
-use crate::{account, contract::{
-    Commodity, Contract, ContractId, Crypto, Forex, Index, SecFuture, SecOption,
-    SecOptionInner, SecurityId, Stock,
-}, currency::Currency, exchange::Routing, message::{ToClient, ToWrapper}, wrapper::Wrapper};
+use crate::{
+    account,
+    contract::{
+        Commodity, Contract, ContractId, Crypto, Forex, Index, SecFuture, SecOption,
+        SecOptionInner, SecurityId, Stock,
+    },
+    currency::Currency,
+    exchange::Routing,
+    message::{ToClient, ToWrapper},
+    wrapper::Wrapper,
+};
 
 type Tx = tokio::sync::mpsc::Sender<ToClient>;
 type Rx = tokio::sync::mpsc::Receiver<ToWrapper>;
@@ -37,18 +44,26 @@ macro_rules! decode_fields {
 
 macro_rules! expand_seg_variants {
     ($root_name: literal) => {
-        $root_name | concat!($root_name, "-C") | concat!($root_name, "-P") | concat!($root_name, "-S")
+        $root_name
+            | concat!($root_name, "-C")
+            | concat!($root_name, "-P")
+            | concat!($root_name, "-S")
     };
 }
 
 macro_rules! impl_seg_variants {
     ($root_name: literal, $name: expr, $value: expr) => {
         match $name.as_str() {
-            $root_name => account::Segment::Total($value.parse()?),
-            concat!($root_name, "-C") => account::Segment::Commodity($value.parse()?),
-            concat!($root_name, "-P") => account::Segment::P($value.parse()?),
-            concat!($root_name, "-S") => account::Segment::Security($value.parse()?),
-            _ => return Err(anyhow::Error::msg(format!("Could not match {} in {} segment parsing", $name, $root_name))),
+            $root_name => account::Segment::Total($value.parse().with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?),
+            concat!($root_name, "-C") => account::Segment::Commodity($value.parse().with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?),
+            concat!($root_name, "-P") => account::Segment::Paxos($value.parse().with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?),
+            concat!($root_name, "-S") => account::Segment::Security($value.parse().with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?),
+            _ => {
+                return Err(anyhow::Error::msg(format!(
+                    "Could not match {} in {} segment parsing",
+                    $name, $root_name
+                )))
+            }
         }
     };
 }
@@ -220,25 +235,222 @@ pub fn acct_value_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyho
             currency @ 0: String,
             account_number @ 0: String
     );
-    let acct_msg = match name.as_str() {
-        "AccountCode" => account::Value::AccountCode(value),
-        "AccountOrGroup" => {
-            match value.as_str() {
-                "All" => account::Value::AccountOrGroup(account::Group::All, currency.parse()?),
-                name => account::Value::AccountOrGroup(account::Group::Name(name.to_owned()), currency.parse()?),
+    let attribute = match name.as_str() {
+        "AccountCode" => account::Attribute::AccountCode(value),
+        "AccountOrGroup" => match value.as_str() {
+            "All" => account::Attribute::AccountOrGroup(account::Group::All, currency.parse()?),
+            name => account::Attribute::AccountOrGroup(
+                account::Group::Name(name.to_owned()),
+                currency.parse()?,
+            ),
+        },
+        "AccountReady" => account::Attribute::AccountReady(value.parse()?),
+        "AccountType" => account::Attribute::AccountType(value),
+        expand_seg_variants!("AccruedCash") => account::Attribute::AccruedCash(
+            impl_seg_variants!("AccruedCash", name, value),
+            currency.parse()?,
+        ),
+        expand_seg_variants!("AccruedDividend") => account::Attribute::AccruedDividend(
+            impl_seg_variants!("AccruedDividend", name, value),
+            currency.parse()?,
+        ),
+        expand_seg_variants!("AvailableFunds") => account::Attribute::AvailableFunds(
+            impl_seg_variants!("AvailableFunds", name, value),
+            currency.parse()?,
+        ),
+        expand_seg_variants!("Billable") => account::Attribute::Billable(
+            impl_seg_variants!("Billable", name, value),
+            currency.parse()?,
+        ),
+        "BuyingPower" => account::Attribute::BuyingPower(value.parse()?, currency.parse()?),
+        "CashBalance" => account::Attribute::CashBalance(value.parse()?, currency.parse()?),
+        expand_seg_variants!("ColumnPrio") => {
+            account::Attribute::ColumnPrio(impl_seg_variants!("ColumnPrio", name, value))
+        }
+        "CorporateBondValue" => {
+            account::Attribute::CorporateBondValue(value.parse()?, currency.parse()?)
+        }
+        "Cryptocurrency" => account::Attribute::Cryptocurrency(value.parse()?, currency.parse()?),
+        "Currency" => account::Attribute::Currency(value.parse()?),
+        "Cushion" => account::Attribute::Cushion(value.parse()?),
+        "DayTradesRemaining" => account::Attribute::DayTradesRemaining(value.parse()?),
+        "DayTradesRemainingT+1" => account::Attribute::DayTradesRemainingTPlus1(value.parse()?),
+        "DayTradesRemainingT+2" => account::Attribute::DayTradesRemainingTPlus2(value.parse()?),
+        "DayTradesRemainingT+3" => account::Attribute::DayTradesRemainingTPlus3(value.parse()?),
+        "DayTradesRemainingT+4" => account::Attribute::DayTradesRemainingTPlus4(value.parse()?),
+        "DayTradingStatus-S" => account::Attribute::DayTradingStatus(value),
+        expand_seg_variants!("EquityWithLoanValue") => account::Attribute::EquityWithLoanValue(
+            impl_seg_variants!("EquityWithLoanValue", name, value),
+            currency.parse()?,
+        ),
+        expand_seg_variants!("ExcessLiquidity") => account::Attribute::ExcessLiquidity(
+            impl_seg_variants!("ExcessLiquidity", name, value),
+            currency.parse()?,
+        ),
+        "ExchangeRate" => account::Attribute::ExchangeRate(value.parse()?, currency.parse()?),
+        expand_seg_variants!("FullAvailableFunds") => account::Attribute::FullAvailableFunds(
+            impl_seg_variants!("FullAvailableFunds", name, value),
+            currency.parse()?,
+        ),
+        expand_seg_variants!("FullExcessLiquidity") => account::Attribute::FullExcessLiquidity(
+            impl_seg_variants!("FullExcessLiquidity", name, value),
+            currency.parse()?,
+        ),
+        expand_seg_variants!("FullInitMarginReq") => account::Attribute::FullInitMarginReq(
+            impl_seg_variants!("FullInitMarginReq", name, value),
+            currency.parse()?,
+        ),
+        expand_seg_variants!("FullMaintMarginReq") => account::Attribute::FullMaintMarginReq(
+            impl_seg_variants!("FullMaintMarginReq", name, value),
+            currency.parse()?,
+        ),
+        "FundValue" => account::Attribute::FundValue(value.parse()?, currency.parse()?),
+        "FutureOptionValue" => {
+            account::Attribute::FutureOptionValue(value.parse()?, currency.parse()?)
+        }
+        "FuturesPNL" => account::Attribute::FuturesPnl(value.parse()?, currency.parse()?),
+        "FxCashBalance" => account::Attribute::FxCashBalance(value.parse()?, currency.parse()?),
+        "GrossPositionValue" => {
+            account::Attribute::GrossPositionValue(value.parse()?, currency.parse()?)
+        }
+        "GrossPositionValue-S" => {
+            account::Attribute::GrossPositionValueSecurity(value.parse()?, currency.parse()?)
+        }
+        expand_seg_variants!("Guarantee") => account::Attribute::Guarantee(
+            impl_seg_variants!("Guarantee", name, value),
+            currency.parse()?,
+        ),
+        expand_seg_variants!("IndianStockHaircut") => account::Attribute::IndianStockHaircut(
+            impl_seg_variants!("IndianStockHaircut", name, value),
+            currency.parse()?,
+        ),
+        expand_seg_variants!("InitMarginReq") => account::Attribute::InitMarginReq(
+            impl_seg_variants!("InitMarginReq", name, value),
+            currency.parse()?,
+        ),
+        "IssuerOptionValue" => {
+            account::Attribute::IssuerOptionValue(value.parse()?, currency.parse()?)
+        }
+        "Leverage-S" => account::Attribute::LeverageSecurity(value.parse()?),
+        expand_seg_variants!("LookAheadAvailableFunds") => {
+            account::Attribute::LookAheadAvailableFunds(
+                impl_seg_variants!("LookAheadAvailableFunds", name, value),
+                currency.parse()?,
+            )
+        }
+        expand_seg_variants!("LookAheadExcessLiquidity") => {
+            account::Attribute::LookAheadExcessLiquidity(
+                impl_seg_variants!("LookAheadExcessLiquidity", name, value),
+                currency.parse()?,
+            )
+        }
+        expand_seg_variants!("LookAheadInitMarginReq") => {
+            account::Attribute::LookAheadInitMarginReq(
+                impl_seg_variants!("LookAheadInitMarginReq", name, value),
+                currency.parse()?,
+            )
+        }
+        expand_seg_variants!("LookAheadMaintMarginReq") => {
+            account::Attribute::LookAheadMaintMarginReq(
+                impl_seg_variants!("LookAheadMaintMarginReq", name, value),
+                currency.parse()?,
+            )
+        }
+        "LookAheadNextChange" => account::Attribute::LookAheadNextChange(value.parse()?),
+        expand_seg_variants!("MaintMarginReq") => account::Attribute::MaintMarginReq(
+            impl_seg_variants!("MaintMarginReq", name, value),
+            currency.parse()?,
+        ),
+        "MoneyMarketFundValue" => {
+            account::Attribute::MoneyMarketFundValue(value.parse()?, currency.parse()?)
+        }
+        "MutualFundValue" => account::Attribute::MutualFundValue(value.parse()?, currency.parse()?),
+        "NLVAndMarginInReview" => account::Attribute::NlvAndMarginInReview(value.parse()?),
+        "NetDividend" => account::Attribute::NetDividend(value.parse()?, currency.parse()?),
+        expand_seg_variants!("NetLiquidation") => account::Attribute::NetLiquidation(
+            impl_seg_variants!("NetLiquidation", name, value),
+            currency.parse()?,
+        ),
+        "NetLiquidationByCurrency" => {
+            account::Attribute::NetLiquidationByCurrency(value.parse()?, currency.parse()?)
+        }
+        "NetLiquidationUncertainty" => {
+            account::Attribute::NetLiquidationUncertainty(value.parse()?, currency.parse()?)
+        }
+        "OptionMarketValue" => {
+            account::Attribute::OptionMarketValue(value.parse()?, currency.parse()?)
+        }
+        expand_seg_variants!("PASharesValue") => account::Attribute::PaSharesValue(
+            impl_seg_variants!("PASharesValue", name, value),
+            currency.parse()?,
+        ),
+        expand_seg_variants!("PhysicalCertificateValue") => {
+            account::Attribute::PhysicalCertificateValue(
+                impl_seg_variants!("PhysicalCertificateValue", name, value),
+                currency.parse()?,
+            )
+        }
+        expand_seg_variants!("PostExpirationExcess") => account::Attribute::PostExpirationExcess(
+            impl_seg_variants!("PostExpirationExcess", name, value),
+            currency.parse()?,
+        ),
+        expand_seg_variants!("PostExpirationMargin") => account::Attribute::PostExpirationMargin(
+            impl_seg_variants!("PostExpirationMargin", name, value),
+            currency.parse()?,
+        ),
+        "PreviousDayEquityWithLoanValue" => {
+            account::Attribute::PreviousDayEquityWithLoanValue(value.parse()?, currency.parse()?)
+        }
+        "PreviousDayEquityWithLoanValue-S" => {
+            account::Attribute::PreviousDayEquityWithLoanValueSecurity(
+                value.parse()?,
+                currency.parse()?,
+            )
+        }
+        "RealCurrency" => account::Attribute::RealCurrency(currency.parse()?),
+        "RealizedPnL" => account::Attribute::RealizedPnL(value.parse()?, currency.parse()?),
+        "RegTEquity" => account::Attribute::RegTEquity(value.parse()?, currency.parse()?),
+        "RegTEquity-S" => account::Attribute::RegTEquitySecurity(value.parse()?, currency.parse()?),
+        "RegTMargin" => account::Attribute::RegTMargin(value.parse()?, currency.parse()?),
+        "RegTMargin-S" => account::Attribute::RegTMarginSecurity(value.parse()?, currency.parse()?),
+        "SMA" => account::Attribute::Sma(value.parse()?, currency.parse()?),
+        "SMA-S" => account::Attribute::SmaSecurity(value.parse()?, currency.parse()?),
+        "StockMarketValue" => {
+            account::Attribute::StockMarketValue(value.parse()?, currency.parse()?)
+        }
+        "TBillValue" => account::Attribute::TBillValue(value.parse()?, currency.parse()?),
+        "TBondValue" => account::Attribute::TBondValue(value.parse()?, currency.parse()?),
+        "TotalCashBalance" => {
+            account::Attribute::TotalCashBalance(value.parse()?, currency.parse()?)
+        }
+        expand_seg_variants!("TotalCashValue") => account::Attribute::TotalCashValue(
+            impl_seg_variants!("TotalCashValue", name, value),
+            currency.parse()?,
+        ),
+        expand_seg_variants!("TotalDebitCardPendingCharges") => {
+            account::Attribute::TotalDebitCardPendingCharges(
+                impl_seg_variants!("TotalDebitCardPendingCharges", name, value),
+                currency.parse()?,
+            )
+        }
+        "TradingType-S" => account::Attribute::TradingTypeSecurity(value),
+        "UnrealizedPnL" => account::Attribute::UnrealizedPnL(value.parse()?, currency.parse()?),
+        "WarrantValue" => account::Attribute::WarrantValue(value.parse()?, currency.parse()?),
+        "WhatIfPMEnabled" => account::Attribute::WhatIfPMEnabled(value.parse()?),
+        expand_seg_variants!("SegmentTitle") => {
+            if name.ends_with('C') || name.ends_with('P') || name.ends_with('S') {
+                return Ok(());
+            } else {
+                return Err(anyhow::Error::msg("Unexpected segment title encountered.  This may mandate an API update: currently-supported values are C, P, and S as outlined in the account::Segment type."));
             }
-        },
-        "AccountReady" => account::Value::AccountReady(value.parse()?),
-        "AccountType" => account::Value::AccountType(value),
-        expand_seg_variants!("AccruedCash") => {
-            account::Value::AccruedCash(impl_seg_variants!("AccruedCash", name, value), currency.parse()?)
-        },
-        _ => todo!()
-
-        // "BuyingPower" => account::Value::BuyingPower(value.parse()?, currency.parse()?),
-
+        }
+        _ => {
+            return Err(anyhow::Error::msg(format!(
+                "Invalid account attribute encountered: {name}"
+            )))
+        }
     };
-
+    wrapper.account_attribute(attribute, account_number);
     Ok(())
 }
 

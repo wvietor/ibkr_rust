@@ -74,6 +74,7 @@ pub mod wrapper;
 
 #[allow(missing_docs, clippy::use_debug, clippy::print_stdout)]
 pub mod default_wrapper {
+    use crate::account::Attribute;
     use crate::tick::{
         Accessibility, AuctionData, Class, Dividends, EtfNav, ExtremeValue, Ipo, MarkPrice, News,
         OpenInterest, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
@@ -289,6 +290,10 @@ pub mod default_wrapper {
         #[inline]
         fn live_tick(&mut self, req_id: i64, tick: crate::payload::Tick) {
             println!("New live tick for Req ID: {req_id}! {tick:?}");
+        }
+
+        fn account_attribute(&mut self, attribute: Attribute, account_number: String) {
+            println!("Updating account attribute for account {account_number}: {attribute:?}");
         }
     }
 }

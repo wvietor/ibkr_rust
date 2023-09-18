@@ -8,6 +8,7 @@ use crate::{
     },
 };
 use chrono::NaiveDateTime;
+use crate::account::Attribute;
 
 /// Contains the "callback functions" that correspond to the requests made by a [`crate::client::Client`].
 pub trait Wrapper: Send + Sync {
@@ -99,4 +100,6 @@ pub trait Wrapper: Send + Sync {
     fn historical_ticks(&mut self, req_id: i64, ticks: Vec<Tick>);
     /// The callback message containing a single tick from [`crate::client::Client::req_tick_by_tick_data`].
     fn live_tick(&mut self, req_id: i64, tick: Tick);
+    /// The callback message containing account attributes from [`crate::client::Client::req_account_updates`]
+    fn account_attribute(&mut self, attribute: Attribute, account_number: String);
 }
