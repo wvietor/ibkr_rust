@@ -54,10 +54,26 @@ macro_rules! expand_seg_variants {
 macro_rules! impl_seg_variants {
     ($root_name: literal, $name: expr, $value: expr) => {
         match $name.as_str() {
-            $root_name => account::Segment::Total($value.parse().with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?),
-            concat!($root_name, "-C") => account::Segment::Commodity($value.parse().with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?),
-            concat!($root_name, "-P") => account::Segment::Paxos($value.parse().with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?),
-            concat!($root_name, "-S") => account::Segment::Security($value.parse().with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?),
+            $root_name => account::Segment::Total(
+                $value
+                    .parse()
+                    .with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?,
+            ),
+            concat!($root_name, "-C") => account::Segment::Commodity(
+                $value
+                    .parse()
+                    .with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?,
+            ),
+            concat!($root_name, "-P") => account::Segment::Paxos(
+                $value
+                    .parse()
+                    .with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?,
+            ),
+            concat!($root_name, "-S") => account::Segment::Security(
+                $value
+                    .parse()
+                    .with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?,
+            ),
             _ => {
                 return Err(anyhow::Error::msg(format!(
                     "Could not match {} in {} segment parsing",
@@ -440,9 +456,8 @@ pub fn acct_value_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyho
         expand_seg_variants!("SegmentTitle") => {
             if name.ends_with('C') || name.ends_with('P') || name.ends_with('S') {
                 return Ok(());
-            } else {
-                return Err(anyhow::Error::msg("Unexpected segment title encountered.  This may mandate an API update: currently-supported values are C, P, and S as outlined in the account::Segment type."));
             }
+            return Err(anyhow::Error::msg("Unexpected segment title encountered.  This may mandate an API update: currently-supported values are C, P, and S as outlined in the account::Segment type."));
         }
         _ => {
             return Err(anyhow::Error::msg(format!(

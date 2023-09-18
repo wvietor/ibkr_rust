@@ -1,3 +1,4 @@
+use crate::account::Attribute;
 use crate::{
     payload::{self, ExchangeId, HistogramEntry, HistoricalBar, Tick},
     tick::{
@@ -8,7 +9,6 @@ use crate::{
     },
 };
 use chrono::NaiveDateTime;
-use crate::account::Attribute;
 
 /// Contains the "callback functions" that correspond to the requests made by a [`crate::client::Client`].
 pub trait Wrapper: Send + Sync {
