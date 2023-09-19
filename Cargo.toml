@@ -14,10 +14,10 @@ categories = ["finance"]
 ibapi_derive = { version="0.1.0", path="src/ibkr_tws_api_derive" }
 tokio = { version = "1.32.0", features = ["full"] }
 tokio-util = { version = "0.7.8", features = ["full"] }
-toml = "0.7.6"
+toml = "0.8.0"
 serde = { version = "1.0.188", features = ["derive"] }
-chrono = "0.4.27"
+chrono = "0.4.31"
 crossbeam = "0.8.2"
-bytes = "1.4.0"
+bytes = "1.5.0"
 anyhow = "1.0.75"
 tracing = "0.1.37"

@@ -5,7 +5,7 @@ use core::str::FromStr;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// Represents a "routing" exchange where orders and market data requests can be directed.
 pub enum Routing {
-    /// IBKR's "SMART" rouring destination, which aggregtes data from many component exchanges
+    /// IBKR's "SMART" routing destination, which aggregates data from many component exchanges
     /// and intelligently routes orders to minimize overall costs net of rebates.
     Smart,
     /// A physical exchange like NYSE or NASDAQ.
@@ -40,7 +40,7 @@ impl std::error::Error for ParseExchangeError {
 // Docs here would be somewhat ridiculous
 #[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-/// Represents all the valid physicsal trading venues for various contracts.
+/// Represents all the valid physical trading venues for various contracts.
 pub enum Primary {
     AmsterdamseEffectenbeurs,
     AlphaTradingSystems,

@@ -140,7 +140,7 @@ pub mod market_depth {
     }
 
     #[derive(Debug, Clone, Copy, PartialOrd, PartialEq)]
-    /// A complete entyr in a limit order book that potentially containing additional information about the market-maker / exchange from where
+    /// A complete entry in a limit order book that potentially containing additional information about the market-maker / exchange from where
     /// the quote was sourced.
     pub enum CompleteEntry {
         /// An entry that indicates additional information about the exchange from which the information has been aggregated

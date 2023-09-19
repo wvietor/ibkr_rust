@@ -3,7 +3,7 @@ use core::str::FromStr;
 // === Type definitions ===
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-/// Represents all the possible currencies avaiable for trading at IBKR.
+/// Represents all the possible currencies available for trading at IBKR.
 pub enum Currency {
     /// The Australian Dollar (AUD) is the currency of Australia.
     AustralianDollar,

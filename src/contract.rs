@@ -272,7 +272,7 @@ mod indicators {
 }
 
 #[doc(alias = "Contract")]
-/// Attributes shared by a tradeable contract or asset. All valid contracts implement this trait.
+/// Attributes shared by a tradable contract or asset. All valid contracts implement this trait.
 pub trait Security: indicators::Valid {
     /// Get the security's [`ContractId`].
     ///

@@ -80,9 +80,9 @@ pub trait Wrapper: Send + Sync {
         exchange_id: ExchangeId,
         snapshot_permissions: u32,
     );
-    /// The callback message containing informaiton about the class of data that will be returned from [`crate::client::Client::req_market_data`].
+    /// The callback message containing information about the class of data that will be returned from [`crate::client::Client::req_market_data`].
     fn market_data_class(&mut self, class: payload::MarketDataClass);
-    /// The callback message contaiing information about updating an existing order book from [`crate::client::Client::req_market_depth`].
+    /// The callback message containing information about updating an existing order book from [`crate::client::Client::req_market_depth`].
     fn update_market_depth(&mut self, req_id: i64, operation: payload::market_depth::Operation);
     /// The callback message containing a complete histogram from [`crate::client::Client::req_histogram_data`].
     fn histogram(

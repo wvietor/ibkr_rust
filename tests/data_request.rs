@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     false,
                 )
                 .await?;
-            std::thread::sleep(std::time::Duration::from_secs(10));
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
             client.cancel_updating_historical_bar(req_id).await?;
 
             client
@@ -73,12 +73,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     false,
                 )
                 .await?;
-            std::thread::sleep(std::time::Duration::from_secs(2));
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
             req_id = client
                 .req_histogram_data(stk, false, ibapi::market_data::histogram::Duration::Day(1))
                 .await?;
-            std::thread::sleep(std::time::Duration::from_secs(2));
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             client.cancel_histogram_data(req_id).await?;
 
             client
@@ -104,7 +104,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     false,
                 )
                 .await?;
-            std::thread::sleep(std::time::Duration::from_secs(2));
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             client.cancel_market_data(req_id).await?;
 
             req_id = client
@@ -115,11 +115,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     false,
                 )
                 .await?;
-            std::thread::sleep(std::time::Duration::from_secs(2));
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             client.cancel_tick_by_tick_data(req_id).await?;
 
             req_id = client.req_market_depth(stk, 5).await?;
-            std::thread::sleep(std::time::Duration::from_secs(2));
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             client.cancel_market_depth(req_id).await?;
 
             req_id = client
@@ -129,13 +129,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     false,
                 )
                 .await?;
-            std::thread::sleep(std::time::Duration::from_secs(2));
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             client.cancel_real_time_bars(req_id).await?;
         }
         _ => (),
     };
 
-    std::thread::sleep(std::time::Duration::from_secs(10));
+    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
     match client.disconnect().await {
         Ok(_) => {
             println!("\x1B[32mOk shutdown!\x1B[0m");

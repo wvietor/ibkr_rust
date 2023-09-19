@@ -316,7 +316,7 @@ pub fn acct_value_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyho
             impl_seg_variants!("FullInitMarginReq", name, value),
             currency.parse()?,
         ),
-        expand_seg_variants!("FullMaintMarginReq") => account::Attribute::FullMaintMarginReq(
+        expand_seg_variants!("FullMaintMarginReq") => account::Attribute::FullMaintenanceMarginReq(
             impl_seg_variants!("FullMaintMarginReq", name, value),
             currency.parse()?,
         ),
@@ -367,13 +367,13 @@ pub fn acct_value_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyho
             )
         }
         expand_seg_variants!("LookAheadMaintMarginReq") => {
-            account::Attribute::LookAheadMaintMarginReq(
+            account::Attribute::LookAheadMaintenanceMarginReq(
                 impl_seg_variants!("LookAheadMaintMarginReq", name, value),
                 currency.parse()?,
             )
         }
         "LookAheadNextChange" => account::Attribute::LookAheadNextChange(value.parse()?),
-        expand_seg_variants!("MaintMarginReq") => account::Attribute::MaintMarginReq(
+        expand_seg_variants!("MaintMarginReq") => account::Attribute::MaintenanceMarginReq(
             impl_seg_variants!("MaintMarginReq", name, value),
             currency.parse()?,
         ),
@@ -809,7 +809,7 @@ pub fn historical_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> 
     for chunk in fields.collect::<Vec<String>>().chunks(8) {
         if let [date, open, high, low, close, volume, wap, trade_count] = chunk {
             let core = HistoricalBarCore {
-                datetime: chrono::NaiveDateTime::parse_and_remainder(date, "%Y%m%d %T")?.0,
+                datetime: NaiveDateTime::parse_and_remainder(date, "%Y%m%d %T")?.0,
                 open: open.parse()?,
                 high: high.parse()?,
                 low: low.parse()?,
@@ -1400,7 +1400,7 @@ pub fn head_timestamp_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> a
     );
     wrapper.head_timestamp(
         req_id,
-        chrono::NaiveDateTime::parse_from_str(timestamp.as_str(), "%Y%m%d-%T")?,
+        NaiveDateTime::parse_from_str(timestamp.as_str(), "%Y%m%d-%T")?,
     );
     Ok(())
 }
@@ -1446,7 +1446,7 @@ pub fn historical_data_update_msg<W: Wrapper>(
             volume @ 0: f64
     );
     let core = HistoricalBarCore {
-        datetime: chrono::NaiveDateTime::parse_and_remainder(datetime_str.as_str(), "%Y%m%d %T")?.0,
+        datetime: NaiveDateTime::parse_and_remainder(datetime_str.as_str(), "%Y%m%d %T")?.0,
         open,
         high,
         low,

@@ -59,7 +59,7 @@ pub enum Attribute {
     /// Initial Margin of whole portfolio with no discounts or intraday credits.
     FullInitMarginReq(Segment<f64>, Denomination),
     /// Maintenance Margin of whole portfolio with no discounts or intraday credits.
-    FullMaintMarginReq(Segment<f64>, Denomination),
+    FullMaintenanceMarginReq(Segment<f64>, Denomination),
     /// Value of funds value (money market funds + mutual funds).
     FundValue(f64, Denomination),
     /// Real-time market-to-market value of futures options.
@@ -91,9 +91,9 @@ pub enum Attribute {
     /// Initial margin requirement of whole portfolio as of next period's margin change.
     LookAheadInitMarginReq(Segment<f64>, Denomination),
     /// Maintenance margin requirement of whole portfolio as of next period's margin change.
-    LookAheadMaintMarginReq(Segment<f64>, Denomination),
+    LookAheadMaintenanceMarginReq(Segment<f64>, Denomination),
     /// Maintenance Margin requirement of whole portfolio.
-    MaintMarginReq(Segment<f64>, Denomination),
+    MaintenanceMarginReq(Segment<f64>, Denomination),
     /// Market value of money market funds excluding mutual funds.
     MoneyMarketFundValue(f64, Denomination),
     /// Market value of mutual funds excluding money market funds.
@@ -106,7 +106,7 @@ pub enum Attribute {
     NetLiquidation(Segment<f64>, Denomination),
     /// Net liquidation for individual currencies.
     NetLiquidationByCurrency(f64, Denomination),
-    /// Net liquidiation uncertainty.
+    /// Net liquidation uncertainty.
     NetLiquidationUncertainty(f64, Currency),
     /// Real-time mark-to-market value of options.
     OptionMarketValue(f64, Denomination),
@@ -189,7 +189,7 @@ pub enum Segment<T> {
 pub enum Denomination {
     /// The base currency for the corresponding account.
     Base,
-    /// A specific [`crate::currency::Currency`]
+    /// A specific [`Currency`]
     Specific(Currency),
 }
 

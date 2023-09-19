@@ -21,7 +21,7 @@ mod comm;
 /// Contains types related to account information.
 mod account;
 mod constants;
-/// Contains the definitions of all [`contract::Security`] implementors, which represent tradeable
+/// Contains the definitions of all [`contract::Security`] implementors, which represent tradable
 /// contracts.
 ///
 /// Each variety of financial instrument instrument is represented as its own unique struct or
@@ -45,7 +45,7 @@ mod decode;
 pub mod exchange;
 /// Contains modules that each relate to different market data requests. In particular, each module
 /// defines: 1) General types used in a given market data query and 2) Optionally, a private
-/// indicator trait that defines whether a given [`contract::Security`] allows for the data reqeust
+/// indicator trait that defines whether a given [`contract::Security`] allows for the data request
 /// and 3) Any types associated with implementors of the indicator types.
 pub mod market_data;
 mod message;

@@ -60,7 +60,7 @@ pub mod historical_bar {
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    /// The span of dates and timees over which bars will be returned.
+    /// The span of dates and times over which bars will be returned.
     pub enum Duration {
         /// Some number of seconds.
         Second(u32),
@@ -401,7 +401,7 @@ pub mod histogram {
     // === Type definitions ===
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    /// The span of dates and timees over which bars will be returned.
+    /// The span of dates and times over which bars will be returned.
     pub enum Duration {
         /// Some number of seconds.
         Second(u32),
@@ -556,7 +556,7 @@ pub mod live_data {
             MiscellaneousStats: "165",
             /// The mark-to-market price used for margin at IBKR.
             MarkPrice: "221",
-            /// The volume, price, and imblance of an auction.
+            /// The volume, price, and imbalance of an auction.
             AuctionValues: "225",
             /// Last trade's price, size, and time.
             RealTimeVolume: "233",
@@ -568,7 +568,7 @@ pub mod live_data {
             FundamentalRatios: "258",
             /// 30-day real time historical volatility.
             RealtimeHistoricalVolatility: "411",
-            /// Information about past and future diviends.
+            /// Information about past and future dividends.
             IBDividends: "456",
             /// No additional data
             Empty: ""
