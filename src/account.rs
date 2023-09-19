@@ -1,5 +1,6 @@
-use crate::currency::Currency;
 use std::fmt::Formatter;
+
+use crate::currency::Currency;
 
 #[derive(Debug, Clone, PartialOrd, PartialEq)]
 /// Represents a specific account value
