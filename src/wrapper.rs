@@ -105,7 +105,7 @@ pub trait Wrapper: Send + Sync {
     fn account_attribute(&mut self, attribute: Attribute, account_number: String);
     /// The callback message containing information about a single [`crate::payload::Position`] from [`crate::client::Client::req_positions`].
     fn position(&mut self, position: Position);
-    /// The callback message containing information about the time at which [`account_attribute`] data is valid.
+    /// The callback message containing information about the time at which [`Wrapper::account_attribute`] data is valid.
     fn account_attribute_time(&mut self, time: NaiveTime);
     /// The callback message containing summary information about positions from [`crate::client::Client::req_positions`]
     fn position_summary(&mut self, summary: PositionSummary);

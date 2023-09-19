@@ -763,7 +763,7 @@ impl Client<indicators::Active> {
         Ok(req_id)
     }
 
-    /// Cancel subscription for real-time updates created by [`Client::req_pnl_single`]
+    /// Cancel subscription for real-time updates created by [`Client::req_single_position_pnl`]
     ///
     /// # Arguments
     /// * `req_id` - The ID of the [`Client::req_pnl`] subscription to cancel.
