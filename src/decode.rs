@@ -1,9 +1,10 @@
 use anyhow::Context;
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
 use crate::payload::{
     market_depth::{CompleteEntry, Entry, Operation},
-    ExchangeId, HistogramEntry, HistoricalBar, HistoricalBarCore, Tick,
+    ExchangeId, HistogramEntry, HistoricalBar, HistoricalBarCore, MarketDataClass, Pnl, Position,
+    PositionSummary, Tick,
 };
 use crate::tick::{
     Accessibility, AuctionData, CalculationResult, Class, Dividends, EtfNav, ExtremeValue, Ipo,
@@ -471,7 +472,27 @@ pub fn acct_value_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyho
 
 #[inline]
 pub fn portfolio_value_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(
+        fields =>
+            contract_id @ 2: ContractId,
+            position @ 10: f64,
+            market_price @ 0: f64,
+            market_value @ 0: f64,
+            average_cost @ 0: f64,
+            unrealized_pnl @ 0: f64,
+            realized_pnl @ 0: f64,
+            account_name @ 0: String
+    );
+    wrapper.position(Position {
+        contract_id,
+        position,
+        market_price,
+        market_value,
+        average_cost,
+        unrealized_pnl,
+        realized_pnl,
+        account_number: account_name,
+    });
     Ok(())
 }
 
@@ -480,7 +501,11 @@ pub fn acct_update_time_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(
+        fields =>
+            timestamp @ 2: String
+    );
+    wrapper.account_attribute_time(NaiveTime::parse_from_str(timestamp.as_str(), "%H:%M")?);
     Ok(())
 }
 
@@ -1161,7 +1186,12 @@ pub fn market_data_type_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(
+        fields =>
+            req_id @ 2: i64,
+            class @ 0: MarketDataClass
+    );
+    wrapper.market_data_class(req_id, class);
     Ok(())
 }
 
@@ -1176,7 +1206,19 @@ pub fn commission_report_msg<W: Wrapper>(
 
 #[inline]
 pub fn position_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(
+        fields =>
+            account_number @ 2: String,
+            contract_id @ 0: ContractId,
+            position @ 10: f64,
+            average_cost @ 0: f64
+    );
+    wrapper.position_summary(PositionSummary {
+        contract_id,
+        position,
+        average_cost,
+        account_number,
+    });
     Ok(())
 }
 
@@ -1492,13 +1534,39 @@ pub fn market_rule_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyh
 
 #[inline]
 pub fn pnl_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(
+        fields =>
+            req_id @ 1: i64,
+            daily_pnl @ 0: f64,
+            unrealized_pnl @ 0: f64,
+            realized_pnl @ 0: f64
+    );
+    let pnl = Pnl {
+        daily: daily_pnl,
+        unrealized: unrealized_pnl,
+        realized: realized_pnl,
+    };
+    wrapper.pnl(req_id, pnl);
     Ok(())
 }
 
 #[inline]
 pub fn pnl_single_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(
+        fields =>
+            req_id @ 1: i64,
+            position @ 0: f64,
+            daily_pnl @ 0: f64,
+            unrealized_pnl @ 0: f64,
+            realized_pnl @ 0: f64,
+            market_value @ 0: f64
+    );
+    let pnl = Pnl {
+        daily: daily_pnl,
+        unrealized: unrealized_pnl,
+        realized: realized_pnl,
+    };
+
     Ok(())
 }
 

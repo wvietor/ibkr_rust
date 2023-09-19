@@ -1,5 +1,6 @@
 use chrono::NaiveDateTime;
 
+use crate::contract::ContractId;
 use std::str::FromStr;
 
 // macro_rules! make_error {
@@ -241,4 +242,49 @@ pub enum Tick {
         /// The last traded exchange.
         exchange: crate::exchange::Primary,
     },
+}
+
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
+/// A single position, comprising a single security and details about its current value, P&L, etc.
+pub struct Position {
+    /// The ID of the underlying contract.
+    pub contract_id: ContractId,
+    /// The number of contracts owned.
+    pub position: f64,
+    /// The current market price of each contract.
+    pub market_price: f64,
+    /// The current market value of the entire position.
+    pub market_value: f64,
+    /// The average cost per contract for the entire position.
+    pub average_cost: f64,
+    /// The unrealized P&L of the position.
+    pub unrealized_pnl: f64,
+    /// The realized P&L of the position.
+    pub realized_pnl: f64,
+    /// The account number holding the position.
+    pub account_number: String,
+}
+
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
+/// A single position, comprising a single security and a few details about its cost, account, etc.
+pub struct PositionSummary {
+    /// The ID of the underlying contract.
+    pub contract_id: ContractId,
+    /// The number of contracts owned.
+    pub position: f64,
+    /// The average cost per contract for the entire position.
+    pub average_cost: f64,
+    /// The account number holding the position.
+    pub account_number: String,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialOrd, PartialEq)]
+/// A simple struct representing a few types of P&L.
+pub struct Pnl {
+    /// The daily P&L for the account in real-time.
+    pub daily: f64,
+    /// Total unrealized P&L for the account.
+    pub unrealized: f64,
+    /// Total realized P&L for the account.
+    pub realized: f64,
 }

@@ -1,4 +1,5 @@
 use crate::account::Attribute;
+use crate::payload::{Pnl, Position, PositionSummary};
 use crate::{
     payload::{self, ExchangeId, HistogramEntry, HistoricalBar, Tick},
     tick::{
@@ -8,7 +9,7 @@ use crate::{
         Volatility, Volume, Yield,
     },
 };
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, NaiveTime};
 
 /// Contains the "callback functions" that correspond to the requests made by a [`crate::client::Client`].
 pub trait Wrapper: Send + Sync {
@@ -81,7 +82,7 @@ pub trait Wrapper: Send + Sync {
         snapshot_permissions: u32,
     );
     /// The callback message containing information about the class of data that will be returned from [`crate::client::Client::req_market_data`].
-    fn market_data_class(&mut self, class: payload::MarketDataClass);
+    fn market_data_class(&mut self, req_id: i64, class: payload::MarketDataClass);
     /// The callback message containing information about updating an existing order book from [`crate::client::Client::req_market_depth`].
     fn update_market_depth(&mut self, req_id: i64, operation: payload::market_depth::Operation);
     /// The callback message containing a complete histogram from [`crate::client::Client::req_histogram_data`].
@@ -100,6 +101,16 @@ pub trait Wrapper: Send + Sync {
     fn historical_ticks(&mut self, req_id: i64, ticks: Vec<Tick>);
     /// The callback message containing a single tick from [`crate::client::Client::req_tick_by_tick_data`].
     fn live_tick(&mut self, req_id: i64, tick: Tick);
-    /// The callback message containing account attributes from [`crate::client::Client::req_account_updates`]
+    /// The callback message containing account attributes from [`crate::client::Client::req_account_updates`].
     fn account_attribute(&mut self, attribute: Attribute, account_number: String);
+    /// The callback message containing information about a single [`crate::payload::Position`] from [`crate::client::Client::req_positions`].
+    fn position(&mut self, position: Position);
+    /// The callback message containing information about the time at which [`account_attribute`] data is valid.
+    fn account_attribute_time(&mut self, time: NaiveTime);
+    /// The callback message containing summary information about positions from [`crate::client::Client::req_positions`]
+    fn position_summary(&mut self, summary: PositionSummary);
+    /// The callback message containing aggregate P&L information from [`crate::client::Client::req_pnl`].
+    fn pnl(&mut self, req_id: i64, pnl: Pnl);
+    /// The callback message containing P&L information for a single position from [`crate::client::Client::req_single_position_pnl`].
+    fn single_position_pnl(&mut self, req_id: i64, pnl: Pnl, position: f64, market_value: f64);
 }

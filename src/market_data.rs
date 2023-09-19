@@ -467,6 +467,8 @@ pub mod live_data {
 
     // === Type definitions ===
 
+    use std::fmt::Formatter;
+
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
     /// The frequency at which data will be updated.
     pub enum RefreshType {
@@ -489,9 +491,9 @@ pub mod live_data {
         DelayedFrozen,
     }
 
-    #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
     /// An error type that represents an invalid [`Class`] has been received.
-    pub struct ParseClassError;
+    pub struct ParseClassError(String);
 
     // === Type implementations ===
 
@@ -526,10 +528,18 @@ pub mod live_data {
                 "2" => Self::Frozen,
                 "3" => Self::Delayed,
                 "4" => Self::DelayedFrozen,
-                _ => return Err(ParseClassError),
+                _ => return Err(ParseClassError(s.to_owned())),
             })
         }
     }
+
+    impl std::fmt::Display for ParseClassError {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            write!(f, "Invalid market data class encountered: {}", self.0)
+        }
+    }
+
+    impl std::error::Error for ParseClassError {}
 
     // === Data types ===
 

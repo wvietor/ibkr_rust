@@ -75,6 +75,7 @@ pub mod wrapper;
 #[allow(missing_docs, clippy::use_debug, clippy::print_stdout)]
 pub mod default_wrapper {
     use crate::account::Attribute;
+    use crate::payload::{Pnl, Position, PositionSummary};
     use crate::tick::{
         Accessibility, AuctionData, Class, Dividends, EtfNav, ExtremeValue, Ipo, MarkPrice, News,
         OpenInterest, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
@@ -82,6 +83,7 @@ pub mod default_wrapper {
         Volatility, Volume, Yield,
     };
     use crate::wrapper::Wrapper;
+    use chrono::NaiveTime;
 
     #[derive(Debug)]
     pub struct DefaultWrapper;
@@ -241,8 +243,8 @@ pub mod default_wrapper {
         }
 
         #[inline]
-        fn market_data_class(&mut self, class: crate::payload::MarketDataClass) {
-            println!("The market data class is {class:?}");
+        fn market_data_class(&mut self, req_id: i64, class: crate::payload::MarketDataClass) {
+            println!("Req ID: {req_id} says the market data class is {class:?}");
         }
 
         #[inline]
@@ -292,8 +294,34 @@ pub mod default_wrapper {
             println!("New live tick for Req ID: {req_id}! {tick:?}");
         }
 
+        #[inline]
         fn account_attribute(&mut self, attribute: Attribute, account_number: String) {
             println!("Updating account attribute for account {account_number}: {attribute:?}");
+        }
+
+        #[inline]
+        fn position(&mut self, position: Position) {
+            println!("New information about our position: {position:?}");
+        }
+
+        #[inline]
+        fn account_attribute_time(&mut self, time: NaiveTime) {
+            println!("The account attributes were refreshed at {time:?}");
+        }
+
+        #[inline]
+        fn position_summary(&mut self, summary: PositionSummary) {
+            println!("Summary information about position: {summary:?}");
+        }
+
+        #[inline]
+        fn pnl(&mut self, req_id: i64, pnl: Pnl) {
+            println!("According to Req ID: {req_id}, our current P&L is {pnl:?}");
+        }
+
+        #[inline]
+        fn single_position_pnl(&mut self, req_id: i64, pnl: Pnl, position: f64, market_value: f64) {
+            println!("According to Req ID: {req_id}, we have {position} of something with market_value {market_value}. Out P&L is {pnl:?}");
         }
     }
 }

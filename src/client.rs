@@ -744,7 +744,7 @@ impl Client<indicators::Active> {
     /// # Errors
     /// Returns any error encountered while writing the outgoing message. Additionally, returns an
     /// error if a provided `account_number` is not in the client's managed accounts.
-    pub async fn req_pnl_single(
+    pub async fn req_single_position_pnl(
         &mut self,
         account_number: String,
         contract_id: ContractId,
