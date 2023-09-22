@@ -15,12 +15,14 @@ use crate::{
         histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks,
         updating_historical_bar,
     },
-    message::{InMsg, OutMsg, ToClient, ToWrapper},
-    order::Executable,
+    message::{In, Out, ToClient, ToWrapper},
+    order::{Order, Executable},
+    payload::ExchangeId,
     reader::Reader,
     wrapper::Wrapper,
 };
-use crate::{order::Order, payload::ExchangeId};
+use crate::account::Tag;
+use crate::execution::Filter;
 
 // ======================================
 // === Types for Handling Config File ===
@@ -49,9 +51,9 @@ impl Config {
                 .with_context(|| format!("Invalid config file at path {path}"))?
                 .as_str(),
         )
-        .with_context(|| {
-            format!(
-                "Invalid TOML file at path {path}.\n
+            .with_context(|| {
+                format!(
+                    "Invalid TOML file at path {path}.\n
         # =========================\n
         # === config.toml Usage ===\n
         # =========================\n
@@ -63,8 +65,8 @@ impl Config {
         \n
         gateway_live: u16\n
         gateway_paper: u16\n"
-            )
-        })
+                )
+            })
     }
 }
 
@@ -225,8 +227,8 @@ impl Builder {
                 .trim_end_matches(|c: char| !c.is_numeric()),
             "%Y%m%d %X",
         )
-        .with_context(|| "Failed to parse connection time")?
-        .0;
+            .with_context(|| "Failed to parse connection time")?
+            .0;
 
         let (client_tx, wrapper_rx) =
             mpsc::channel::<ToWrapper>(constants::TO_WRAPPER_CHANNEL_SIZE);
@@ -392,7 +394,7 @@ impl<W: 'static + Wrapper> Client<indicators::Inactive<W>> {
 
     async fn start_api(&mut self) -> Result<(), anyhow::Error> {
         const VERSION: u8 = 2;
-        let msg = make_msg!(OutMsg::StartApi, VERSION, self.client_id, "");
+        let msg = make_msg!(Out::StartApi, VERSION, self.client_id, "");
         self.status
             .client_tx
             .send(ToWrapper::StartApiManagedAccts)
@@ -407,9 +409,9 @@ impl<W: 'static + Wrapper> Client<indicators::Inactive<W>> {
 
     // Don't worry about these allows: This function will NEVER panic (it can infinite loop though)
     #[allow(
-        clippy::unwrap_used,
-        clippy::missing_panics_doc,
-        clippy::too_many_lines
+    clippy::unwrap_used,
+    clippy::missing_panics_doc,
+    clippy::too_many_lines
     )]
     /// Initiates the main message loop and spawns all helper threads to manage the application.
     ///
@@ -445,88 +447,88 @@ impl<W: 'static + Wrapper> Client<indicators::Inactive<W>> {
                                 None => Err(anyhow::Error::msg("Empty fields received from reader")),
                                 Some(s) => {
                                     match s.parse() {
-                                        Ok(InMsg::TickPrice) => decode::tick_price_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick price msg"),
-                                        Ok(InMsg::TickSize) => decode::tick_size_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick size msg"),
-                                        Ok(InMsg::OrderStatus) => decode::order_status_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "order status msg"),
-                                        Ok(InMsg::ErrMsg) => decode::err_msg_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "err msg msg"),
-                                        Ok(InMsg::OpenOrder) => decode::open_order_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "open order msg"),
-                                        Ok(InMsg::AcctValue) => decode::acct_value_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "acct value msg"),
-                                        Ok(InMsg::PortfolioValue) => decode::portfolio_value_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "portfolio value msg"),
-                                        Ok(InMsg::AcctUpdateTime) => decode::acct_update_time_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "acct update time msg"),
-                                        Ok(InMsg::NextValidId) => decode::next_valid_id_msg(&mut fields.into_iter(), &mut wrapper, &mut tx, &mut rx).await.with_context(|| "next valid id msg"),
-                                        Ok(InMsg::ContractData) => decode::contract_data_msg(&mut fields.into_iter(), &mut wrapper, &mut tx, &mut rx).await.with_context(|| "contract data msg"),
-                                        Ok(InMsg::ExecutionData) => decode::execution_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "execution data msg"),
-                                        Ok(InMsg::MarketDepth) => decode::market_depth_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "market depth msg"),
-                                        Ok(InMsg::MarketDepthL2) => decode::market_depth_l2_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "market depth l2 msg"),
-                                        Ok(InMsg::NewsBulletins) => decode::news_bulletins_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "news bulletins msg"),
-                                        Ok(InMsg::ManagedAccts) => decode::managed_accts_msg(&mut fields.into_iter(), &mut wrapper, &mut tx, &mut rx).await.with_context(|| "managed accounts msg"),
-                                        Ok(InMsg::ReceiveFa) => decode::receive_fa_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "receive fa msg"),
-                                        Ok(InMsg::HistoricalData) => decode::historical_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical data msg"),
-                                        Ok(InMsg::BondContractData) => decode::bond_contract_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "bond contract data msg"),
-                                        Ok(InMsg::ScannerParameters) => decode::scanner_parameters_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "scanner parameters msg"),
-                                        Ok(InMsg::ScannerData) => decode::scanner_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "scanner data msg"),
-                                        Ok(InMsg::TickOptionComputation) => decode::tick_option_computation_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick option computation msg"),
-                                        Ok(InMsg::TickGeneric) => decode::tick_generic_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick generic msg"),
-                                        Ok(InMsg::TickString) => decode::tick_string_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick string msg"),
-                                        Ok(InMsg::TickEfp) => decode::tick_efp_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick efp msg"),
-                                        Ok(InMsg::CurrentTime) => decode::current_time_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "current time msg"),
-                                        Ok(InMsg::RealTimeBars) => decode::real_time_bars_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "real time bars msg"),
-                                        Ok(InMsg::FundamentalData) => decode::fundamental_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "fundamental data msg"),
-                                        Ok(InMsg::ContractDataEnd) => decode::contract_data_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "contract data end msg"),
-                                        Ok(InMsg::OpenOrderEnd) => decode::open_order_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "open order end msg"),
-                                        Ok(InMsg::AcctDownloadEnd) => decode::acct_download_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "acct download end msg"),
-                                        Ok(InMsg::ExecutionDataEnd) => decode::execution_data_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "execution data end msg"),
-                                        Ok(InMsg::DeltaNeutralValidation) => decode::delta_neutral_validation_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "delta neutral validation msg"),
-                                        Ok(InMsg::TickSnapshotEnd) => decode::tick_snapshot_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick snapshot end msg"),
-                                        Ok(InMsg::MarketDataType) => decode::market_data_type_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "market data type msg"),
-                                        Ok(InMsg::CommissionReport) => decode::commission_report_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "commission report msg"),
-                                        Ok(InMsg::PositionData) => decode::position_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "position data msg"),
-                                        Ok(InMsg::PositionEnd) => decode::position_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "position end msg"),
-                                        Ok(InMsg::AccountSummary) => decode::account_summary_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "account summary msg"),
-                                        Ok(InMsg::AccountSummaryEnd) => decode::account_summary_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "account summary end msg"),
-                                        Ok(InMsg::VerifyMessageApi) => decode::verify_message_api_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "verify message api msg"),
-                                        Ok(InMsg::VerifyCompleted) => decode::verify_completed_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "verify completed msg"),
-                                        Ok(InMsg::DisplayGroupList) => decode::display_group_list_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "display group list msg"),
-                                        Ok(InMsg::DisplayGroupUpdated) => decode::display_group_updated_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "display group updated msg"),
-                                        Ok(InMsg::VerifyAndAuthMessageApi) => decode::verify_and_auth_message_api_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "verify and auth message api msg"),
-                                        Ok(InMsg::VerifyAndAuthCompleted) => decode::verify_and_auth_completed_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "verify and auth completed msg"),
-                                        Ok(InMsg::PositionMulti) => decode::position_multi_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "position multi msg"),
-                                        Ok(InMsg::PositionMultiEnd) => decode::position_multi_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "position multi end msg"),
-                                        Ok(InMsg::AccountUpdateMulti) => decode::account_update_multi_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "account update multi msg"),
-                                        Ok(InMsg::AccountUpdateMultiEnd) => decode::account_update_multi_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "account update multi end msg"),
-                                        Ok(InMsg::SecurityDefinitionOptionParameter) => decode::security_definition_option_parameter_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "security definition option parameter msg"),
-                                        Ok(InMsg::SecurityDefinitionOptionParameterEnd) => decode::security_definition_option_parameter_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "security definition option parameter end msg"),
-                                        Ok(InMsg::SoftDollarTiers) => decode::soft_dollar_tiers_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "soft dollar tiers msg"),
-                                        Ok(InMsg::FamilyCodes) => decode::family_codes_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "family codes msg"),
-                                        Ok(InMsg::SymbolSamples) => decode::symbol_samples_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "symbol samples msg"),
-                                        Ok(InMsg::MktDepthExchanges) => decode::mkt_depth_exchanges_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "mkt depth exchanges msg"),
-                                        Ok(InMsg::TickReqParams) => decode::tick_req_params_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick req params msg"),
-                                        Ok(InMsg::SmartComponents) => decode::smart_components_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "smart components msg"),
-                                        Ok(InMsg::NewsArticle) => decode::news_article_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "news article msg"),
-                                        Ok(InMsg::TickNews) => decode::tick_news_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick news msg"),
-                                        Ok(InMsg::NewsProviders) => decode::news_providers_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "news providers msg"),
-                                        Ok(InMsg::HistoricalNews) => decode::historical_news_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical news msg"),
-                                        Ok(InMsg::HistoricalNewsEnd) => decode::historical_news_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical news end msg"),
-                                        Ok(InMsg::HeadTimestamp) => decode::head_timestamp_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "head timestamp msg"),
-                                        Ok(InMsg::HistogramData) => decode::histogram_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "histogram data msg"),
-                                        Ok(InMsg::HistoricalDataUpdate) => decode::historical_data_update_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical data update msg"),
-                                        Ok(InMsg::RerouteMktDataReq) => decode::reroute_mkt_data_req_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "reroute mkt data req msg"),
-                                        Ok(InMsg::RerouteMktDepthReq) => decode::reroute_mkt_depth_req_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "reroute mkt depth req msg"),
-                                        Ok(InMsg::MarketRule) => decode::market_rule_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "market rule msg"),
-                                        Ok(InMsg::Pnl) => decode::pnl_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "pnl msg"),
-                                        Ok(InMsg::PnlSingle) => decode::pnl_single_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "pnl single msg"),
-                                        Ok(InMsg::HistoricalTicks) => decode::historical_ticks_midpoint_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical ticks msg"),
-                                        Ok(InMsg::HistoricalTicksBidAsk) => decode::historical_ticks_bid_ask_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical ticks bid ask msg"),
-                                        Ok(InMsg::HistoricalTicksLast) => decode::historical_ticks_last_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical ticks last msg"),
-                                        Ok(InMsg::TickByTick) => decode::tick_by_tick_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick by tick msg"),
-                                        Ok(InMsg::OrderBound) => decode::order_bound_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "order bound msg"),
-                                        Ok(InMsg::CompletedOrder) => decode::completed_order_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "completed order msg"),
-                                        Ok(InMsg::CompletedOrdersEnd) => decode::completed_orders_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "completed orders end msg"),
-                                        Ok(InMsg::ReplaceFaEnd) => decode::replace_fa_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "replace fa end msg"),
-                                        Ok(InMsg::WshMetaData) => decode::wsh_meta_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "wsh meta data msg"),
-                                        Ok(InMsg::WshEventData) => decode::wsh_event_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "wsh event data msg"),
-                                        Ok(InMsg::HistoricalSchedule) => decode::historical_schedule_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical schedule msg"),
-                                        Ok(InMsg::UserInfo) => decode::user_info_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "user info msg"),
+                                        Ok(In::TickPrice) => decode::tick_price_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick price msg"),
+                                        Ok(In::TickSize) => decode::tick_size_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick size msg"),
+                                        Ok(In::OrderStatus) => decode::order_status_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "order status msg"),
+                                        Ok(In::ErrMsg) => decode::err_msg_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "err msg msg"),
+                                        Ok(In::OpenOrder) => decode::open_order_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "open order msg"),
+                                        Ok(In::AcctValue) => decode::acct_value_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "acct value msg"),
+                                        Ok(In::PortfolioValue) => decode::portfolio_value_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "portfolio value msg"),
+                                        Ok(In::AcctUpdateTime) => decode::acct_update_time_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "acct update time msg"),
+                                        Ok(In::NextValidId) => decode::next_valid_id_msg(&mut fields.into_iter(), &mut wrapper, &mut tx, &mut rx).await.with_context(|| "next valid id msg"),
+                                        Ok(In::ContractData) => decode::contract_data_msg(&mut fields.into_iter(), &mut wrapper, &mut tx, &mut rx).await.with_context(|| "contract data msg"),
+                                        Ok(In::ExecutionData) => decode::execution_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "execution data msg"),
+                                        Ok(In::MarketDepth) => decode::market_depth_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "market depth msg"),
+                                        Ok(In::MarketDepthL2) => decode::market_depth_l2_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "market depth l2 msg"),
+                                        Ok(In::NewsBulletins) => decode::news_bulletins_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "news bulletins msg"),
+                                        Ok(In::ManagedAccts) => decode::managed_accts_msg(&mut fields.into_iter(), &mut wrapper, &mut tx, &mut rx).await.with_context(|| "managed accounts msg"),
+                                        Ok(In::ReceiveFa) => decode::receive_fa_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "receive fa msg"),
+                                        Ok(In::HistoricalData) => decode::historical_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical data msg"),
+                                        Ok(In::BondContractData) => decode::bond_contract_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "bond contract data msg"),
+                                        Ok(In::ScannerParameters) => decode::scanner_parameters_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "scanner parameters msg"),
+                                        Ok(In::ScannerData) => decode::scanner_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "scanner data msg"),
+                                        Ok(In::TickOptionComputation) => decode::tick_option_computation_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick option computation msg"),
+                                        Ok(In::TickGeneric) => decode::tick_generic_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick generic msg"),
+                                        Ok(In::TickString) => decode::tick_string_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick string msg"),
+                                        Ok(In::TickEfp) => decode::tick_efp_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick efp msg"),
+                                        Ok(In::CurrentTime) => decode::current_time_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "current time msg"),
+                                        Ok(In::RealTimeBars) => decode::real_time_bars_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "real time bars msg"),
+                                        Ok(In::FundamentalData) => decode::fundamental_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "fundamental data msg"),
+                                        Ok(In::ContractDataEnd) => decode::contract_data_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "contract data end msg"),
+                                        Ok(In::OpenOrderEnd) => decode::open_order_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "open order end msg"),
+                                        Ok(In::AcctDownloadEnd) => decode::acct_download_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "acct download end msg"),
+                                        Ok(In::ExecutionDataEnd) => decode::execution_data_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "execution data end msg"),
+                                        Ok(In::DeltaNeutralValidation) => decode::delta_neutral_validation_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "delta neutral validation msg"),
+                                        Ok(In::TickSnapshotEnd) => decode::tick_snapshot_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick snapshot end msg"),
+                                        Ok(In::MarketDataType) => decode::market_data_type_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "market data type msg"),
+                                        Ok(In::CommissionReport) => decode::commission_report_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "commission report msg"),
+                                        Ok(In::PositionData) => decode::position_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "position data msg"),
+                                        Ok(In::PositionEnd) => decode::position_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "position end msg"),
+                                        Ok(In::AccountSummary) => decode::account_summary_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "account summary msg"),
+                                        Ok(In::AccountSummaryEnd) => decode::account_summary_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "account summary end msg"),
+                                        Ok(In::VerifyMessageApi) => decode::verify_message_api_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "verify message api msg"),
+                                        Ok(In::VerifyCompleted) => decode::verify_completed_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "verify completed msg"),
+                                        Ok(In::DisplayGroupList) => decode::display_group_list_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "display group list msg"),
+                                        Ok(In::DisplayGroupUpdated) => decode::display_group_updated_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "display group updated msg"),
+                                        Ok(In::VerifyAndAuthMessageApi) => decode::verify_and_auth_message_api_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "verify and auth message api msg"),
+                                        Ok(In::VerifyAndAuthCompleted) => decode::verify_and_auth_completed_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "verify and auth completed msg"),
+                                        Ok(In::PositionMulti) => decode::position_multi_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "position multi msg"),
+                                        Ok(In::PositionMultiEnd) => decode::position_multi_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "position multi end msg"),
+                                        Ok(In::AccountUpdateMulti) => decode::account_update_multi_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "account update multi msg"),
+                                        Ok(In::AccountUpdateMultiEnd) => decode::account_update_multi_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "account update multi end msg"),
+                                        Ok(In::SecurityDefinitionOptionParameter) => decode::security_definition_option_parameter_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "security definition option parameter msg"),
+                                        Ok(In::SecurityDefinitionOptionParameterEnd) => decode::security_definition_option_parameter_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "security definition option parameter end msg"),
+                                        Ok(In::SoftDollarTiers) => decode::soft_dollar_tiers_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "soft dollar tiers msg"),
+                                        Ok(In::FamilyCodes) => decode::family_codes_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "family codes msg"),
+                                        Ok(In::SymbolSamples) => decode::symbol_samples_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "symbol samples msg"),
+                                        Ok(In::MktDepthExchanges) => decode::mkt_depth_exchanges_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "mkt depth exchanges msg"),
+                                        Ok(In::TickReqParams) => decode::tick_req_params_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick req params msg"),
+                                        Ok(In::SmartComponents) => decode::smart_components_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "smart components msg"),
+                                        Ok(In::NewsArticle) => decode::news_article_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "news article msg"),
+                                        Ok(In::TickNews) => decode::tick_news_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick news msg"),
+                                        Ok(In::NewsProviders) => decode::news_providers_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "news providers msg"),
+                                        Ok(In::HistoricalNews) => decode::historical_news_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical news msg"),
+                                        Ok(In::HistoricalNewsEnd) => decode::historical_news_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical news end msg"),
+                                        Ok(In::HeadTimestamp) => decode::head_timestamp_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "head timestamp msg"),
+                                        Ok(In::HistogramData) => decode::histogram_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "histogram data msg"),
+                                        Ok(In::HistoricalDataUpdate) => decode::historical_data_update_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical data update msg"),
+                                        Ok(In::RerouteMktDataReq) => decode::reroute_mkt_data_req_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "reroute mkt data req msg"),
+                                        Ok(In::RerouteMktDepthReq) => decode::reroute_mkt_depth_req_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "reroute mkt depth req msg"),
+                                        Ok(In::MarketRule) => decode::market_rule_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "market rule msg"),
+                                        Ok(In::Pnl) => decode::pnl_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "pnl msg"),
+                                        Ok(In::PnlSingle) => decode::pnl_single_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "pnl single msg"),
+                                        Ok(In::HistoricalTicks) => decode::historical_ticks_midpoint_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical ticks msg"),
+                                        Ok(In::HistoricalTicksBidAsk) => decode::historical_ticks_bid_ask_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical ticks bid ask msg"),
+                                        Ok(In::HistoricalTicksLast) => decode::historical_ticks_last_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical ticks last msg"),
+                                        Ok(In::TickByTick) => decode::tick_by_tick_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "tick by tick msg"),
+                                        Ok(In::OrderBound) => decode::order_bound_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "order bound msg"),
+                                        Ok(In::CompletedOrder) => decode::completed_order_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "completed order msg"),
+                                        Ok(In::CompletedOrdersEnd) => decode::completed_orders_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "completed orders end msg"),
+                                        Ok(In::ReplaceFaEnd) => decode::replace_fa_end_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "replace fa end msg"),
+                                        Ok(In::WshMetaData) => decode::wsh_meta_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "wsh meta data msg"),
+                                        Ok(In::WshEventData) => decode::wsh_event_data_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "wsh event data msg"),
+                                        Ok(In::HistoricalSchedule) => decode::historical_schedule_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "historical schedule msg"),
+                                        Ok(In::UserInfo) => decode::user_info_msg(&mut fields.into_iter(), &mut wrapper).with_context(|| "user info msg"),
                                         Err(e) => Err(e.into()),
                                     }
                                 },
@@ -626,7 +628,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn req_current_time(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(OutMsg::ReqCurrentTime, VERSION);
+        let msg = make_msg!(Out::ReqCurrentTime, VERSION);
         self.writer.write_all(msg.as_bytes()).await
     }
 
@@ -636,7 +638,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn req_managed_accounts(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(OutMsg::ReqManagedAccts, VERSION);
+        let msg = make_msg!(Out::ReqManagedAccts, VERSION);
         self.writer.write_all(msg.as_bytes()).await
     }
 
@@ -658,7 +660,7 @@ impl Client<indicators::Active> {
             None => String::default(),
         };
 
-        let msg = make_msg!(OutMsg::ReqAcctData, VERSION, 1, acct_num);
+        let msg = make_msg!(Out::ReqAcctData, VERSION, 1, acct_num);
         self.writer.write_all(msg.as_bytes()).await
     }
 
@@ -678,7 +680,7 @@ impl Client<indicators::Active> {
             None => String::default(),
         };
 
-        let msg = make_msg!(OutMsg::ReqAcctData, VERSION, 0, acct_num);
+        let msg = make_msg!(Out::ReqAcctData, VERSION, 0, acct_num);
         self.writer.write_all(msg.as_bytes()).await
     }
 
@@ -689,7 +691,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn req_positions(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(OutMsg::ReqPositions, VERSION);
+        let msg = make_msg!(Out::ReqPositions, VERSION);
         self.writer.write_all(msg.as_bytes()).await
     }
 
@@ -699,7 +701,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_positions(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(OutMsg::CancelPositions, VERSION);
+        let msg = make_msg!(Out::CancelPositions, VERSION);
         self.writer.write_all(msg.as_bytes()).await
     }
 
@@ -711,10 +713,13 @@ impl Client<indicators::Active> {
     /// # Errors
     /// Returns any error encountered while writing the outgoing message. Additionally, returns an
     /// error if a provided `account_number` is not in the client's managed accounts.
+    ///
+    /// # Returns
+    /// Returns the unique ID associated with the request.
     pub async fn req_pnl(&mut self, account_number: String) -> IdResult {
         let req_id = self.get_next_req_id();
         let account_number = check_valid_account(self, account_number)?;
-        let msg = make_msg!(OutMsg::ReqPnl, req_id, account_number, "");
+        let msg = make_msg!(Out::ReqPnl, req_id, account_number, "");
 
         self.writer.write_all(msg.as_bytes()).await?;
         Ok(req_id)
@@ -728,7 +733,7 @@ impl Client<indicators::Active> {
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_pnl(&mut self, req_id: i64) -> ReqResult {
-        let msg = make_msg!(OutMsg::CancelPnl, req_id);
+        let msg = make_msg!(Out::CancelPnl, req_id);
 
         self.writer.write_all(msg.as_bytes()).await
     }
@@ -744,6 +749,9 @@ impl Client<indicators::Active> {
     /// # Errors
     /// Returns any error encountered while writing the outgoing message. Additionally, returns an
     /// error if a provided `account_number` is not in the client's managed accounts.
+    ///
+    /// # Returns
+    /// Returns the unique ID associated with the request.
     pub async fn req_single_position_pnl(
         &mut self,
         account_number: String,
@@ -752,7 +760,7 @@ impl Client<indicators::Active> {
         let req_id = self.get_next_req_id();
         let account_number = check_valid_account(self, account_number)?;
         let msg = make_msg!(
-            OutMsg::ReqPnlSingle,
+            Out::ReqPnlSingle,
             req_id,
             account_number,
             "",
@@ -771,8 +779,71 @@ impl Client<indicators::Active> {
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_pnl_single(&mut self, req_id: i64) -> ReqResult {
-        let msg = make_msg!(OutMsg::CancelPnl, req_id);
+        let msg = make_msg!(Out::CancelPnl, req_id);
 
+        self.writer.write_all(msg.as_bytes()).await
+    }
+
+    /// Request completed orders.
+    ///
+    /// # Arguments
+    /// * `api_only` - When true, only orders placed from the API returned.
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
+    pub async fn req_completed_orders(&mut self, api_only: bool) -> ReqResult {
+        let msg = make_msg!(
+            Out::ReqCompletedOrders,
+            u8::from(api_only)
+        );
+
+        self.writer.write_all(msg.as_bytes()).await
+    }
+
+    /// Request summary information about a specific account, creating a subscription to the same
+    /// information as is shown in the TWS Account Summary tab.
+    ///
+    /// # Arguments
+    /// * `tags` - The list of data tags to include in the subscription.
+    ///
+    /// # Returns
+    /// Returns the unique ID associated with the request.
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
+    pub async fn req_account_summary(&mut self, tags: Vec<Tag>) -> IdResult {
+        const VERSION: u8 = 1;
+        let req_id = self.get_next_req_id();
+        let msg = make_msg!(
+            Out::ReqAccountSummary,
+            VERSION,
+            req_id,
+            "All",
+            tags.iter()
+                .map(std::string::ToString::to_string)
+                .collect::<Vec<String>>()
+                .join(",")
+        );
+
+        self.writer.write_all(msg.as_bytes()).await?;
+        Ok(req_id)
+    }
+
+
+    /// Cancel an existing account summary subscription created by [`Client::req_account_summary`].
+    ///
+    /// # Arguments
+    /// * `req_id` - The ID of the subscription to cancel.
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
+    pub async fn cancel_account_summary(&mut self, req_id: i64) -> ReqResult {
+        const VERSION: u8 = 1;
+        let msg = make_msg!(
+            Out::CancelAccountSummary,
+            VERSION,
+            req_id
+        );
         self.writer.write_all(msg.as_bytes()).await
     }
 
@@ -804,13 +875,13 @@ impl Client<indicators::Active> {
         data: D,
         regular_trading_hours_only: bool,
     ) -> IdResult
-    where
-        S: Security,
-        D: historical_bar::data_types::DataType<S>,
+        where
+            S: Security,
+            D: historical_bar::data_types::DataType<S>,
     {
         let id = self.get_next_req_id();
         let msg = make_msg!(
-            OutMsg::ReqHistoricalData,
+            Out::ReqHistoricalData,
             id,
             security,
             u8::from(false),
@@ -851,13 +922,13 @@ impl Client<indicators::Active> {
         data: D,
         regular_trading_hours_only: bool,
     ) -> IdResult
-    where
-        S: Security,
-        D: updating_historical_bar::data_types::DataType<S>,
+        where
+            S: Security,
+            D: updating_historical_bar::data_types::DataType<S>,
     {
         let id = self.get_next_req_id();
         let msg = make_msg!(
-            OutMsg::ReqHistoricalData,
+            Out::ReqHistoricalData,
             id,
             security,
             u8::from(false),
@@ -883,7 +954,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_updating_historical_bar(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(OutMsg::CancelHistoricalData, VERSION, req_id);
+        let msg = make_msg!(Out::CancelHistoricalData, VERSION, req_id);
         self.writer.write_all(msg.as_bytes()).await
     }
 
@@ -906,13 +977,13 @@ impl Client<indicators::Active> {
         data: D,
         regular_trading_hours_only: bool,
     ) -> IdResult
-    where
-        S: Security,
-        D: historical_ticks::data_types::DataType<S>,
+        where
+            S: Security,
+            D: historical_ticks::data_types::DataType<S>,
     {
         let id = self.get_next_req_id();
         let msg = make_msg!(
-            OutMsg::ReqHeadTimestamp,
+            Out::ReqHeadTimestamp,
             id,
             security,
             "",
@@ -932,7 +1003,7 @@ impl Client<indicators::Active> {
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_head_timestamp(&mut self, req_id: i64) -> ReqResult {
-        let msg = make_msg!(OutMsg::CancelHeadTimestamp, req_id);
+        let msg = make_msg!(Out::CancelHeadTimestamp, req_id);
 
         self.writer.write_all(msg.as_bytes()).await
     }
@@ -955,12 +1026,12 @@ impl Client<indicators::Active> {
         regular_trading_hours_only: bool,
         duration: histogram::Duration,
     ) -> IdResult
-    where
-        S: Security,
+        where
+            S: Security,
     {
         let id = self.get_next_req_id();
         let msg = make_msg!(
-            OutMsg::ReqHistogramData,
+            Out::ReqHistogramData,
             id,
             security,
             "",
@@ -979,7 +1050,7 @@ impl Client<indicators::Active> {
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_histogram_data(&mut self, req_id: i64) -> ReqResult {
-        let msg = make_msg!(OutMsg::CancelHistogramData, req_id);
+        let msg = make_msg!(Out::CancelHistogramData, req_id);
         self.writer.write_all(msg.as_bytes()).await
     }
 
@@ -1006,13 +1077,13 @@ impl Client<indicators::Active> {
         data: D,
         regular_trading_hours_only: bool,
     ) -> IdResult
-    where
-        S: Security,
-        D: historical_ticks::data_types::DataType<S>,
+        where
+            S: Security,
+            D: historical_ticks::data_types::DataType<S>,
     {
         let id = self.get_next_req_id();
         let msg = make_msg!(
-            OutMsg::ReqHistoricalTicks,
+            Out::ReqHistoricalTicks,
             id,
             security,
             "",
@@ -1052,14 +1123,14 @@ impl Client<indicators::Active> {
         refresh_type: live_data::RefreshType,
         use_regulatory_snapshot: bool,
     ) -> IdResult
-    where
-        S: Security,
-        D: live_data::data_types::DataType<S>,
+        where
+            S: Security,
+            D: live_data::data_types::DataType<S>,
     {
         const VERSION: u8 = 11;
         let id = self.get_next_req_id();
         let msg = make_msg!(
-            OutMsg::ReqMktData,
+            Out::ReqMktData,
             VERSION,
             id,
             security,
@@ -1086,7 +1157,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_market_data(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 2;
-        let msg = make_msg!(OutMsg::CancelMktData, VERSION, req_id);
+        let msg = make_msg!(Out::CancelMktData, VERSION, req_id);
         self.writer.write_all(msg.as_bytes()).await
     }
 
@@ -1099,7 +1170,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn req_market_data_type(&mut self, variant: live_data::Class) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(OutMsg::ReqMarketDataType, VERSION, variant);
+        let msg = make_msg!(Out::ReqMarketDataType, VERSION, variant);
         self.writer.write_all(msg.as_bytes()).await
     }
 
@@ -1122,14 +1193,14 @@ impl Client<indicators::Active> {
         data: D,
         regular_trading_hours_only: bool,
     ) -> IdResult
-    where
-        S: Security,
-        D: live_bar::data_types::DataType<S>,
+        where
+            S: Security,
+            D: live_bar::data_types::DataType<S>,
     {
         const VERSION: u8 = 3;
         let id = self.get_next_req_id();
         let msg = make_msg!(
-            OutMsg::ReqRealTimeBars,
+            Out::ReqRealTimeBars,
             VERSION,
             id,
             security,
@@ -1152,7 +1223,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_real_time_bars(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(OutMsg::CancelRealTimeBars, VERSION, req_id);
+        let msg = make_msg!(Out::CancelRealTimeBars, VERSION, req_id);
         self.writer.write_all(msg.as_bytes()).await
     }
 
@@ -1179,13 +1250,13 @@ impl Client<indicators::Active> {
         number_of_historical_ticks: live_ticks::NumberOfTicks,
         ignore_size: bool,
     ) -> IdResult
-    where
-        S: Security,
-        D: live_ticks::data_types::DataType<S>,
+        where
+            S: Security,
+            D: live_ticks::data_types::DataType<S>,
     {
         let id = self.get_next_req_id();
         let msg = make_msg!(
-            OutMsg::ReqTickByTickData,
+            Out::ReqTickByTickData,
             id,
             security,
             tick_data,
@@ -1204,7 +1275,7 @@ impl Client<indicators::Active> {
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_tick_by_tick_data(&mut self, req_id: i64) -> ReqResult {
-        let msg = make_msg!(OutMsg::CancelTickByTickData, req_id);
+        let msg = make_msg!(Out::CancelTickByTickData, req_id);
         self.writer.write_all(msg.as_bytes()).await
     }
 
@@ -1222,13 +1293,13 @@ impl Client<indicators::Active> {
     /// # Returns
     /// Returns the unique ID associated with the request.
     pub async fn req_market_depth<S>(&mut self, security: &S, number_of_rows: u32) -> IdResult
-    where
-        S: Security,
+        where
+            S: Security,
     {
         const VERSION: u8 = 5;
         let id = self.get_next_req_id();
         let msg = make_msg!(
-            OutMsg::ReqMktDepth,
+            Out::ReqMktDepth,
             VERSION,
             id,
             security,
@@ -1246,7 +1317,7 @@ impl Client<indicators::Active> {
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
     pub async fn req_market_depth_exchanges(&mut self) -> ReqResult {
-        let msg = make_msg!(OutMsg::ReqMktDepthExchanges);
+        let msg = make_msg!(Out::ReqMktDepthExchanges);
         self.writer.write_all(msg.as_bytes()).await
     }
 
@@ -1259,7 +1330,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_market_depth(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(OutMsg::CancelMktDepth, VERSION, req_id);
+        let msg = make_msg!(Out::CancelMktDepth, VERSION, req_id);
         self.writer.write_all(msg.as_bytes()).await
     }
 
@@ -1276,7 +1347,7 @@ impl Client<indicators::Active> {
     /// Returns the unique ID associated with the request.
     pub async fn req_smart_components(&mut self, exchange_id: ExchangeId) -> IdResult {
         let id = self.get_next_req_id();
-        let msg = make_msg!(OutMsg::ReqSmartComponents, id, exchange_id);
+        let msg = make_msg!(Out::ReqSmartComponents, id, exchange_id);
         self.writer.write_all(msg.as_bytes()).await?;
 
         Ok(id)
@@ -1296,12 +1367,12 @@ impl Client<indicators::Active> {
     /// # Returns
     /// Returns the unique ID associated with the request.
     pub async fn req_place_order<S, E>(&mut self, order: &Order<'_, S, E>) -> IdResult
-    where
-        S: Security,
-        E: Executable<S>,
+        where
+            S: Security,
+            E: Executable<S>,
     {
         let id = self.get_next_order_id();
-        let msg = make_msg!(OutMsg::PlaceOrder, id, order.get_security(), "", "", order);
+        let msg = make_msg!(Out::PlaceOrder, id, order.get_security(), "", "", order);
         self.writer.write_all(msg.as_bytes()).await?;
         Ok(id)
     }
@@ -1319,11 +1390,11 @@ impl Client<indicators::Active> {
     /// # Returns
     /// Returns the unique ID associated with the request.
     pub async fn req_modify_order<S, E>(&mut self, order: &Order<'_, S, E>, id: i64) -> IdResult
-    where
-        S: Security,
-        E: Executable<S>,
+        where
+            S: Security,
+            E: Executable<S>,
     {
-        let msg = make_msg!(OutMsg::PlaceOrder, id, order.get_security(), "", "", order);
+        let msg = make_msg!(Out::PlaceOrder, id, order.get_security(), "", "", order);
         self.writer.write_all(msg.as_bytes()).await?;
         Ok(id)
     }
@@ -1336,11 +1407,11 @@ impl Client<indicators::Active> {
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_order<S>(&mut self, id: i64) -> ReqResult
-    where
-        S: Security,
+        where
+            S: Security,
     {
         const VERSION: u8 = 1;
-        let msg = make_msg!(OutMsg::CancelOrder, VERSION, id, "");
+        let msg = make_msg!(Out::CancelOrder, VERSION, id, "");
         self.writer.write_all(msg.as_bytes()).await
     }
 
@@ -1350,7 +1421,58 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_all_orders(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(OutMsg::ReqGlobalCancel, VERSION);
+        let msg = make_msg!(Out::ReqGlobalCancel, VERSION);
+        self.writer.write_all(msg.as_bytes()).await
+    }
+
+    /// Request all the open orders placed from all API clients and from TWS.
+    ///
+    /// Note that this will request all of the orders associated with a given IBKR account and
+    /// therefore will contain orders placed by another [`Client`].
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
+    pub async fn req_all_open_orders(&mut self) -> ReqResult {
+        const VERSION: u8 = 1;
+        let msg = make_msg!(
+            Out::ReqAllOpenOrders,
+            VERSION
+        );
+
+        self.writer.write_all(msg.as_bytes()).await
+    }
+
+    /// Request that all newly created TWS orders will be implicitly associated with the calling
+    /// client. Therefore, the API will receive updates about TWS orders.
+    ///
+    /// Note! This can only be called from a client with ID 0.
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message. Also returns an error if
+    /// the calling client does not have ID 0.
+    pub async fn req_auto_open_orders(&mut self) -> ReqResult {
+        const VERSION: u8 = 1;
+        let msg = make_msg!(
+            Out::ReqAutoOpenOrders,
+            VERSION,
+            u8::from(true)
+        );
+
+        self.writer.write_all(msg.as_bytes()).await
+    }
+
+    // === Executions ===
+
+    pub async fn req_executions(&mut self, filter: Filter) -> ReqResult {
+        const VERSION: u8 = 3;
+        let req_id = self.get_next_req_id();
+        let msg = make_msg!(
+            Out::ReqExecutions,
+            VERSION,
+            req_id,
+            filter
+        );
+
         self.writer.write_all(msg.as_bytes()).await
     }
 
@@ -1364,7 +1486,7 @@ impl Client<indicators::Active> {
         const VERSION: u8 = 8;
         let req_id = self.get_next_req_id();
         let msg = make_msg!(
-            OutMsg::ReqContractData,
+            Out::ReqContractData,
             VERSION,
             req_id,
             contract_id.0,

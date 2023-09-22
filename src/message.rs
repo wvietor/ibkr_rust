@@ -26,7 +26,7 @@ impl std::error::Error for InvalidInMsg {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum InMsg {
+pub enum In {
     TickPrice,
     TickSize,
     OrderStatus,
@@ -111,7 +111,7 @@ pub enum InMsg {
     UserInfo,
 }
 
-impl FromStr for InMsg {
+impl FromStr for In {
     type Err = InvalidInMsg;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -204,176 +204,256 @@ impl FromStr for InMsg {
 }
 
 #[allow(dead_code)] // Temporary to avoid annoying lint
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum OutMsg {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+pub enum Out {
+    #[serde(rename(serialize="1"))]
     ReqMktData,
+    #[serde(rename(serialize="2"))]
     CancelMktData,
+    #[serde(rename(serialize="3"))]
     PlaceOrder,
+    #[serde(rename(serialize="4"))]
     CancelOrder,
+    #[serde(rename(serialize="5"))]
     ReqOpenOrders,
+    #[serde(rename(serialize="6"))]
     ReqAcctData,
+    #[serde(rename(serialize="7"))]
     ReqExecutions,
+    #[serde(rename(serialize="8"))]
     ReqIds,
+    #[serde(rename(serialize="9"))]
     ReqContractData,
+    #[serde(rename(serialize="10"))]
     ReqMktDepth,
+    #[serde(rename(serialize="11"))]
     CancelMktDepth,
+    #[serde(rename(serialize="12"))]
     ReqNewsBulletins,
+    #[serde(rename(serialize="13"))]
     CancelNewsBulletins,
+    #[serde(rename(serialize="14"))]
     SetServerLoglevel,
+    #[serde(rename(serialize="15"))]
     ReqAutoOpenOrders,
+    #[serde(rename(serialize="16"))]
     ReqAllOpenOrders,
+    #[serde(rename(serialize="17"))]
     ReqManagedAccts,
+    #[serde(rename(serialize="18"))]
     ReqFa,
+    #[serde(rename(serialize="19"))]
     ReplaceFa,
+    #[serde(rename(serialize="20"))]
     ReqHistoricalData,
+    #[serde(rename(serialize="21"))]
     ExerciseOptions,
+    #[serde(rename(serialize="22"))]
     ReqScannerSubscription,
+    #[serde(rename(serialize="23"))]
     CancelScannerSubscription,
+    #[serde(rename(serialize="24"))]
     ReqScannerParameters,
+    #[serde(rename(serialize="25"))]
     CancelHistoricalData,
+    #[serde(rename(serialize="49"))]
     ReqCurrentTime,
+    #[serde(rename(serialize="50"))]
     ReqRealTimeBars,
+    #[serde(rename(serialize="51"))]
     CancelRealTimeBars,
+    #[serde(rename(serialize="52"))]
     ReqFundamentalData,
+    #[serde(rename(serialize="53"))]
     CancelFundamentalData,
+    #[serde(rename(serialize="54"))]
     ReqCalcImpliedVolat,
+    #[serde(rename(serialize="55"))]
     ReqCalcOptionPrice,
+    #[serde(rename(serialize="56"))]
     CancelCalcImpliedVolat,
+    #[serde(rename(serialize="57"))]
     CancelCalcOptionPrice,
+    #[serde(rename(serialize="58"))]
     ReqGlobalCancel,
+    #[serde(rename(serialize="59"))]
     ReqMarketDataType,
+    #[serde(rename(serialize="61"))]
     ReqPositions,
+    #[serde(rename(serialize="62"))]
     ReqAccountSummary,
+    #[serde(rename(serialize="63"))]
     CancelAccountSummary,
+    #[serde(rename(serialize="64"))]
     CancelPositions,
+    #[serde(rename(serialize="65"))]
     VerifyRequest,
+    #[serde(rename(serialize="66"))]
     VerifyMessage,
+    #[serde(rename(serialize="67"))]
     QueryDisplayGroups,
+    #[serde(rename(serialize="68"))]
     SubscribeToGroupEvents,
+    #[serde(rename(serialize="69"))]
     UpdateDisplayGroup,
+    #[serde(rename(serialize="70"))]
     UnsubscribeFromGroupEvents,
+    #[serde(rename(serialize="71"))]
     StartApi,
+    #[serde(rename(serialize="72"))]
     VerifyAndAuthRequest,
+    #[serde(rename(serialize="73"))]
     VerifyAndAuthMessage,
+    #[serde(rename(serialize="74"))]
     ReqPositionsMulti,
+    #[serde(rename(serialize="75"))]
     CancelPositionsMulti,
+    #[serde(rename(serialize="76"))]
     ReqAccountUpdatesMulti,
+    #[serde(rename(serialize="77"))]
     CancelAccountUpdatesMulti,
+    #[serde(rename(serialize="78"))]
     ReqSecDefOptParams,
+    #[serde(rename(serialize="79"))]
     ReqSoftDollarTiers,
+    #[serde(rename(serialize="80"))]
     ReqFamilyCodes,
+    #[serde(rename(serialize="81"))]
     ReqMatchingSymbols,
+    #[serde(rename(serialize="82"))]
     ReqMktDepthExchanges,
+    #[serde(rename(serialize="83"))]
     ReqSmartComponents,
+    #[serde(rename(serialize="84"))]
     ReqNewsArticle,
+    #[serde(rename(serialize="85"))]
     ReqNewsProviders,
+    #[serde(rename(serialize="86"))]
     ReqHistoricalNews,
+    #[serde(rename(serialize="87"))]
     ReqHeadTimestamp,
+    #[serde(rename(serialize="88"))]
     ReqHistogramData,
+    #[serde(rename(serialize="89"))]
     CancelHistogramData,
+    #[serde(rename(serialize="90"))]
     CancelHeadTimestamp,
+    #[serde(rename(serialize="91"))]
     ReqMarketRule,
+    #[serde(rename(serialize="92"))]
     ReqPnl,
+    #[serde(rename(serialize="93"))]
     CancelPnl,
+    #[serde(rename(serialize="94"))]
     ReqPnlSingle,
+    #[serde(rename(serialize="95"))]
     CancelPnlSingle,
+    #[serde(rename(serialize="96"))]
     ReqHistoricalTicks,
+    #[serde(rename(serialize="97"))]
     ReqTickByTickData,
+    #[serde(rename(serialize="98"))]
     CancelTickByTickData,
+    #[serde(rename(serialize="99"))]
     ReqCompletedOrders,
+    #[serde(rename(serialize="100"))]
     ReqWshMetaData,
+    #[serde(rename(serialize="101"))]
     CancelWshMetaData,
+    #[serde(rename(serialize="102"))]
     ReqWshEventData,
+    #[serde(rename(serialize="103"))]
     CancelWshEventData,
+    #[serde(rename(serialize="104"))]
     ReqUserInfo,
 }
 
-impl ToString for OutMsg {
-    fn to_string(&self) -> String {
-        match self {
-            Self::ReqMktData => "1",
-            Self::CancelMktData => "2",
-            Self::PlaceOrder => "3",
-            Self::CancelOrder => "4",
-            Self::ReqOpenOrders => "5",
-            Self::ReqAcctData => "6",
-            Self::ReqExecutions => "7",
-            Self::ReqIds => "8",
-            Self::ReqContractData => "9",
-            Self::ReqMktDepth => "10",
-            Self::CancelMktDepth => "11",
-            Self::ReqNewsBulletins => "12",
-            Self::CancelNewsBulletins => "13",
-            Self::SetServerLoglevel => "14",
-            Self::ReqAutoOpenOrders => "15",
-            Self::ReqAllOpenOrders => "16",
-            Self::ReqManagedAccts => "17",
-            Self::ReqFa => "18",
-            Self::ReplaceFa => "19",
-            Self::ReqHistoricalData => "20",
-            Self::ExerciseOptions => "21",
-            Self::ReqScannerSubscription => "22",
-            Self::CancelScannerSubscription => "23",
-            Self::ReqScannerParameters => "24",
-            Self::CancelHistoricalData => "25",
-            Self::ReqCurrentTime => "49",
-            Self::ReqRealTimeBars => "50",
-            Self::CancelRealTimeBars => "51",
-            Self::ReqFundamentalData => "52",
-            Self::CancelFundamentalData => "53",
-            Self::ReqCalcImpliedVolat => "54",
-            Self::ReqCalcOptionPrice => "55",
-            Self::CancelCalcImpliedVolat => "56",
-            Self::CancelCalcOptionPrice => "57",
-            Self::ReqGlobalCancel => "58",
-            Self::ReqMarketDataType => "59",
-            Self::ReqPositions => "61",
-            Self::ReqAccountSummary => "62",
-            Self::CancelAccountSummary => "63",
-            Self::CancelPositions => "64",
-            Self::VerifyRequest => "65",
-            Self::VerifyMessage => "66",
-            Self::QueryDisplayGroups => "67",
-            Self::SubscribeToGroupEvents => "68",
-            Self::UpdateDisplayGroup => "69",
-            Self::UnsubscribeFromGroupEvents => "70",
-            Self::StartApi => "71",
-            Self::VerifyAndAuthRequest => "72",
-            Self::VerifyAndAuthMessage => "73",
-            Self::ReqPositionsMulti => "74",
-            Self::CancelPositionsMulti => "75",
-            Self::ReqAccountUpdatesMulti => "76",
-            Self::CancelAccountUpdatesMulti => "77",
-            Self::ReqSecDefOptParams => "78",
-            Self::ReqSoftDollarTiers => "79",
-            Self::ReqFamilyCodes => "80",
-            Self::ReqMatchingSymbols => "81",
-            Self::ReqMktDepthExchanges => "82",
-            Self::ReqSmartComponents => "83",
-            Self::ReqNewsArticle => "84",
-            Self::ReqNewsProviders => "85",
-            Self::ReqHistoricalNews => "86",
-            Self::ReqHeadTimestamp => "87",
-            Self::ReqHistogramData => "88",
-            Self::CancelHistogramData => "89",
-            Self::CancelHeadTimestamp => "90",
-            Self::ReqMarketRule => "91",
-            Self::ReqPnl => "92",
-            Self::CancelPnl => "93",
-            Self::ReqPnlSingle => "94",
-            Self::CancelPnlSingle => "95",
-            Self::ReqHistoricalTicks => "96",
-            Self::ReqTickByTickData => "97",
-            Self::CancelTickByTickData => "98",
-            Self::ReqCompletedOrders => "99",
-            Self::ReqWshMetaData => "100",
-            Self::CancelWshMetaData => "101",
-            Self::ReqWshEventData => "102",
-            Self::CancelWshEventData => "103",
-            Self::ReqUserInfo => "104",
-        }
-        .to_owned()
+impl ToString for Out {
+fn to_string(&self) -> String {
+    match self {
+        Self::ReqMktData => "1",
+        Self::CancelMktData => "2",
+        Self::PlaceOrder => "3",
+        Self::CancelOrder => "4",
+        Self::ReqOpenOrders => "5",
+        Self::ReqAcctData => "6",
+        Self::ReqExecutions => "7",
+        Self::ReqIds => "8",
+        Self::ReqContractData => "9",
+        Self::ReqMktDepth => "10",
+        Self::CancelMktDepth => "11",
+        Self::ReqNewsBulletins => "12",
+        Self::CancelNewsBulletins => "13",
+        Self::SetServerLoglevel => "14",
+        Self::ReqAutoOpenOrders => "15",
+        Self::ReqAllOpenOrders => "16",
+        Self::ReqManagedAccts => "17",
+        Self::ReqFa => "18",
+        Self::ReplaceFa => "19",
+        Self::ReqHistoricalData => "20",
+        Self::ExerciseOptions => "21",
+        Self::ReqScannerSubscription => "22",
+        Self::CancelScannerSubscription => "23",
+        Self::ReqScannerParameters => "24",
+        Self::CancelHistoricalData => "25",
+        Self::ReqCurrentTime => "49",
+        Self::ReqRealTimeBars => "50",
+        Self::CancelRealTimeBars => "51",
+        Self::ReqFundamentalData => "52",
+        Self::CancelFundamentalData => "53",
+        Self::ReqCalcImpliedVolat => "54",
+        Self::ReqCalcOptionPrice => "55",
+        Self::CancelCalcImpliedVolat => "56",
+        Self::CancelCalcOptionPrice => "57",
+        Self::ReqGlobalCancel => "58",
+        Self::ReqMarketDataType => "59",
+        Self::ReqPositions => "61",
+        Self::ReqAccountSummary => "62",
+        Self::CancelAccountSummary => "63",
+        Self::CancelPositions => "64",
+        Self::VerifyRequest => "65",
+        Self::VerifyMessage => "66",
+        Self::QueryDisplayGroups => "67",
+        Self::SubscribeToGroupEvents => "68",
+        Self::UpdateDisplayGroup => "69",
+        Self::UnsubscribeFromGroupEvents => "70",
+        Self::StartApi => "71",
+        Self::VerifyAndAuthRequest => "72",
+        Self::VerifyAndAuthMessage => "73",
+        Self::ReqPositionsMulti => "74",
+        Self::CancelPositionsMulti => "75",
+        Self::ReqAccountUpdatesMulti => "76",
+        Self::CancelAccountUpdatesMulti => "77",
+        Self::ReqSecDefOptParams => "78",
+        Self::ReqSoftDollarTiers => "79",
+        Self::ReqFamilyCodes => "80",
+        Self::ReqMatchingSymbols => "81",
+        Self::ReqMktDepthExchanges => "82",
+        Self::ReqSmartComponents => "83",
+        Self::ReqNewsArticle => "84",
+        Self::ReqNewsProviders => "85",
+        Self::ReqHistoricalNews => "86",
+        Self::ReqHeadTimestamp => "87",
+        Self::ReqHistogramData => "88",
+        Self::CancelHistogramData => "89",
+        Self::CancelHeadTimestamp => "90",
+        Self::ReqMarketRule => "91",
+        Self::ReqPnl => "92",
+        Self::CancelPnl => "93",
+        Self::ReqPnlSingle => "94",
+        Self::CancelPnlSingle => "95",
+        Self::ReqHistoricalTicks => "96",
+        Self::ReqTickByTickData => "97",
+        Self::CancelTickByTickData => "98",
+        Self::ReqCompletedOrders => "99",
+        Self::ReqWshMetaData => "100",
+        Self::CancelWshMetaData => "101",
+        Self::ReqWshEventData => "102",
+        Self::CancelWshEventData => "103",
+        Self::ReqUserInfo => "104",
     }
+        .to_owned()
+}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

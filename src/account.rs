@@ -1,4 +1,5 @@
 use std::fmt::Formatter;
+use serde::{Serialize, Deserialize};
 
 use crate::currency::Currency;
 
@@ -163,13 +164,29 @@ pub enum Attribute {
     WhatIfPMEnabled(bool),
 }
 
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+impl ToString for Tag {
+    fn to_string(&self) -> String {
+        "".to_owned()
+    }
+}
+
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
 /// The particular account groups managed by a given client.
 pub enum Group {
     /// All accounts to which a given user has access.
     All,
     /// A specific account.
     Name(String),
+}
+
+impl ToString for Group {
+    fn to_string(&self) -> String {
+        match self {
+            Self::All => "All",
+            Self::Name(s) => s,
+        }
+        .to_owned()
+    }
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -237,4 +254,67 @@ impl std::str::FromStr for RemainingDayTrades {
             )),
         }
     }
+}
+
+/// Represents the different types of account information available for a
+/// [`crate::client::Client::req_account_summary`] request.
+pub enum Tag {
+    /// Identifies the IB account structure
+    AccountType,
+    /// The basis for determining the price of the assets in your account. Total cash value + stock value + options value + bond value.
+    NetLiquidation,
+    /// Total cash balance recognized at the time of trade + futures PNL.
+    TotalCashValue,
+    /// Cash recognized at the time of settlement - purchases at the time of trade - commissions - taxes - fees.
+    SettledCash,
+    /// Total accrued cash value of stock, commodities and securities.
+    AccruedCash,
+    /// Buying power serves as a measurement of the dollar value of securities that one may purchase in a securities account without depositing additional funds.
+    BuyingPower,
+    /// Forms the basis for determining whether a client has the necessary assets to either initiate or maintain security positions. Cash + stocks + bonds + mutual funds.
+    EquityWithLoanValue,
+    /// Marginable Equity with Loan value as of 16:00 ET the previous day.
+    PreviousEquityWithLoanValue,
+    /// The sum of the absolute value of all stock and equity option positions.
+    GrossPositionValue,
+    /// Regulation T equity for universal account.
+    RegTEquity,
+    /// Regulation T margin for universal account.
+    RegTMargin,
+    /// Special Memorandum Account: Line of credit created when the market value of securities in a Regulation T account increase in value.
+    SMA,
+    /// Initial Margin requirement of whole portfolio.
+    InitMarginReq,
+    /// Maintenance Margin requirement of whole portfolio.
+    MaintMarginReq,
+    /// This value tells what you have available for trading.
+    AvailableFunds,
+    /// This value shows your margin cushion, before liquidation.
+    ExcessLiquidity,
+    /// Excess liquidity as a percentage of net liquidation value.
+    Cushion,
+    /// Initial Margin of whole portfolio with no discounts or intraday credits.
+    FullInitMarginReq,
+    /// Maintenance Margin of whole portfolio with no discounts or intraday credits.
+    FullMaintMarginReq,
+    /// Available funds of whole portfolio with no discounts or intraday credits.
+    FullAvailableFunds,
+    /// Excess liquidity of whole portfolio with no discounts or intraday credits.
+    FullExcessLiquidity,
+    /// Time when look-ahead values take effect.
+    LookAheadNextChange,
+    /// Initial Margin requirement of whole portfolio as of next period's margin change.
+    LookAheadInitMarginReq,
+    /// Maintenance Margin requirement of whole portfolio as of next period's margin change.
+    LookAheadMaintMarginReq,
+    /// This value reflects your available funds at the next margin change.
+    LookAheadAvailableFunds,
+    /// This value reflects your excess liquidity at the next margin change.
+    LookAheadExcessLiquidity,
+    /// A measure of how close the account is to liquidation.
+    HighestSeverity,
+    /// The Number of Open/Close trades a user could put on before Pattern Day Trading is detected. A value of "-1" means that the user can put on unlimited day trades.
+    DayTradesRemaining,
+    /// GrossPositionValue / NetLiquidation.
+    Leverage,
 }

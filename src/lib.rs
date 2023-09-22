@@ -19,7 +19,7 @@ pub mod client;
 #[macro_use]
 mod comm;
 /// Contains types related to account information.
-mod account;
+pub mod account;
 mod constants;
 /// Contains the definitions of all [`contract::Security`] implementors, which represent tradable
 /// contracts.
@@ -34,7 +34,6 @@ pub mod currency;
 #[allow(
     dead_code,
     unused_variables,
-    clippy::inline_always,
     clippy::print_stdout,
     clippy::use_debug,
     clippy::too_many_lines,
@@ -49,6 +48,7 @@ pub mod exchange;
 /// and 3) Any types associated with implementors of the indicator types.
 pub mod market_data;
 mod message;
+mod message2;
 /// Contains types and traits related to orders.
 pub mod order;
 /// Contains the types that are parsed from API callbacks. They are used in the [`wrapper::Wrapper`]
@@ -71,6 +71,7 @@ pub mod tick;
 /// Contains the definition of the [`wrapper::Wrapper`] trait. Implementing this trait on a custom
 /// type allows users to customize callback behavior.
 pub mod wrapper;
+mod execution;
 
 #[allow(missing_docs, clippy::use_debug, clippy::print_stdout)]
 pub mod default_wrapper {
