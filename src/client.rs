@@ -829,7 +829,6 @@ impl Client<indicators::Active> {
         Ok(req_id)
     }
 
-
     /// Cancel an existing account summary subscription created by [`Client::req_account_summary`].
     ///
     /// # Arguments
@@ -844,7 +843,19 @@ impl Client<indicators::Active> {
             VERSION,
             req_id
         );
+
         self.writer.write_all(msg.as_bytes()).await
+    }
+
+    pub async fn req_user_info(&mut self) -> IdResult {
+        let req_id = self.get_next_req_id();
+        let msg = make_msg!(
+            Out::ReqUserInfo,
+            req_id
+        );
+
+        self.writer.write_all(msg.as_bytes()).await?;
+        Ok(req_id)
     }
 
     // === Historical Market Data ===
@@ -1461,6 +1472,22 @@ impl Client<indicators::Active> {
         self.writer.write_all(msg.as_bytes()).await
     }
 
+    /// Request the open orders that were placed from the calling client.
+    ///
+    /// A Note that a client with an ID of 0 will also receive updates about orders placed with TWS.
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
+    pub async fn req_open_orders(&mut self) -> ReqResult {
+        const VERSION: u8 = 1;
+        let msg = make_msg!(
+            Out::ReqOpenOrders,
+            VERSION
+        );
+
+        self.writer.write_all(msg.as_bytes()).await
+    }
+
     // === Executions ===
 
     pub async fn req_executions(&mut self, filter: Filter) -> ReqResult {
@@ -1475,6 +1502,8 @@ impl Client<indicators::Active> {
 
         self.writer.write_all(msg.as_bytes()).await
     }
+
+
 
     // === Contract Creation ===
 
