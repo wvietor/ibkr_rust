@@ -166,7 +166,7 @@ pub enum Attribute {
 
 impl ToString for Tag {
     fn to_string(&self) -> String {
-        "".to_owned()
+        String::new()
     }
 }
 
@@ -223,12 +223,18 @@ impl std::str::FromStr for Denomination {
 }
 
 #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Hash)]
+/// Represents the possible numbers of day trades before a regulatory breach of pattern day-trading
+/// rules is committed.
 pub enum RemainingDayTrades {
+    /// No limits on the number of day trades.
     Unlimited,
+    /// A specified number of day trades are remaining.
     Count(u32),
 }
 
 #[derive(Debug, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+/// An error type that represents an invalid value encountered while parsing the numer of remaining
+/// day trades.
 pub struct ParseDayTradesError(String);
 
 impl std::fmt::Display for ParseDayTradesError {

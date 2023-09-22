@@ -847,6 +847,13 @@ impl Client<indicators::Active> {
         self.writer.write_all(msg.as_bytes()).await
     }
 
+    /// Request user info details for the user associated with the calling client.
+    ///
+    /// # Returns
+    /// Returns the unique ID associated with the request.
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
     pub async fn req_user_info(&mut self) -> IdResult {
         let req_id = self.get_next_req_id();
         let msg = make_msg!(
@@ -1490,7 +1497,17 @@ impl Client<indicators::Active> {
 
     // === Executions ===
 
-    pub async fn req_executions(&mut self, filter: Filter) -> ReqResult {
+    /// Request execution all execution reports that fit the criteria specified in the `filter`.
+    ///
+    /// In order to view executions beyond the past 24 hours, open the Trade Log in TWS and, while
+    /// the Trade Log is displayed, request the executions again from the API.
+    ///
+    /// # Arguments
+    /// `filter` - The conditions with which to determine whether an execution will be returned.
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
+    pub async fn req_executions(&mut self, filter: Filter) -> IdResult {
         const VERSION: u8 = 3;
         let req_id = self.get_next_req_id();
         let msg = make_msg!(
@@ -1500,7 +1517,8 @@ impl Client<indicators::Active> {
             filter
         );
 
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.write_all(msg.as_bytes()).await?;
+        Ok(req_id)
     }
 
 

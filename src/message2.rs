@@ -1,9 +1,11 @@
+#![allow(dead_code)]
+
 use bytes::{BufMut, BytesMut};
 use serde::Serialize;
 
 const DELIMITER: u8 = b'\0';
 type Out = crate::message::Out;
-type In = crate::message::In;
+// type In = crate::message::In;
 
 
 #[derive(Debug, Clone)]
@@ -16,7 +18,7 @@ pub(crate) struct Message {
 
 impl Message {
     #[inline]
-    pub(crate) fn new<D, T>(code: Out, t: T) -> Self
+    pub(crate) fn new<T>(code: Out, t: T) -> Self
     where
         T: Serialize
     {
@@ -455,10 +457,4 @@ mod ser {
             Ok(())
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct Fields<> {
-    /// The code associated with the incoming message.
-    code: In,
 }
