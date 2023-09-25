@@ -23,6 +23,7 @@ use crate::{
 };
 use crate::account::Tag;
 use crate::execution::Filter;
+use crate::message2::Writer;
 
 // ======================================
 // === Types for Handling Config File ===
@@ -200,13 +201,18 @@ impl Builder {
             Inner::Manual { port, address } => (None, None, port, address),
         };
 
-        let (mut reader, mut writer) = TcpStream::connect((address, port)).await?.into_split();
+        let (mut reader, writer) = TcpStream::connect((address, port)).await?.into_split();
 
-        let msg = make_msg!(
-            "API\0";
-            format!("v{}..{}", constants::MIN_CLIENT_VERSION, constants::MAX_CLIENT_VERSION)
-        );
-        writer.write_all(msg.as_bytes()).await?;
+        let mut writer = Writer::new(writer)?;
+        writer.add_prefix("API\0")?;
+        writer.add_body(format!("v{}..{}", constants::MIN_CLIENT_VERSION, constants::MAX_CLIENT_VERSION))?;
+        writer.send().await?;
+        
+        // let msg = make_msg!(
+        //     "API\0";
+        //     format!("v{}..{}", constants::MIN_CLIENT_VERSION, constants::MAX_CLIENT_VERSION)
+        // );
+        // writer.write_all(msg.as_bytes()).await?;
 
         let mut buf = bytes::BytesMut::with_capacity(usize::try_from(reader.read_u32().await?)?);
         reader.read_buf(&mut buf).await?;
@@ -328,7 +334,7 @@ pub struct Client<C: indicators::Status> {
     client_id: i64,
     server_version: u32,
     conn_time: chrono::NaiveDateTime,
-    writer: OwnedWriteHalf,
+    writer: Writer,
     status: C,
 }
 
@@ -394,7 +400,6 @@ impl<W: 'static + Wrapper> Client<indicators::Inactive<W>> {
 
     async fn start_api(&mut self) -> Result<(), anyhow::Error> {
         const VERSION: u8 = 2;
-        let msg = make_msg!(Out::StartApi, VERSION, self.client_id, "");
         self.status
             .client_tx
             .send(ToWrapper::StartApiManagedAccts)
@@ -403,7 +408,8 @@ impl<W: 'static + Wrapper> Client<indicators::Inactive<W>> {
             .client_tx
             .send(ToWrapper::StartApiNextValidId)
             .await?;
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_body((Out::StartApi, VERSION, self.client_id, None::<()>))?;
+        self.writer.send().await?;
         Ok(())
     }
 
@@ -629,7 +635,8 @@ impl Client<indicators::Active> {
     pub async fn req_current_time(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
         let msg = make_msg!(Out::ReqCurrentTime, VERSION);
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Requests the accounts to which the logged user has access to.
@@ -639,7 +646,8 @@ impl Client<indicators::Active> {
     pub async fn req_managed_accounts(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
         let msg = make_msg!(Out::ReqManagedAccts, VERSION);
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Creates a subscription to the TWS through which account and portfolio information is
@@ -661,7 +669,8 @@ impl Client<indicators::Active> {
         };
 
         let msg = make_msg!(Out::ReqAcctData, VERSION, 1, acct_num);
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Cancels an existing subscription to receive account updates.
@@ -681,7 +690,8 @@ impl Client<indicators::Active> {
         };
 
         let msg = make_msg!(Out::ReqAcctData, VERSION, 0, acct_num);
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Subscribes to position updates for all accessible accounts. All positions sent initially,
@@ -692,7 +702,8 @@ impl Client<indicators::Active> {
     pub async fn req_positions(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
         let msg = make_msg!(Out::ReqPositions, VERSION);
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Cancels a previous position subscription request made with [`Client::req_positions`].
@@ -702,7 +713,8 @@ impl Client<indicators::Active> {
     pub async fn cancel_positions(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
         let msg = make_msg!(Out::CancelPositions, VERSION);
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Creates subscription for real time daily P&L and unrealized P&L updates.
@@ -721,7 +733,8 @@ impl Client<indicators::Active> {
         let account_number = check_valid_account(self, account_number)?;
         let msg = make_msg!(Out::ReqPnl, req_id, account_number, "");
 
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await?;
         Ok(req_id)
     }
 
@@ -735,7 +748,8 @@ impl Client<indicators::Active> {
     pub async fn cancel_pnl(&mut self, req_id: i64) -> ReqResult {
         let msg = make_msg!(Out::CancelPnl, req_id);
 
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Creates subscription for real time daily P&L and unrealized P&L updates, but only for a
@@ -767,7 +781,8 @@ impl Client<indicators::Active> {
             contract_id.0
         );
 
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await?;
         Ok(req_id)
     }
 
@@ -781,7 +796,8 @@ impl Client<indicators::Active> {
     pub async fn cancel_pnl_single(&mut self, req_id: i64) -> ReqResult {
         let msg = make_msg!(Out::CancelPnl, req_id);
 
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Request completed orders.
@@ -797,7 +813,8 @@ impl Client<indicators::Active> {
             u8::from(api_only)
         );
 
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Request summary information about a specific account, creating a subscription to the same
@@ -825,7 +842,8 @@ impl Client<indicators::Active> {
                 .join(",")
         );
 
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await?;
         Ok(req_id)
     }
 
@@ -844,7 +862,8 @@ impl Client<indicators::Active> {
             req_id
         );
 
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Request user info details for the user associated with the calling client.
@@ -861,7 +880,8 @@ impl Client<indicators::Active> {
             req_id
         );
 
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await?;
         Ok(req_id)
     }
 
@@ -912,7 +932,8 @@ impl Client<indicators::Active> {
             u8::from(false),
             ""
         );
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await?;
         Ok(id)
     }
 
@@ -959,7 +980,8 @@ impl Client<indicators::Active> {
             u8::from(true),
             ""
         );
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await?;
         Ok(id)
     }
 
@@ -973,7 +995,8 @@ impl Client<indicators::Active> {
     pub async fn cancel_updating_historical_bar(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
         let msg = make_msg!(Out::CancelHistoricalData, VERSION, req_id);
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Request the earliest available data point for a given security and data type.
@@ -1009,7 +1032,8 @@ impl Client<indicators::Active> {
             data,
             "1"
         );
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await?;
         Ok(id)
     }
 
@@ -1023,7 +1047,8 @@ impl Client<indicators::Active> {
     pub async fn cancel_head_timestamp(&mut self, req_id: i64) -> ReqResult {
         let msg = make_msg!(Out::CancelHeadTimestamp, req_id);
 
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Request a histogram of historical data.
@@ -1056,7 +1081,8 @@ impl Client<indicators::Active> {
             u8::from(regular_trading_hours_only),
             duration
         );
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await?;
         Ok(id)
     }
 
@@ -1069,7 +1095,8 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_histogram_data(&mut self, req_id: i64) -> ReqResult {
         let msg = make_msg!(Out::CancelHistogramData, req_id);
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Request historical ticks for a given security. See [`historical_ticks`] for
@@ -1112,7 +1139,8 @@ impl Client<indicators::Active> {
             "",
             ""
         );
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await?;
         Ok(id)
     }
 
@@ -1162,7 +1190,8 @@ impl Client<indicators::Active> {
             u8::from(use_regulatory_snapshot),
             ""
         );
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await?;
         Ok(id)
     }
 
@@ -1176,7 +1205,8 @@ impl Client<indicators::Active> {
     pub async fn cancel_market_data(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 2;
         let msg = make_msg!(Out::CancelMktData, VERSION, req_id);
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Set the market data variant for all succeeding `Client::req_market_data` requests.
@@ -1189,7 +1219,8 @@ impl Client<indicators::Active> {
     pub async fn req_market_data_type(&mut self, variant: live_data::Class) -> ReqResult {
         const VERSION: u8 = 1;
         let msg = make_msg!(Out::ReqMarketDataType, VERSION, variant);
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Request real-time, 5 second bars for a given security.
@@ -1227,7 +1258,8 @@ impl Client<indicators::Active> {
             u8::from(regular_trading_hours_only),
             ""
         );
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await?;
 
         Ok(id)
     }
@@ -1242,7 +1274,8 @@ impl Client<indicators::Active> {
     pub async fn cancel_real_time_bars(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
         let msg = make_msg!(Out::CancelRealTimeBars, VERSION, req_id);
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     // === Live Tick-by-Tick Data ===
@@ -1281,7 +1314,8 @@ impl Client<indicators::Active> {
             number_of_historical_ticks,
             u8::from(ignore_size)
         );
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await?;
         Ok(id)
     }
 
@@ -1294,7 +1328,8 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_tick_by_tick_data(&mut self, req_id: i64) -> ReqResult {
         let msg = make_msg!(Out::CancelTickByTickData, req_id);
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     // === Market Depth ===
@@ -1325,7 +1360,8 @@ impl Client<indicators::Active> {
             u8::from(true),
             ""
         );
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await?;
 
         Ok(id)
     }
@@ -1336,7 +1372,8 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn req_market_depth_exchanges(&mut self) -> ReqResult {
         let msg = make_msg!(Out::ReqMktDepthExchanges);
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Cancel a market depth subscription for a given `req_id`.
@@ -1349,7 +1386,8 @@ impl Client<indicators::Active> {
     pub async fn cancel_market_depth(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
         let msg = make_msg!(Out::CancelMktDepth, VERSION, req_id);
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Request exchanges comprising the aggregate SMART exchange
@@ -1366,7 +1404,8 @@ impl Client<indicators::Active> {
     pub async fn req_smart_components(&mut self, exchange_id: ExchangeId) -> IdResult {
         let id = self.get_next_req_id();
         let msg = make_msg!(Out::ReqSmartComponents, id, exchange_id);
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await?;
 
         Ok(id)
     }
@@ -1391,7 +1430,8 @@ impl Client<indicators::Active> {
     {
         let id = self.get_next_order_id();
         let msg = make_msg!(Out::PlaceOrder, id, order.get_security(), "", "", order);
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await?;
         Ok(id)
     }
 
@@ -1413,7 +1453,8 @@ impl Client<indicators::Active> {
             E: Executable<S>,
     {
         let msg = make_msg!(Out::PlaceOrder, id, order.get_security(), "", "", order);
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await?;
         Ok(id)
     }
 
@@ -1430,7 +1471,8 @@ impl Client<indicators::Active> {
     {
         const VERSION: u8 = 1;
         let msg = make_msg!(Out::CancelOrder, VERSION, id, "");
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Cancel all currently open orders, including those placed in TWS.
@@ -1440,7 +1482,8 @@ impl Client<indicators::Active> {
     pub async fn cancel_all_orders(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
         let msg = make_msg!(Out::ReqGlobalCancel, VERSION);
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Request all the open orders placed from all API clients and from TWS.
@@ -1457,7 +1500,8 @@ impl Client<indicators::Active> {
             VERSION
         );
 
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Request that all newly created TWS orders will be implicitly associated with the calling
@@ -1476,7 +1520,8 @@ impl Client<indicators::Active> {
             u8::from(true)
         );
 
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     /// Request the open orders that were placed from the calling client.
@@ -1492,7 +1537,8 @@ impl Client<indicators::Active> {
             VERSION
         );
 
-        self.writer.write_all(msg.as_bytes()).await
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await
     }
 
     // === Executions ===
@@ -1517,7 +1563,8 @@ impl Client<indicators::Active> {
             filter
         );
 
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await?;
         Ok(req_id)
     }
 
@@ -1557,7 +1604,8 @@ impl Client<indicators::Active> {
             .tx
             .send(ToWrapper::ContractQuery((contract_id, req_id)))
             .await?;
-        self.writer.write_all(msg.as_bytes()).await?;
+        self.writer.add_prefix(&msg)?;
+self.writer.send().await?;
         Ok(())
     }
 
