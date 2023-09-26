@@ -1,15 +1,17 @@
 macro_rules! make_variants {
     ($($( #[doc = $name_doc:expr] )? $name: ident: $repr: literal),*) => {
         $(
-            #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+            #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+            #[serde(rename(serialize = $repr))]
             $( #[doc = $name_doc] )?
             pub struct $name;
         )*
 
         pub(crate) mod indicators {
-            use super::{$($name,)*};
+            use serde::Serialize;
+use super::{$($name,)*};
 
-            pub trait Valid {}
+            pub trait Valid: Serialize {}
 
             $(
                 impl Valid for $name {}
@@ -49,6 +51,8 @@ macro_rules! impl_data_type {
 pub mod historical_bar {
 
     // === Type definitions ===
+
+    use serde::{Serialize, Serializer};
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
     /// The last time for which bar data will be returned.
@@ -144,6 +148,19 @@ pub mod historical_bar {
 
     // === Type implementations ===
 
+    impl Serialize for EndDateTime {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            match *self {
+                Self::Past(dt) => Some(dt.format("%Y%m%d %H%M%S").to_string()),
+                Self::Present => None,
+            }
+            .serialize(serializer)
+        }
+    }
+
     impl ToString for EndDateTime {
         fn to_string(&self) -> String {
             match *self {
@@ -162,6 +179,22 @@ pub mod historical_bar {
                 Self::Month(m) => format!("{m} M"),
                 Self::Year(y) => format!("{y} Y"),
             }
+        }
+    }
+
+    impl Serialize for Duration {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            match *self {
+                Self::Second(s) => format!("{s} S"),
+                Self::Day(d) => format!("{d} D"),
+                Self::Week(w) => format!("{w} W"),
+                Self::Month(m) => format!("{m} M"),
+                Self::Year(y) => format!("{y} Y"),
+            }
+            .serialize(serializer)
         }
     }
 
@@ -197,6 +230,44 @@ pub mod historical_bar {
                 Self::Month => "1 month",
             }
             .to_owned()
+        }
+    }
+
+    impl Serialize for Size {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            match *self {
+                Self::Seconds(s) => match s {
+                    SecondSize::One => "1 secs",
+                    SecondSize::Five => "5 secs",
+                    SecondSize::Ten => "10 secs",
+                    SecondSize::Fifteen => "15 secs",
+                    SecondSize::Thirty => "30 secs",
+                },
+                Self::Minutes(m) => match m {
+                    MinuteSize::One => "1 min",
+                    MinuteSize::Two => "2 mins",
+                    MinuteSize::Three => "3 mins",
+                    MinuteSize::Five => "5 mins",
+                    MinuteSize::Ten => "10 mins",
+                    MinuteSize::Fifteen => "15 mins",
+                    MinuteSize::Twenty => "20 mins",
+                    MinuteSize::Thirty => "30 mins",
+                },
+                Self::Hours(h) => match h {
+                    HourSize::One => "1 hour",
+                    HourSize::Two => "2 hours",
+                    HourSize::Three => "3 hours",
+                    HourSize::Four => "4 hours",
+                    HourSize::Eight => "8 hours",
+                },
+                Self::Day => "1 day",
+                Self::Week => "1 week",
+                Self::Month => "1 month",
+            }
+            .serialize(serializer)
         }
     }
 

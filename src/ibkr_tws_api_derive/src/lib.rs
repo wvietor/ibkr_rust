@@ -259,6 +259,23 @@ fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
             }
         }
 
+        impl serde::Serialize for #name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+                (
+                    self.get_contract_id(),
+                    self.get_symbol(),
+                    self.get_security_type(),
+                    self.get_expiration_date().map(|d| d.format("%Y%m%d").to_string()),
+                    self.get_strike(),
+                    self.get_exchange(),
+                    self.get_primary_exchange(),
+                    self.get_currency(),
+                    self.get_local_symbol(),
+                    self.get_trading_class()
+                ).serialize(serializer)
+            }
+        }
+
         impl Security for #name {
             #[inline]
             fn get_contract_id(&self) -> ContractId {

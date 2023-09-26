@@ -14,23 +14,20 @@ pub(crate) struct Writer {
 impl Writer {
     #[inline]
     /// Create a new `Message` with the default capacity specified as [`constants::OUT_MESSAGE_SIZE`]
-    pub(crate) fn new(writer: tokio::net::tcp::OwnedWriteHalf) -> Result<Self, Error> {
+    pub(crate) fn new(writer: tokio::net::tcp::OwnedWriteHalf) -> Self {
         Self::with_capacity(writer, crate::constants::OUT_MESSAGE_SIZE)
     }
 
     #[inline]
     /// Create a new `Message` with the specified capacity.
-    pub(crate) fn with_capacity(
-        writer: tokio::net::tcp::OwnedWriteHalf,
-        cap: usize,
-    ) -> Result<Self, Error> {
+    pub(crate) fn with_capacity(writer: tokio::net::tcp::OwnedWriteHalf, cap: usize) -> Self {
         let buf = Vec::with_capacity(cap);
 
-        Ok(Self {
+        Self {
             buf,
             offset: None,
             writer,
-        })
+        }
     }
 
     #[inline]
@@ -227,7 +224,7 @@ pub(crate) mod ser {
         fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
             let mut temp = [0; 5];
             v.encode_utf8(&mut temp);
-            self.buf.write_all(&temp[..1 + v.len_utf8()])?;
+            self.buf.write_all(&temp[..=v.len_utf8()])?;
 
             Ok(())
         }
@@ -372,13 +369,13 @@ pub(crate) mod ser {
             T: Serialize,
         {
             value.serialize(&mut **self)?;
-            self.buf.splice(self.buf.len()-1..self.buf.len(), *b",");
+            self.buf.splice(self.buf.len() - 1..self.buf.len(), *b",");
             Ok(())
         }
 
         #[inline]
         fn end(self) -> Result<Self::Ok, Self::Error> {
-            self.buf.splice(self.buf.len()-1..self.buf.len(), *b"\0");
+            self.buf.splice(self.buf.len() - 1..self.buf.len(), *b"\0");
             Ok(())
         }
     }

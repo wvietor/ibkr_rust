@@ -1,11 +1,7 @@
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::{
-    io::AsyncReadExt,
-    net::TcpStream,
-    sync::mpsc,
-};
+use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
 
 use crate::account::Tag;
 use crate::execution::Filter;
@@ -203,7 +199,7 @@ impl Builder {
 
         let (mut reader, writer) = TcpStream::connect((address, port)).await?.into_split();
 
-        let mut writer = Writer::new(writer)?;
+        let mut writer = Writer::new(writer);
         writer.add_prefix("API\0")?;
         writer.add_body(format!(
             "v{}..{}",
@@ -663,10 +659,11 @@ impl Client<indicators::Active> {
     pub async fn req_account_updates(&mut self, account_number: Option<String>) -> ReqResult {
         const VERSION: u8 = 2;
         if let Some(acct_num) = &account_number {
-            check_valid_account(self, acct_num)?
+            check_valid_account(self, acct_num)?;
         }
 
-        self.writer.add_body((Out::ReqAcctData, VERSION, 1, account_number))?;
+        self.writer
+            .add_body((Out::ReqAcctData, VERSION, 1, account_number))?;
         self.writer.send().await
     }
 
@@ -682,10 +679,11 @@ impl Client<indicators::Active> {
     pub async fn cancel_account_updates(&mut self, account_number: Option<String>) -> ReqResult {
         const VERSION: u8 = 2;
         if let Some(acct_num) = &account_number {
-            check_valid_account(self, acct_num)?
+            check_valid_account(self, acct_num)?;
         }
 
-        self.writer.add_body((Out::ReqAcctData, VERSION, 0, account_number))?;
+        self.writer
+            .add_body((Out::ReqAcctData, VERSION, 0, account_number))?;
         self.writer.send().await
     }
 
@@ -727,7 +725,8 @@ impl Client<indicators::Active> {
         let req_id = self.get_next_req_id();
         check_valid_account(self, &account_number)?;
 
-        self.writer.add_body((Out::ReqPnl, req_id, account_number, None::<()>))?;
+        self.writer
+            .add_body((Out::ReqPnl, req_id, account_number, None::<()>))?;
         self.writer.send().await?;
         Ok(req_id)
     }
@@ -766,7 +765,13 @@ impl Client<indicators::Active> {
         let req_id = self.get_next_req_id();
         check_valid_account(self, &account_number)?;
 
-        self.writer.add_body((Out::ReqPnlSingle, req_id, account_number, None::<()>, contract_id))?;
+        self.writer.add_body((
+            Out::ReqPnlSingle,
+            req_id,
+            account_number,
+            None::<()>,
+            contract_id,
+        ))?;
         self.writer.send().await?;
         Ok(req_id)
     }
@@ -810,7 +815,8 @@ impl Client<indicators::Active> {
         const VERSION: u8 = 1;
         let req_id = self.get_next_req_id();
 
-        self.writer.add_body((Out::ReqAccountSummary, VERSION, req_id, "All", tags))?;
+        self.writer
+            .add_body((Out::ReqAccountSummary, VERSION, req_id, "All", tags))?;
         self.writer.send().await?;
         Ok(req_id)
     }
@@ -825,7 +831,8 @@ impl Client<indicators::Active> {
     pub async fn cancel_account_summary(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
 
-        self.writer.add_body((Out::CancelAccountSummary, VERSION, req_id))?;
+        self.writer
+            .add_body((Out::CancelAccountSummary, VERSION, req_id))?;
         self.writer.send().await
     }
 
@@ -891,7 +898,21 @@ impl Client<indicators::Active> {
             u8::from(false),
             ""
         );
-        self.writer.add_prefix(&msg)?;
+        // self.writer.add_prefix(&msg)?;
+        self.writer.add_body((
+            Out::ReqHistoricalData,
+            id,
+            security,
+            false,
+            end_date_time,
+            bar_size,
+            duration,
+            regular_trading_hours_only,
+            data,
+            1,
+            false,
+            None::<()>,
+        ))?;
         self.writer.send().await?;
         Ok(id)
     }
@@ -1593,13 +1614,9 @@ impl Client<indicators::Active> {
 #[inline]
 fn check_valid_account(
     client: &Client<indicators::Active>,
-    account_number: &String,
+    account_number: &str,
 ) -> Result<(), std::io::Error> {
-    if client
-        .status
-        .managed_accounts
-        .contains(account_number.as_str())
-    {
+    if client.status.managed_accounts.contains(account_number) {
         Ok(())
     } else {
         Err(std::io::Error::new(

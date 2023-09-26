@@ -7,7 +7,7 @@ use crate::{
     make_body,
 };
 use ibapi_derive::Security;
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 
 // =========================================================
 // === Utility Types and Functions for Contract Creation ===
@@ -255,9 +255,11 @@ pub enum SecurityId {
 
 mod indicators {
     use super::{Commodity, Contract, Crypto, Forex, Index, SecFuture, SecOption, Stock};
+    use serde::Serialize;
 
     pub trait Valid:
         ToString
+        + Serialize
         + Send
         + Sync
         + TryFrom<Forex>
