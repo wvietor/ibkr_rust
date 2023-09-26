@@ -42,6 +42,7 @@ pub mod currency;
 mod decode;
 /// Contains types related to security exchanges and trading venues available in the API.
 pub mod exchange;
+mod execution;
 /// Contains modules that each relate to different market data requests. In particular, each module
 /// defines: 1) General types used in a given market data query and 2) Optionally, a private
 /// indicator trait that defines whether a given [`contract::Security`] allows for the data request
@@ -71,7 +72,6 @@ pub mod tick;
 /// Contains the definition of the [`wrapper::Wrapper`] trait. Implementing this trait on a custom
 /// type allows users to customize callback behavior.
 pub mod wrapper;
-mod execution;
 
 #[allow(missing_docs, clippy::use_debug, clippy::print_stdout)]
 pub mod default_wrapper {

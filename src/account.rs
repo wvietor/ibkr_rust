@@ -1,5 +1,5 @@
+use serde::{Deserialize, Serialize};
 use std::fmt::Formatter;
-use serde::{Serialize, Deserialize};
 
 use crate::currency::Currency;
 
@@ -262,6 +262,7 @@ impl std::str::FromStr for RemainingDayTrades {
     }
 }
 
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, PartialEq, Eq, Hash, Serialize)]
 /// Represents the different types of account information available for a
 /// [`crate::client::Client::req_account_summary`] request.
 pub enum Tag {
@@ -287,12 +288,14 @@ pub enum Tag {
     RegTEquity,
     /// Regulation T margin for universal account.
     RegTMargin,
+    #[serde(rename(serialize = "SMA"))]
     /// Special Memorandum Account: Line of credit created when the market value of securities in a Regulation T account increase in value.
-    SMA,
+    Sma,
     /// Initial Margin requirement of whole portfolio.
     InitMarginReq,
+    #[serde(rename(serialize = "MaintMarginReq"))]
     /// Maintenance Margin requirement of whole portfolio.
-    MaintMarginReq,
+    MaintenanceMarginReq,
     /// This value tells what you have available for trading.
     AvailableFunds,
     /// This value shows your margin cushion, before liquidation.
@@ -301,8 +304,9 @@ pub enum Tag {
     Cushion,
     /// Initial Margin of whole portfolio with no discounts or intraday credits.
     FullInitMarginReq,
+    #[serde(rename(serialize = "FullMaintMarginReq"))]
     /// Maintenance Margin of whole portfolio with no discounts or intraday credits.
-    FullMaintMarginReq,
+    FullMaintenanceMarginReq,
     /// Available funds of whole portfolio with no discounts or intraday credits.
     FullAvailableFunds,
     /// Excess liquidity of whole portfolio with no discounts or intraday credits.
@@ -311,8 +315,9 @@ pub enum Tag {
     LookAheadNextChange,
     /// Initial Margin requirement of whole portfolio as of next period's margin change.
     LookAheadInitMarginReq,
+    #[serde(rename(serialize = "LookAheadMaintMarginReq"))]
     /// Maintenance Margin requirement of whole portfolio as of next period's margin change.
-    LookAheadMaintMarginReq,
+    LookAheadMaintenanceMarginReq,
     /// This value reflects your available funds at the next margin change.
     LookAheadAvailableFunds,
     /// This value reflects your excess liquidity at the next margin change.

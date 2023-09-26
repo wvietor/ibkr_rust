@@ -1,5 +1,5 @@
-use chrono::NaiveDateTime;
 use crate::exchange::Primary;
+use chrono::NaiveDateTime;
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Filter {
@@ -25,7 +25,6 @@ impl ToString for Filter {
         )
     }
 }
-
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum ContractType {
@@ -61,14 +60,15 @@ impl ToString for ContractType {
             Self::SecFuture => "FUT",
             Self::SecOption => "OPT",
             Self::Commodity => "CMDTY",
-        }.to_owned()
+        }
+        .to_owned()
     }
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq, Hash)]
 pub enum OrderSide {
     Buy,
-    Sell
+    Sell,
 }
 
 impl ToString for OrderSide {
@@ -76,6 +76,7 @@ impl ToString for OrderSide {
         match self {
             Self::Buy => "BUY",
             Self::Sell => "SELL",
-        }.to_owned()
+        }
+        .to_owned()
     }
 }

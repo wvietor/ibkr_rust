@@ -1,8 +1,8 @@
 #![allow(unused_variables, dead_code)]
 
-use std::fmt::{Display, Formatter};
-use std::io::{Write, Error};
 use serde::Serialize;
+use std::fmt::{Display, Formatter};
+use std::io::{Error, Write};
 
 #[derive(Debug)]
 pub(crate) struct Writer {
@@ -20,13 +20,16 @@ impl Writer {
 
     #[inline]
     /// Create a new `Message` with the specified capacity.
-    pub(crate) fn with_capacity(writer: tokio::net::tcp::OwnedWriteHalf, cap: usize) -> Result<Self, Error> {
+    pub(crate) fn with_capacity(
+        writer: tokio::net::tcp::OwnedWriteHalf,
+        cap: usize,
+    ) -> Result<Self, Error> {
         let buf = Vec::with_capacity(cap);
 
         Ok(Self {
             buf,
             offset: None,
-            writer
+            writer,
         })
     }
 
@@ -49,10 +52,11 @@ impl Writer {
             None => (self.buf.len() - LENGTH_PREFIX.len(), 0),
         };
 
-        self.buf.splice(offset..LENGTH_PREFIX.len()+offset,
-                        u32::try_from(len)
-                            .expect("Overflow: Message length exceeds the max of 2³² - 1 bytes.")
-                            .to_be_bytes()
+        self.buf.splice(
+            offset..LENGTH_PREFIX.len() + offset,
+            u32::try_from(len)
+                .expect("Overflow: Message length exceeds the max of 2³² - 1 bytes.")
+                .to_be_bytes(),
         );
 
         Ok(())
@@ -91,7 +95,10 @@ impl std::fmt::Display for SerializeMessageError {
 impl std::error::Error for SerializeMessageError {}
 
 impl serde::ser::Error for SerializeMessageError {
-    fn custom<T>(msg: T) -> Self where T: Display {
+    fn custom<T>(msg: T) -> Self
+    where
+        T: Display,
+    {
         SerializeMessageError(msg.to_string())
     }
 }
@@ -104,16 +111,19 @@ impl From<std::io::Error> for SerializeMessageError {
 
 impl From<SerializeMessageError> for std::io::Error {
     fn from(value: SerializeMessageError) -> Self {
-        std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            value.0
-        )
+        std::io::Error::new(std::io::ErrorKind::InvalidData, value.0)
     }
 }
 
 pub(crate) mod ser {
+    use serde::{
+        ser::{
+            SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant, SerializeTuple,
+            SerializeTupleStruct, SerializeTupleVariant,
+        },
+        Serialize, Serializer,
+    };
     use std::io::Write;
-    use serde::{Serialize, Serializer, ser::{SerializeSeq, SerializeTuple, SerializeTupleStruct, SerializeTupleVariant, SerializeMap, SerializeStruct, SerializeStructVariant}};
 
     use super::{SerializeMessageError, Writer};
 
@@ -217,7 +227,7 @@ pub(crate) mod ser {
         fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
             let mut temp = [0; 5];
             v.encode_utf8(&mut temp);
-            self.buf.write_all(&temp[..1+v.len_utf8()])?;
+            self.buf.write_all(&temp[..1 + v.len_utf8()])?;
 
             Ok(())
         }
@@ -243,7 +253,10 @@ pub(crate) mod ser {
         }
 
         #[inline]
-        fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error> where T: Serialize {
+        fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
+        where
+            T: Serialize,
+        {
             value.serialize(self)
         }
 
@@ -258,17 +271,38 @@ pub(crate) mod ser {
         }
 
         #[inline]
-        fn serialize_unit_variant(self, name: &'static str, variant_index: u32, variant: &'static str) -> Result<Self::Ok, Self::Error> {
+        fn serialize_unit_variant(
+            self,
+            name: &'static str,
+            variant_index: u32,
+            variant: &'static str,
+        ) -> Result<Self::Ok, Self::Error> {
             variant.serialize(self)
         }
 
         #[inline]
-        fn serialize_newtype_struct<T: ?Sized>(self, name: &'static str, value: &T) -> Result<Self::Ok, Self::Error> where T: Serialize {
+        fn serialize_newtype_struct<T: ?Sized>(
+            self,
+            name: &'static str,
+            value: &T,
+        ) -> Result<Self::Ok, Self::Error>
+        where
+            T: Serialize,
+        {
             value.serialize(self)
         }
 
         #[inline]
-        fn serialize_newtype_variant<T: ?Sized>(self, name: &'static str, variant_index: u32, variant: &'static str, value: &T) -> Result<Self::Ok, Self::Error> where T: Serialize {
+        fn serialize_newtype_variant<T: ?Sized>(
+            self,
+            name: &'static str,
+            variant_index: u32,
+            variant: &'static str,
+            value: &T,
+        ) -> Result<Self::Ok, Self::Error>
+        where
+            T: Serialize,
+        {
             value.serialize(self)
         }
 
@@ -283,12 +317,22 @@ pub(crate) mod ser {
         }
 
         #[inline]
-        fn serialize_tuple_struct(self, name: &'static str, len: usize) -> Result<Self::SerializeTupleStruct, Self::Error> {
+        fn serialize_tuple_struct(
+            self,
+            name: &'static str,
+            len: usize,
+        ) -> Result<Self::SerializeTupleStruct, Self::Error> {
             Ok(self)
         }
 
         #[inline]
-        fn serialize_tuple_variant(self, name: &'static str, variant_index: u32, variant: &'static str, len: usize) -> Result<Self::SerializeTupleVariant, Self::Error> {
+        fn serialize_tuple_variant(
+            self,
+            name: &'static str,
+            variant_index: u32,
+            variant: &'static str,
+            len: usize,
+        ) -> Result<Self::SerializeTupleVariant, Self::Error> {
             Ok(self)
         }
 
@@ -298,12 +342,22 @@ pub(crate) mod ser {
         }
 
         #[inline]
-        fn serialize_struct(self, name: &'static str, len: usize) -> Result<Self::SerializeStruct, Self::Error> {
+        fn serialize_struct(
+            self,
+            name: &'static str,
+            len: usize,
+        ) -> Result<Self::SerializeStruct, Self::Error> {
             Ok(self)
         }
 
         #[inline]
-        fn serialize_struct_variant(self, name: &'static str, variant_index: u32, variant: &'static str, len: usize) -> Result<Self::SerializeStructVariant, Self::Error> {
+        fn serialize_struct_variant(
+            self,
+            name: &'static str,
+            variant_index: u32,
+            variant: &'static str,
+            len: usize,
+        ) -> Result<Self::SerializeStructVariant, Self::Error> {
             Ok(self)
         }
     }
@@ -313,12 +367,18 @@ pub(crate) mod ser {
         type Error = <Self as Serializer>::Error;
 
         #[inline]
-        fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> where T: Serialize {
-            value.serialize(&mut **self)
+        fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+        where
+            T: Serialize,
+        {
+            value.serialize(&mut **self)?;
+            self.buf.splice(self.buf.len()-1..self.buf.len(), *b",");
+            Ok(())
         }
 
         #[inline]
         fn end(self) -> Result<Self::Ok, Self::Error> {
+            self.buf.splice(self.buf.len()-1..self.buf.len(), *b"\0");
             Ok(())
         }
     }
@@ -328,7 +388,10 @@ pub(crate) mod ser {
         type Error = <Self as Serializer>::Error;
 
         #[inline]
-        fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> where T: Serialize {
+        fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+        where
+            T: Serialize,
+        {
             value.serialize(&mut **self)
         }
 
@@ -343,7 +406,10 @@ pub(crate) mod ser {
         type Error = <Self as Serializer>::Error;
 
         #[inline]
-        fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> where T: Serialize {
+        fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+        where
+            T: Serialize,
+        {
             value.serialize(&mut **self)
         }
 
@@ -358,7 +424,10 @@ pub(crate) mod ser {
         type Error = <Self as Serializer>::Error;
 
         #[inline]
-        fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> where T: Serialize {
+        fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+        where
+            T: Serialize,
+        {
             value.serialize(&mut **self)
         }
 
@@ -373,12 +442,18 @@ pub(crate) mod ser {
         type Error = <Self as Serializer>::Error;
 
         #[inline]
-        fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<(), Self::Error> where T: Serialize {
+        fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<(), Self::Error>
+        where
+            T: Serialize,
+        {
             key.serialize(&mut **self)
         }
 
         #[inline]
-        fn serialize_value<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> where T: Serialize {
+        fn serialize_value<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+        where
+            T: Serialize,
+        {
             value.serialize(&mut **self)
         }
 
@@ -393,7 +468,14 @@ pub(crate) mod ser {
         type Error = <Self as Serializer>::Error;
 
         #[inline]
-        fn serialize_field<T: ?Sized>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error> where T: Serialize {
+        fn serialize_field<T: ?Sized>(
+            &mut self,
+            key: &'static str,
+            value: &T,
+        ) -> Result<(), Self::Error>
+        where
+            T: Serialize,
+        {
             value.serialize(&mut **self)
         }
 
@@ -408,7 +490,14 @@ pub(crate) mod ser {
         type Error = <Self as Serializer>::Error;
 
         #[inline]
-        fn serialize_field<T: ?Sized>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error> where T: Serialize {
+        fn serialize_field<T: ?Sized>(
+            &mut self,
+            key: &'static str,
+            value: &T,
+        ) -> Result<(), Self::Error>
+        where
+            T: Serialize,
+        {
             key.serialize(&mut **self)?;
             value.serialize(&mut **self)
         }

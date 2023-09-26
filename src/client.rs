@@ -2,11 +2,14 @@ use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::{tcp::OwnedWriteHalf, TcpStream},
+    io::AsyncReadExt,
+    net::TcpStream,
     sync::mpsc,
 };
 
+use crate::account::Tag;
+use crate::execution::Filter;
+use crate::message2::Writer;
 use crate::{
     constants,
     contract::{ContractId, Security},
@@ -16,14 +19,11 @@ use crate::{
         updating_historical_bar,
     },
     message::{In, Out, ToClient, ToWrapper},
-    order::{Order, Executable},
+    order::{Executable, Order},
     payload::ExchangeId,
     reader::Reader,
     wrapper::Wrapper,
 };
-use crate::account::Tag;
-use crate::execution::Filter;
-use crate::message2::Writer;
 
 // ======================================
 // === Types for Handling Config File ===
@@ -52,9 +52,9 @@ impl Config {
                 .with_context(|| format!("Invalid config file at path {path}"))?
                 .as_str(),
         )
-            .with_context(|| {
-                format!(
-                    "Invalid TOML file at path {path}.\n
+        .with_context(|| {
+            format!(
+                "Invalid TOML file at path {path}.\n
         # =========================\n
         # === config.toml Usage ===\n
         # =========================\n
@@ -66,8 +66,8 @@ impl Config {
         \n
         gateway_live: u16\n
         gateway_paper: u16\n"
-                )
-            })
+            )
+        })
     }
 }
 
@@ -205,14 +205,12 @@ impl Builder {
 
         let mut writer = Writer::new(writer)?;
         writer.add_prefix("API\0")?;
-        writer.add_body(format!("v{}..{}", constants::MIN_CLIENT_VERSION, constants::MAX_CLIENT_VERSION))?;
+        writer.add_body(format!(
+            "v{}..{}",
+            constants::MIN_CLIENT_VERSION,
+            constants::MAX_CLIENT_VERSION
+        ))?;
         writer.send().await?;
-        
-        // let msg = make_msg!(
-        //     "API\0";
-        //     format!("v{}..{}", constants::MIN_CLIENT_VERSION, constants::MAX_CLIENT_VERSION)
-        // );
-        // writer.write_all(msg.as_bytes()).await?;
 
         let mut buf = bytes::BytesMut::with_capacity(usize::try_from(reader.read_u32().await?)?);
         reader.read_buf(&mut buf).await?;
@@ -233,8 +231,8 @@ impl Builder {
                 .trim_end_matches(|c: char| !c.is_numeric()),
             "%Y%m%d %X",
         )
-            .with_context(|| "Failed to parse connection time")?
-            .0;
+        .with_context(|| "Failed to parse connection time")?
+        .0;
 
         let (client_tx, wrapper_rx) =
             mpsc::channel::<ToWrapper>(constants::TO_WRAPPER_CHANNEL_SIZE);
@@ -408,16 +406,17 @@ impl<W: 'static + Wrapper> Client<indicators::Inactive<W>> {
             .client_tx
             .send(ToWrapper::StartApiNextValidId)
             .await?;
-        self.writer.add_body((Out::StartApi, VERSION, self.client_id, None::<()>))?;
+        self.writer
+            .add_body((Out::StartApi, VERSION, self.client_id, None::<()>))?;
         self.writer.send().await?;
         Ok(())
     }
 
     // Don't worry about these allows: This function will NEVER panic (it can infinite loop though)
     #[allow(
-    clippy::unwrap_used,
-    clippy::missing_panics_doc,
-    clippy::too_many_lines
+        clippy::unwrap_used,
+        clippy::missing_panics_doc,
+        clippy::too_many_lines
     )]
     /// Initiates the main message loop and spawns all helper threads to manage the application.
     ///
@@ -634,9 +633,9 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn req_current_time(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(Out::ReqCurrentTime, VERSION);
-        self.writer.add_prefix(&msg)?;
-self.writer.send().await
+
+        self.writer.add_body((Out::ReqCurrentTime, VERSION))?;
+        self.writer.send().await
     }
 
     /// Requests the accounts to which the logged user has access to.
@@ -645,9 +644,9 @@ self.writer.send().await
     /// Returns any error encountered while writing the outgoing message.
     pub async fn req_managed_accounts(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(Out::ReqManagedAccts, VERSION);
-        self.writer.add_prefix(&msg)?;
-self.writer.send().await
+
+        self.writer.add_body((Out::ReqManagedAccts, VERSION))?;
+        self.writer.send().await
     }
 
     /// Creates a subscription to the TWS through which account and portfolio information is
@@ -663,14 +662,12 @@ self.writer.send().await
     /// error if a provided `account_number` is not in the client's managed accounts.
     pub async fn req_account_updates(&mut self, account_number: Option<String>) -> ReqResult {
         const VERSION: u8 = 2;
-        let acct_num = match account_number {
-            Some(acct) => check_valid_account(self, acct)?,
-            None => String::default(),
-        };
+        if let Some(acct_num) = &account_number {
+            check_valid_account(self, acct_num)?
+        }
 
-        let msg = make_msg!(Out::ReqAcctData, VERSION, 1, acct_num);
-        self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.add_body((Out::ReqAcctData, VERSION, 1, account_number))?;
+        self.writer.send().await
     }
 
     /// Cancels an existing subscription to receive account updates.
@@ -684,14 +681,12 @@ self.writer.send().await
     /// error if a provided `account_number` is not in the client's managed accounts.
     pub async fn cancel_account_updates(&mut self, account_number: Option<String>) -> ReqResult {
         const VERSION: u8 = 2;
-        let acct_num = match account_number {
-            Some(acct) => check_valid_account(self, acct)?,
-            None => String::default(),
-        };
+        if let Some(acct_num) = &account_number {
+            check_valid_account(self, acct_num)?
+        }
 
-        let msg = make_msg!(Out::ReqAcctData, VERSION, 0, acct_num);
-        self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.add_body((Out::ReqAcctData, VERSION, 0, account_number))?;
+        self.writer.send().await
     }
 
     /// Subscribes to position updates for all accessible accounts. All positions sent initially,
@@ -701,9 +696,9 @@ self.writer.send().await
     /// Returns any error encountered while writing the outgoing message.
     pub async fn req_positions(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(Out::ReqPositions, VERSION);
-        self.writer.add_prefix(&msg)?;
-self.writer.send().await
+
+        self.writer.add_body((Out::ReqPositions, VERSION))?;
+        self.writer.send().await
     }
 
     /// Cancels a previous position subscription request made with [`Client::req_positions`].
@@ -712,9 +707,9 @@ self.writer.send().await
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_positions(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(Out::CancelPositions, VERSION);
-        self.writer.add_prefix(&msg)?;
-self.writer.send().await
+
+        self.writer.add_body((Out::CancelPositions, VERSION))?;
+        self.writer.send().await
     }
 
     /// Creates subscription for real time daily P&L and unrealized P&L updates.
@@ -730,11 +725,10 @@ self.writer.send().await
     /// Returns the unique ID associated with the request.
     pub async fn req_pnl(&mut self, account_number: String) -> IdResult {
         let req_id = self.get_next_req_id();
-        let account_number = check_valid_account(self, account_number)?;
-        let msg = make_msg!(Out::ReqPnl, req_id, account_number, "");
+        check_valid_account(self, &account_number)?;
 
-        self.writer.add_prefix(&msg)?;
-self.writer.send().await?;
+        self.writer.add_body((Out::ReqPnl, req_id, account_number, None::<()>))?;
+        self.writer.send().await?;
         Ok(req_id)
     }
 
@@ -746,10 +740,8 @@ self.writer.send().await?;
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_pnl(&mut self, req_id: i64) -> ReqResult {
-        let msg = make_msg!(Out::CancelPnl, req_id);
-
-        self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.add_body((Out::CancelPnl, req_id))?;
+        self.writer.send().await
     }
 
     /// Creates subscription for real time daily P&L and unrealized P&L updates, but only for a
@@ -772,17 +764,10 @@ self.writer.send().await
         contract_id: ContractId,
     ) -> IdResult {
         let req_id = self.get_next_req_id();
-        let account_number = check_valid_account(self, account_number)?;
-        let msg = make_msg!(
-            Out::ReqPnlSingle,
-            req_id,
-            account_number,
-            "",
-            contract_id.0
-        );
+        check_valid_account(self, &account_number)?;
 
-        self.writer.add_prefix(&msg)?;
-self.writer.send().await?;
+        self.writer.add_body((Out::ReqPnlSingle, req_id, account_number, None::<()>, contract_id))?;
+        self.writer.send().await?;
         Ok(req_id)
     }
 
@@ -794,10 +779,8 @@ self.writer.send().await?;
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_pnl_single(&mut self, req_id: i64) -> ReqResult {
-        let msg = make_msg!(Out::CancelPnl, req_id);
-
-        self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.add_body((Out::CancelPnl, req_id))?;
+        self.writer.send().await
     }
 
     /// Request completed orders.
@@ -808,13 +791,8 @@ self.writer.send().await
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
     pub async fn req_completed_orders(&mut self, api_only: bool) -> ReqResult {
-        let msg = make_msg!(
-            Out::ReqCompletedOrders,
-            u8::from(api_only)
-        );
-
-        self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.add_body((Out::ReqCompletedOrders, api_only))?;
+        self.writer.send().await
     }
 
     /// Request summary information about a specific account, creating a subscription to the same
@@ -828,22 +806,12 @@ self.writer.send().await
     ///
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
-    pub async fn req_account_summary(&mut self, tags: Vec<Tag>) -> IdResult {
+    pub async fn req_account_summary(&mut self, tags: &Vec<Tag>) -> IdResult {
         const VERSION: u8 = 1;
         let req_id = self.get_next_req_id();
-        let msg = make_msg!(
-            Out::ReqAccountSummary,
-            VERSION,
-            req_id,
-            "All",
-            tags.iter()
-                .map(std::string::ToString::to_string)
-                .collect::<Vec<String>>()
-                .join(",")
-        );
 
-        self.writer.add_prefix(&msg)?;
-self.writer.send().await?;
+        self.writer.add_body((Out::ReqAccountSummary, VERSION, req_id, "All", tags))?;
+        self.writer.send().await?;
         Ok(req_id)
     }
 
@@ -856,14 +824,9 @@ self.writer.send().await?;
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_account_summary(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(
-            Out::CancelAccountSummary,
-            VERSION,
-            req_id
-        );
 
-        self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.add_body((Out::CancelAccountSummary, VERSION, req_id))?;
+        self.writer.send().await
     }
 
     /// Request user info details for the user associated with the calling client.
@@ -875,13 +838,9 @@ self.writer.send().await
     /// Returns any error encountered while writing the outgoing message.
     pub async fn req_user_info(&mut self) -> IdResult {
         let req_id = self.get_next_req_id();
-        let msg = make_msg!(
-            Out::ReqUserInfo,
-            req_id
-        );
 
-        self.writer.add_prefix(&msg)?;
-self.writer.send().await?;
+        self.writer.add_body((Out::ReqUserInfo, req_id))?;
+        self.writer.send().await?;
         Ok(req_id)
     }
 
@@ -913,9 +872,9 @@ self.writer.send().await?;
         data: D,
         regular_trading_hours_only: bool,
     ) -> IdResult
-        where
-            S: Security,
-            D: historical_bar::data_types::DataType<S>,
+    where
+        S: Security,
+        D: historical_bar::data_types::DataType<S>,
     {
         let id = self.get_next_req_id();
         let msg = make_msg!(
@@ -933,7 +892,7 @@ self.writer.send().await?;
             ""
         );
         self.writer.add_prefix(&msg)?;
-self.writer.send().await?;
+        self.writer.send().await?;
         Ok(id)
     }
 
@@ -961,9 +920,9 @@ self.writer.send().await?;
         data: D,
         regular_trading_hours_only: bool,
     ) -> IdResult
-        where
-            S: Security,
-            D: updating_historical_bar::data_types::DataType<S>,
+    where
+        S: Security,
+        D: updating_historical_bar::data_types::DataType<S>,
     {
         let id = self.get_next_req_id();
         let msg = make_msg!(
@@ -981,7 +940,7 @@ self.writer.send().await?;
             ""
         );
         self.writer.add_prefix(&msg)?;
-self.writer.send().await?;
+        self.writer.send().await?;
         Ok(id)
     }
 
@@ -996,7 +955,7 @@ self.writer.send().await?;
         const VERSION: u8 = 1;
         let msg = make_msg!(Out::CancelHistoricalData, VERSION, req_id);
         self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.send().await
     }
 
     /// Request the earliest available data point for a given security and data type.
@@ -1018,9 +977,9 @@ self.writer.send().await
         data: D,
         regular_trading_hours_only: bool,
     ) -> IdResult
-        where
-            S: Security,
-            D: historical_ticks::data_types::DataType<S>,
+    where
+        S: Security,
+        D: historical_ticks::data_types::DataType<S>,
     {
         let id = self.get_next_req_id();
         let msg = make_msg!(
@@ -1033,7 +992,7 @@ self.writer.send().await
             "1"
         );
         self.writer.add_prefix(&msg)?;
-self.writer.send().await?;
+        self.writer.send().await?;
         Ok(id)
     }
 
@@ -1048,7 +1007,7 @@ self.writer.send().await?;
         let msg = make_msg!(Out::CancelHeadTimestamp, req_id);
 
         self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.send().await
     }
 
     /// Request a histogram of historical data.
@@ -1069,8 +1028,8 @@ self.writer.send().await
         regular_trading_hours_only: bool,
         duration: histogram::Duration,
     ) -> IdResult
-        where
-            S: Security,
+    where
+        S: Security,
     {
         let id = self.get_next_req_id();
         let msg = make_msg!(
@@ -1082,7 +1041,7 @@ self.writer.send().await
             duration
         );
         self.writer.add_prefix(&msg)?;
-self.writer.send().await?;
+        self.writer.send().await?;
         Ok(id)
     }
 
@@ -1096,7 +1055,7 @@ self.writer.send().await?;
     pub async fn cancel_histogram_data(&mut self, req_id: i64) -> ReqResult {
         let msg = make_msg!(Out::CancelHistogramData, req_id);
         self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.send().await
     }
 
     /// Request historical ticks for a given security. See [`historical_ticks`] for
@@ -1122,9 +1081,9 @@ self.writer.send().await
         data: D,
         regular_trading_hours_only: bool,
     ) -> IdResult
-        where
-            S: Security,
-            D: historical_ticks::data_types::DataType<S>,
+    where
+        S: Security,
+        D: historical_ticks::data_types::DataType<S>,
     {
         let id = self.get_next_req_id();
         let msg = make_msg!(
@@ -1140,7 +1099,7 @@ self.writer.send().await
             ""
         );
         self.writer.add_prefix(&msg)?;
-self.writer.send().await?;
+        self.writer.send().await?;
         Ok(id)
     }
 
@@ -1169,9 +1128,9 @@ self.writer.send().await?;
         refresh_type: live_data::RefreshType,
         use_regulatory_snapshot: bool,
     ) -> IdResult
-        where
-            S: Security,
-            D: live_data::data_types::DataType<S>,
+    where
+        S: Security,
+        D: live_data::data_types::DataType<S>,
     {
         const VERSION: u8 = 11;
         let id = self.get_next_req_id();
@@ -1191,7 +1150,7 @@ self.writer.send().await?;
             ""
         );
         self.writer.add_prefix(&msg)?;
-self.writer.send().await?;
+        self.writer.send().await?;
         Ok(id)
     }
 
@@ -1206,7 +1165,7 @@ self.writer.send().await?;
         const VERSION: u8 = 2;
         let msg = make_msg!(Out::CancelMktData, VERSION, req_id);
         self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.send().await
     }
 
     /// Set the market data variant for all succeeding `Client::req_market_data` requests.
@@ -1220,7 +1179,7 @@ self.writer.send().await
         const VERSION: u8 = 1;
         let msg = make_msg!(Out::ReqMarketDataType, VERSION, variant);
         self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.send().await
     }
 
     /// Request real-time, 5 second bars for a given security.
@@ -1242,9 +1201,9 @@ self.writer.send().await
         data: D,
         regular_trading_hours_only: bool,
     ) -> IdResult
-        where
-            S: Security,
-            D: live_bar::data_types::DataType<S>,
+    where
+        S: Security,
+        D: live_bar::data_types::DataType<S>,
     {
         const VERSION: u8 = 3;
         let id = self.get_next_req_id();
@@ -1259,7 +1218,7 @@ self.writer.send().await
             ""
         );
         self.writer.add_prefix(&msg)?;
-self.writer.send().await?;
+        self.writer.send().await?;
 
         Ok(id)
     }
@@ -1275,7 +1234,7 @@ self.writer.send().await?;
         const VERSION: u8 = 1;
         let msg = make_msg!(Out::CancelRealTimeBars, VERSION, req_id);
         self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.send().await
     }
 
     // === Live Tick-by-Tick Data ===
@@ -1301,9 +1260,9 @@ self.writer.send().await
         number_of_historical_ticks: live_ticks::NumberOfTicks,
         ignore_size: bool,
     ) -> IdResult
-        where
-            S: Security,
-            D: live_ticks::data_types::DataType<S>,
+    where
+        S: Security,
+        D: live_ticks::data_types::DataType<S>,
     {
         let id = self.get_next_req_id();
         let msg = make_msg!(
@@ -1315,7 +1274,7 @@ self.writer.send().await
             u8::from(ignore_size)
         );
         self.writer.add_prefix(&msg)?;
-self.writer.send().await?;
+        self.writer.send().await?;
         Ok(id)
     }
 
@@ -1329,7 +1288,7 @@ self.writer.send().await?;
     pub async fn cancel_tick_by_tick_data(&mut self, req_id: i64) -> ReqResult {
         let msg = make_msg!(Out::CancelTickByTickData, req_id);
         self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.send().await
     }
 
     // === Market Depth ===
@@ -1346,8 +1305,8 @@ self.writer.send().await
     /// # Returns
     /// Returns the unique ID associated with the request.
     pub async fn req_market_depth<S>(&mut self, security: &S, number_of_rows: u32) -> IdResult
-        where
-            S: Security,
+    where
+        S: Security,
     {
         const VERSION: u8 = 5;
         let id = self.get_next_req_id();
@@ -1361,7 +1320,7 @@ self.writer.send().await
             ""
         );
         self.writer.add_prefix(&msg)?;
-self.writer.send().await?;
+        self.writer.send().await?;
 
         Ok(id)
     }
@@ -1373,7 +1332,7 @@ self.writer.send().await?;
     pub async fn req_market_depth_exchanges(&mut self) -> ReqResult {
         let msg = make_msg!(Out::ReqMktDepthExchanges);
         self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.send().await
     }
 
     /// Cancel a market depth subscription for a given `req_id`.
@@ -1387,7 +1346,7 @@ self.writer.send().await
         const VERSION: u8 = 1;
         let msg = make_msg!(Out::CancelMktDepth, VERSION, req_id);
         self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.send().await
     }
 
     /// Request exchanges comprising the aggregate SMART exchange
@@ -1405,7 +1364,7 @@ self.writer.send().await
         let id = self.get_next_req_id();
         let msg = make_msg!(Out::ReqSmartComponents, id, exchange_id);
         self.writer.add_prefix(&msg)?;
-self.writer.send().await?;
+        self.writer.send().await?;
 
         Ok(id)
     }
@@ -1424,14 +1383,14 @@ self.writer.send().await?;
     /// # Returns
     /// Returns the unique ID associated with the request.
     pub async fn req_place_order<S, E>(&mut self, order: &Order<'_, S, E>) -> IdResult
-        where
-            S: Security,
-            E: Executable<S>,
+    where
+        S: Security,
+        E: Executable<S>,
     {
         let id = self.get_next_order_id();
         let msg = make_msg!(Out::PlaceOrder, id, order.get_security(), "", "", order);
         self.writer.add_prefix(&msg)?;
-self.writer.send().await?;
+        self.writer.send().await?;
         Ok(id)
     }
 
@@ -1448,13 +1407,13 @@ self.writer.send().await?;
     /// # Returns
     /// Returns the unique ID associated with the request.
     pub async fn req_modify_order<S, E>(&mut self, order: &Order<'_, S, E>, id: i64) -> IdResult
-        where
-            S: Security,
-            E: Executable<S>,
+    where
+        S: Security,
+        E: Executable<S>,
     {
         let msg = make_msg!(Out::PlaceOrder, id, order.get_security(), "", "", order);
         self.writer.add_prefix(&msg)?;
-self.writer.send().await?;
+        self.writer.send().await?;
         Ok(id)
     }
 
@@ -1466,13 +1425,13 @@ self.writer.send().await?;
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_order<S>(&mut self, id: i64) -> ReqResult
-        where
-            S: Security,
+    where
+        S: Security,
     {
         const VERSION: u8 = 1;
         let msg = make_msg!(Out::CancelOrder, VERSION, id, "");
         self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.send().await
     }
 
     /// Cancel all currently open orders, including those placed in TWS.
@@ -1483,7 +1442,7 @@ self.writer.send().await
         const VERSION: u8 = 1;
         let msg = make_msg!(Out::ReqGlobalCancel, VERSION);
         self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.send().await
     }
 
     /// Request all the open orders placed from all API clients and from TWS.
@@ -1495,13 +1454,10 @@ self.writer.send().await
     /// Returns any error encountered while writing the outgoing message.
     pub async fn req_all_open_orders(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(
-            Out::ReqAllOpenOrders,
-            VERSION
-        );
+        let msg = make_msg!(Out::ReqAllOpenOrders, VERSION);
 
         self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.send().await
     }
 
     /// Request that all newly created TWS orders will be implicitly associated with the calling
@@ -1514,14 +1470,10 @@ self.writer.send().await
     /// the calling client does not have ID 0.
     pub async fn req_auto_open_orders(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(
-            Out::ReqAutoOpenOrders,
-            VERSION,
-            u8::from(true)
-        );
+        let msg = make_msg!(Out::ReqAutoOpenOrders, VERSION, u8::from(true));
 
         self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.send().await
     }
 
     /// Request the open orders that were placed from the calling client.
@@ -1532,13 +1484,10 @@ self.writer.send().await
     /// Returns any error encountered while writing the outgoing message.
     pub async fn req_open_orders(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(
-            Out::ReqOpenOrders,
-            VERSION
-        );
+        let msg = make_msg!(Out::ReqOpenOrders, VERSION);
 
         self.writer.add_prefix(&msg)?;
-self.writer.send().await
+        self.writer.send().await
     }
 
     // === Executions ===
@@ -1556,19 +1505,12 @@ self.writer.send().await
     pub async fn req_executions(&mut self, filter: Filter) -> IdResult {
         const VERSION: u8 = 3;
         let req_id = self.get_next_req_id();
-        let msg = make_msg!(
-            Out::ReqExecutions,
-            VERSION,
-            req_id,
-            filter
-        );
+        let msg = make_msg!(Out::ReqExecutions, VERSION, req_id, filter);
 
         self.writer.add_prefix(&msg)?;
-self.writer.send().await?;
+        self.writer.send().await?;
         Ok(req_id)
     }
-
-
 
     // === Contract Creation ===
 
@@ -1605,7 +1547,7 @@ self.writer.send().await?;
             .send(ToWrapper::ContractQuery((contract_id, req_id)))
             .await?;
         self.writer.add_prefix(&msg)?;
-self.writer.send().await?;
+        self.writer.send().await?;
         Ok(())
     }
 
@@ -1651,14 +1593,14 @@ self.writer.send().await?;
 #[inline]
 fn check_valid_account(
     client: &Client<indicators::Active>,
-    account_number: String,
-) -> Result<String, std::io::Error> {
+    account_number: &String,
+) -> Result<(), std::io::Error> {
     if client
         .status
         .managed_accounts
         .contains(account_number.as_str())
     {
-        Ok(account_number)
+        Ok(())
     } else {
         Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
