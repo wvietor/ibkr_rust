@@ -2,6 +2,7 @@ use chrono::NaiveDateTime;
 
 use crate::contract::ContractId;
 use std::str::FromStr;
+use serde::Serialize;
 
 // macro_rules! make_error {
 //     ($( #[doc = $name_doc:expr] )? $name: ident: $msg: literal) => {
@@ -19,7 +20,7 @@ use std::str::FromStr;
 //     };
 // }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 /// The result of a [`crate::client::Client::req_market_data`] request, which contains an identifier that can be passed to
 /// [`crate::client::Client::req_smart_components`] request to find which exchanges are included in the SMART aggregate exchange.
 pub struct ExchangeId(String);

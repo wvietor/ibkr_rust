@@ -536,7 +536,7 @@ impl<W: 'static + Wrapper> Client<indicators::Inactive<W>> {
                             };
                             match status {
                                 Ok(()) => (),
-                                Err(e) => println!("{e}")
+                                Err(e) => println!("\x1B[31m{e}\x1B[0m")
                             }
                         }
                     } => (),
@@ -884,21 +884,7 @@ impl Client<indicators::Active> {
         D: historical_bar::data_types::DataType<S>,
     {
         let id = self.get_next_req_id();
-        let msg = make_msg!(
-            Out::ReqHistoricalData,
-            id,
-            security,
-            u8::from(false),
-            end_date_time,
-            bar_size,
-            duration,
-            u8::from(regular_trading_hours_only),
-            data,
-            1,
-            u8::from(false),
-            ""
-        );
-        // self.writer.add_prefix(&msg)?;
+
         self.writer.add_body((
             Out::ReqHistoricalData,
             id,
@@ -946,21 +932,21 @@ impl Client<indicators::Active> {
         D: updating_historical_bar::data_types::DataType<S>,
     {
         let id = self.get_next_req_id();
-        let msg = make_msg!(
+
+        self.writer.add_body((
             Out::ReqHistoricalData,
             id,
             security,
-            u8::from(false),
-            "",
+            false,
+            None::<()>,
             bar_size,
             duration,
-            u8::from(regular_trading_hours_only),
+            regular_trading_hours_only,
             data,
             1,
-            u8::from(true),
-            ""
-        );
-        self.writer.add_prefix(&msg)?;
+            true,
+            None::<()>
+        ))?;
         self.writer.send().await?;
         Ok(id)
     }
@@ -974,8 +960,8 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_updating_historical_bar(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(Out::CancelHistoricalData, VERSION, req_id);
-        self.writer.add_prefix(&msg)?;
+
+        self.writer.add_body((Out::CancelHistoricalData, VERSION, req_id))?;
         self.writer.send().await
     }
 
@@ -1003,16 +989,16 @@ impl Client<indicators::Active> {
         D: historical_ticks::data_types::DataType<S>,
     {
         let id = self.get_next_req_id();
-        let msg = make_msg!(
+
+        self.writer.add_body((
             Out::ReqHeadTimestamp,
             id,
             security,
-            "",
-            u8::from(regular_trading_hours_only),
+            None::<()>,
+            regular_trading_hours_only,
             data,
-            "1"
-        );
-        self.writer.add_prefix(&msg)?;
+            1
+        ))?;
         self.writer.send().await?;
         Ok(id)
     }
@@ -1025,9 +1011,7 @@ impl Client<indicators::Active> {
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_head_timestamp(&mut self, req_id: i64) -> ReqResult {
-        let msg = make_msg!(Out::CancelHeadTimestamp, req_id);
-
-        self.writer.add_prefix(&msg)?;
+        self.writer.add_body((Out::CancelHeadTimestamp, req_id))?;
         self.writer.send().await
     }
 
@@ -1053,15 +1037,15 @@ impl Client<indicators::Active> {
         S: Security,
     {
         let id = self.get_next_req_id();
-        let msg = make_msg!(
+
+        self.writer.add_body((
             Out::ReqHistogramData,
             id,
             security,
-            "",
-            u8::from(regular_trading_hours_only),
+            None::<()>,
+            regular_trading_hours_only,
             duration
-        );
-        self.writer.add_prefix(&msg)?;
+        ))?;
         self.writer.send().await?;
         Ok(id)
     }
@@ -1074,8 +1058,7 @@ impl Client<indicators::Active> {
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_histogram_data(&mut self, req_id: i64) -> ReqResult {
-        let msg = make_msg!(Out::CancelHistogramData, req_id);
-        self.writer.add_prefix(&msg)?;
+        self.writer.add_body((Out::CancelHistogramData, req_id))?;
         self.writer.send().await
     }
 
@@ -1119,7 +1102,20 @@ impl Client<indicators::Active> {
             "",
             ""
         );
-        self.writer.add_prefix(&msg)?;
+        // self.writer.add_prefix(&msg)?;
+        self.writer.add_body((
+            Out::ReqHistoricalTicks,
+            id,
+            security,
+            None::<()>,
+            timestamp,
+            number_of_ticks,
+            data,
+            regular_trading_hours_only,
+            None::<()>,
+            None::<()>
+            )
+        )?;
         self.writer.send().await?;
         Ok(id)
     }
@@ -1170,7 +1166,18 @@ impl Client<indicators::Active> {
             u8::from(use_regulatory_snapshot),
             ""
         );
-        self.writer.add_prefix(&msg)?;
+        // self.writer.add_prefix(&msg)?;
+        self.writer.add_body((
+            Out::ReqMktData,
+            VERSION,
+            id,
+            security,
+            false,
+            additional_data,
+            refresh_type,
+            use_regulatory_snapshot,
+            None::<()>
+        ))?;
         self.writer.send().await?;
         Ok(id)
     }
@@ -1184,8 +1191,8 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_market_data(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 2;
-        let msg = make_msg!(Out::CancelMktData, VERSION, req_id);
-        self.writer.add_prefix(&msg)?;
+
+        self.writer.add_body((Out::CancelMktData, VERSION, req_id))?;
         self.writer.send().await
     }
 
@@ -1198,8 +1205,8 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn req_market_data_type(&mut self, variant: live_data::Class) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(Out::ReqMarketDataType, VERSION, variant);
-        self.writer.add_prefix(&msg)?;
+
+        self.writer.add_body((Out::ReqMarketDataType, VERSION, variant))?;
         self.writer.send().await
     }
 
@@ -1238,9 +1245,19 @@ impl Client<indicators::Active> {
             u8::from(regular_trading_hours_only),
             ""
         );
-        self.writer.add_prefix(&msg)?;
-        self.writer.send().await?;
 
+        // self.writer.add_prefix(&msg)?;
+        self.writer.add_body((
+            Out::ReqRealTimeBars,
+            VERSION,
+            id,
+            security,
+            5_u32,
+            data,
+            regular_trading_hours_only,
+            None::<()>
+            ))?;
+        self.writer.send().await?;
         Ok(id)
     }
 
@@ -1254,7 +1271,8 @@ impl Client<indicators::Active> {
     pub async fn cancel_real_time_bars(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
         let msg = make_msg!(Out::CancelRealTimeBars, VERSION, req_id);
-        self.writer.add_prefix(&msg)?;
+        // self.writer.add_prefix(&msg)?;
+        self.writer.add_body((Out::CancelRealTimeBars, VERSION, req_id))?;
         self.writer.send().await
     }
 
@@ -1294,7 +1312,16 @@ impl Client<indicators::Active> {
             number_of_historical_ticks,
             u8::from(ignore_size)
         );
-        self.writer.add_prefix(&msg)?;
+        // self.writer.add_prefix(&msg)?;
+
+        self.writer.add_body((
+            Out::ReqTickByTickData,
+            id,
+            security,
+            tick_data,
+            number_of_historical_ticks,
+            ignore_size
+            ))?;
         self.writer.send().await?;
         Ok(id)
     }
@@ -1307,8 +1334,7 @@ impl Client<indicators::Active> {
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_tick_by_tick_data(&mut self, req_id: i64) -> ReqResult {
-        let msg = make_msg!(Out::CancelTickByTickData, req_id);
-        self.writer.add_prefix(&msg)?;
+        self.writer.add_body((Out::CancelTickByTickData, req_id))?;
         self.writer.send().await
     }
 
@@ -1340,9 +1366,17 @@ impl Client<indicators::Active> {
             u8::from(true),
             ""
         );
-        self.writer.add_prefix(&msg)?;
+        // self.writer.add_prefix(&msg)?;
+        self.writer.add_body((
+            Out::ReqMktDepth,
+            VERSION,
+            id,
+            security,
+            number_of_rows,
+            true,
+            None::<()>
+        ))?;
         self.writer.send().await?;
-
         Ok(id)
     }
 
@@ -1351,8 +1385,7 @@ impl Client<indicators::Active> {
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
     pub async fn req_market_depth_exchanges(&mut self) -> ReqResult {
-        let msg = make_msg!(Out::ReqMktDepthExchanges);
-        self.writer.add_prefix(&msg)?;
+        self.writer.add_body(Out::ReqMktDepthExchanges)?;
         self.writer.send().await
     }
 
@@ -1365,8 +1398,8 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_market_depth(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(Out::CancelMktDepth, VERSION, req_id);
-        self.writer.add_prefix(&msg)?;
+
+        self.writer.add_body((Out::CancelMktDepth, VERSION, req_id))?;
         self.writer.send().await
     }
 
@@ -1383,10 +1416,9 @@ impl Client<indicators::Active> {
     /// Returns the unique ID associated with the request.
     pub async fn req_smart_components(&mut self, exchange_id: ExchangeId) -> IdResult {
         let id = self.get_next_req_id();
-        let msg = make_msg!(Out::ReqSmartComponents, id, exchange_id);
-        self.writer.add_prefix(&msg)?;
-        self.writer.send().await?;
 
+        self.writer.add_body((Out::ReqSmartComponents, id, exchange_id))?;
+        self.writer.send().await?;
         Ok(id)
     }
 
@@ -1410,6 +1442,7 @@ impl Client<indicators::Active> {
     {
         let id = self.get_next_order_id();
         let msg = make_msg!(Out::PlaceOrder, id, order.get_security(), "", "", order);
+
         self.writer.add_prefix(&msg)?;
         self.writer.send().await?;
         Ok(id)

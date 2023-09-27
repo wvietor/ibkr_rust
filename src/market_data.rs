@@ -11,7 +11,7 @@ macro_rules! make_variants {
             use serde::Serialize;
 use super::{$($name,)*};
 
-            pub trait Valid: Serialize {}
+            pub trait Valid: Serialize + Copy + Clone {}
 
             $(
                 impl Valid for $name {}
@@ -381,6 +381,7 @@ pub mod updating_historical_bar {
 /// Contains types and traits used by [`crate::client::Client::req_historical_ticks`] and
 /// [`crate::client::Client::req_head_timestamp`].
 pub mod historical_ticks {
+    use serde::{Serialize, Serializer};
     use crate::make_body;
 
     // === Type definitions ===
@@ -395,7 +396,7 @@ pub mod historical_ticks {
         EndDateTime(chrono::NaiveDateTime),
     }
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
     /// A simple struct to ensure that the number of ticks to return never exceeds 1,000.
     pub struct NumberOfTicks(u16);
 
@@ -441,6 +442,19 @@ pub mod historical_ticks {
         }
     }
 
+    impl Serialize for TimeStamp {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+            match *self {
+                Self::StartDateTime(dt) => {
+                    (dt.format("%Y%m%d-%T").to_string(), None::<()>).serialize(serializer)
+                }
+                Self::EndDateTime(dt) => {
+                    (None::<()>, dt.format("%Y%m%d-%T").to_string()).serialize(serializer)
+                }
+            }
+        }
+    }
+
     // === Data types ===
 
     /// Contains the potential data types for a [`crate::client::Client::req_historical_ticks`] or
@@ -471,6 +485,8 @@ pub mod histogram {
 
     // === Type definitions ===
 
+    use serde::{Serialize, Serializer};
+
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
     /// The span of dates and times over which bars will be returned.
     pub enum Duration {
@@ -498,6 +514,18 @@ pub mod histogram {
                 Self::Month(m) => format!("{m} months"),
                 Self::Year(y) => format!("{y} years"),
             }
+        }
+    }
+
+    impl Serialize for Duration {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+            match *self {
+                Self::Second(s) => format!("{s} seconds"),
+                Self::Day(d) => format!("{d} days"),
+                Self::Week(w) => format!("{w} weeks"),
+                Self::Month(m) => format!("{m} months"),
+                Self::Year(y) => format!("{y} years"),
+            }.serialize(serializer)
         }
     }
 }
@@ -539,25 +567,32 @@ pub mod live_data {
     // === Type definitions ===
 
     use std::fmt::Formatter;
+    use serde::Serialize;
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
     /// The frequency at which data will be updated.
     pub enum RefreshType {
+        #[serde(rename(serialize="1"))]
         /// Return a snapshot of the market at a specific point in time.
         Snapshot,
+        #[serde(rename(serialize="0"))]
         /// Begin a streaming subscription.
         Streaming,
     }
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
     /// The type of market data to return.
     pub enum Class {
+        #[serde(rename(serialize="1"))]
         /// Real-time streaming data, which requires a subscription.
         Live,
+        #[serde(rename(serialize="2"))]
         /// The last data recorded at market close, which requires a subscription.
         Frozen,
+        #[serde(rename(serialize="3"))]
         /// Delayed data by 15-20 minutes, which does not require any subscription.
         Delayed,
+        #[serde(rename(serialize="4"))]
         /// Same as frozen, but does not require any subscription.
         DelayedFrozen,
     }

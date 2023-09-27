@@ -98,7 +98,7 @@ pub mod default_wrapper {
             error_string: String,
             advanced_order_reject_json: String,
         ) {
-            println!("Oh no, an error occurred! Req ID: {req_id}, Error Code {error_code}: {error_string} {advanced_order_reject_json}");
+            println!("\x1B[31mOh no, an error occurred! Req ID: {req_id}, Error Code {error_code}: {error_string} {advanced_order_reject_json}\x1B[0m");
         }
 
         #[inline]

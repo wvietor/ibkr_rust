@@ -267,6 +267,8 @@ fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
                     self.get_security_type(),
                     self.get_expiration_date().map(|d| d.format("%Y%m%d").to_string()),
                     self.get_strike(),
+                    self.get_right(),
+                    self.get_multiplier(),
                     self.get_exchange(),
                     self.get_primary_exchange(),
                     self.get_currency(),
