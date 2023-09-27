@@ -1090,19 +1090,7 @@ impl Client<indicators::Active> {
         D: historical_ticks::data_types::DataType<S>,
     {
         let id = self.get_next_req_id();
-        let msg = make_msg!(
-            Out::ReqHistoricalTicks,
-            id,
-            security,
-            "",
-            timestamp,
-            number_of_ticks,
-            data,
-            u8::from(regular_trading_hours_only),
-            "",
-            ""
-        );
-        // self.writer.add_prefix(&msg)?;
+
         self.writer.add_body((
             Out::ReqHistoricalTicks,
             id,
@@ -1151,22 +1139,7 @@ impl Client<indicators::Active> {
     {
         const VERSION: u8 = 11;
         let id = self.get_next_req_id();
-        let msg = make_msg!(
-            Out::ReqMktData,
-            VERSION,
-            id,
-            security,
-            u8::from(false),
-            additional_data
-                .iter()
-                .map(std::string::ToString::to_string)
-                .collect::<Vec<String>>()
-                .join(","),
-            refresh_type,
-            u8::from(use_regulatory_snapshot),
-            ""
-        );
-        // self.writer.add_prefix(&msg)?;
+
         self.writer.add_body((
             Out::ReqMktData,
             VERSION,
@@ -1235,18 +1208,7 @@ impl Client<indicators::Active> {
     {
         const VERSION: u8 = 3;
         let id = self.get_next_req_id();
-        let msg = make_msg!(
-            Out::ReqRealTimeBars,
-            VERSION,
-            id,
-            security,
-            5_u32,
-            data,
-            u8::from(regular_trading_hours_only),
-            ""
-        );
 
-        // self.writer.add_prefix(&msg)?;
         self.writer.add_body((
             Out::ReqRealTimeBars,
             VERSION,
@@ -1270,8 +1232,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_real_time_bars(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(Out::CancelRealTimeBars, VERSION, req_id);
-        // self.writer.add_prefix(&msg)?;
+
         self.writer.add_body((Out::CancelRealTimeBars, VERSION, req_id))?;
         self.writer.send().await
     }
@@ -1304,15 +1265,6 @@ impl Client<indicators::Active> {
         D: live_ticks::data_types::DataType<S>,
     {
         let id = self.get_next_req_id();
-        let msg = make_msg!(
-            Out::ReqTickByTickData,
-            id,
-            security,
-            tick_data,
-            number_of_historical_ticks,
-            u8::from(ignore_size)
-        );
-        // self.writer.add_prefix(&msg)?;
 
         self.writer.add_body((
             Out::ReqTickByTickData,
@@ -1357,16 +1309,7 @@ impl Client<indicators::Active> {
     {
         const VERSION: u8 = 5;
         let id = self.get_next_req_id();
-        let msg = make_msg!(
-            Out::ReqMktDepth,
-            VERSION,
-            id,
-            security,
-            number_of_rows,
-            u8::from(true),
-            ""
-        );
-        // self.writer.add_prefix(&msg)?;
+
         self.writer.add_body((
             Out::ReqMktDepth,
             VERSION,
