@@ -1518,32 +1518,18 @@ impl Client<indicators::Active> {
     ) -> anyhow::Result<()> {
         const VERSION: u8 = 8;
         let req_id = self.get_next_req_id();
-        let msg = make_msg!(
-            Out::ReqContractData,
-            VERSION,
-            req_id,
-            contract_id.0,
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            ""
-        );
         self.status
             .tx
             .send(ToWrapper::ContractQuery((contract_id, req_id)))
             .await?;
-        self.writer.add_prefix(&msg)?;
+
+        self.writer.add_body((
+            Out::ReqContractData,
+            VERSION,
+            req_id,
+            contract_id,
+            [None::<()>; 15]
+            ))?;
         self.writer.send().await?;
         Ok(())
     }
