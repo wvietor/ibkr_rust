@@ -56,7 +56,7 @@ order:
     stock_range_lower, // Default =""
     stock_range_upper, // Default = ""
     override_percentage_constraints, // Default = false
-    volatility, // Defualt = ""
+    volatility, // Default = ""
     volatility_type, // Default = "", valid={1: daily, 2: annual}
     delta_neutral_order_type, // Default = ""
     delta_neutral_aux_price, // Default = ""

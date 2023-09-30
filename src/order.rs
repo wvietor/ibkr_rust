@@ -1,8 +1,11 @@
-use serde::{Serialize, Serializer};
+use std::collections::HashMap;
+use std::io::Error;
+use serde::{Serialize};
 use crate::{
     contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Security, Stock},
     make_body,
 };
+use crate::message2::Writer;
 
 // ==============================================
 // === Core Order Types (Market, Limit, etc.) ===
@@ -12,26 +15,33 @@ const ORDER_NULL_STRING: &str = "\x00\x00\x000\x00\x001\x000\x000\x000\x000\x000
 
 // === Type definitions ===
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 /// The time periods for which an order is active and can be executed against.
 pub enum TimeInForce {
     #[default]
+    #[serde(rename(serialize="DAY"))]
     /// Valid for the day only.
     Day,
+    #[serde(rename(serialize="GTC"))]
     /// Good until canceled. The order will continue to work within the system and in the marketplace until it executes or is canceled. GTC orders will be automatically be cancelled under the following conditions:
     /// If a corporate action on a security results in a stock split (forward or reverse), exchange for shares, or distribution of shares. If you do not log into your IB account for 90 days.
     /// At the end of the calendar quarter following the current quarter. For example, an order placed during the third quarter of 2011 will be canceled at the end of the first quarter of 2012. If the last day is a non-trading day, the cancellation will occur at the close of the final trading day of that quarter. For example, if the last day of the quarter is Sunday, the orders will be cancelled on the preceding Friday.
     /// Orders that are modified will be assigned a new “Auto Expire” date consistent with the end of the calendar quarter following the current quarter.
     /// Orders submitted to IB that remain in force for more than one day will not be reduced for dividends. To allow adjustment to your order price on ex-dividend date, consider using a Good-Til-Date/Time (GTD) or Good-after-Time/Date (GAT) order type, or a combination of the two.
     Gtc,
+    #[serde(rename(serialize="IOC"))]
     /// Immediate or Cancel. Any portion that is not filled as soon as it becomes available in the market is canceled.
     Ioc,
+    // #[serde(rename(serialize="GTD"))]
     // /// Good until Date. It will remain working within the system and in the marketplace until it executes or until the close of the market on the date specified
     // Gtd,
+    // #[serde(rename(serialize="OPG"))]
     // /// Use OPG to send a market-on-open (MOO) or limit-on-open (LOO) order.
     // Opg,
+    #[serde(rename(serialize="FOK"))]
     /// If the entire Fill-or-Kill order does not execute as soon as it becomes available, the entire order is canceled.
     Fok,
+    #[serde(rename(serialize="DTC"))]
     /// Day until canceled.
     Dtc,
 }
@@ -285,7 +295,7 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
     }
 
     #[inline]
-    /// Get the model code associated with a given order.
+    /// Return the model code associated with a given order.
     ///
     /// Is used to place an order to a model. For example, "Technology" model can be used for tech
     /// stocks first created in TWS.
@@ -293,44 +303,638 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
         None
     }
 
-    // Next is oca_type
+    #[inline]
+    /// Return the one-cancels-all group
+    ///
+    /// Tells how to handle remaining orders in an OCA group when one order or part of an order
+    /// executes.
+    fn get_one_cancels_all_type(&self) -> OneCancelsAllType {
+        OneCancelsAllType::default()
+    }
+
+    #[inline]
+    /// Return the Rule 80 A details for an order
+    fn get_rule_80a(&self) -> Option<Rule80A> {
+        None
+    }
+
+    #[inline]
+    /// Returns whether or not all the order has to be filled on a single execution.
+    fn get_all_or_none(&self) -> bool {
+        false
+    }
+
+    #[inline]
+    /// Returns the minimum quantity for an order (ie. a minimum quantity order type).
+    fn get_minimum_quantity(&self) -> Option<u64> {
+        None
+    }
+
+    #[inline]
+    /// Return the percent offset amount for relative orders.
+    fn get_percent_offset(&self) -> Option<f64> {
+        None
+    }
+
+    #[inline]
+    /// Return the auction strategy.
+    ///
+    /// For BOX orders only.
+    fn get_box_auction_strategy(&self) -> AuctionStrategy {
+        AuctionStrategy::default()
+    }
+
+    #[inline]
+    /// Return the auction's starting price.
+    ///
+    /// For BOX orders only.
+
+    fn get_box_starting_price(&self) -> Option<f64> {
+        None
+    }
+
+    #[inline]
+    /// Return the stock's reference price.
+    /// The reference price is used for VOL orders to compute the limit price sent to an exchange
+    /// (whether or not Continuous Update is selected), and for price range monitoring.
+    fn get_box_stock_reference_price(&self) -> Option<f64> {
+        None
+    }
+
+    #[inline]
+    /// Return the stock's Delta. For orders on BOX only.
+    fn get_box_stock_delta(&self) -> Option<f64> {
+        None
+    }
+
+    #[inline]
+    /// Return the lower value for the acceptable underlying stock price range.
+    ///
+    /// For price improvement option orders on BOX and VOL orders with dynamic management.
+    fn get_box_vol_stock_range_lower(&self) -> Option<f64> {
+        None
+    }
+
+    #[inline]
+    /// Return the upper value for the acceptable underlying stock price range.
+    ///
+    /// For price improvement option orders on BOX and VOL orders with dynamic management.
+    fn get_box_vol_stock_range_upper(&self) -> Option<f64> {
+        None
+    }
+
+    #[inline]
+    /// Return whether the order will override validation from TWS.
+    ///
+    ///
+    /// Precautionary constraints are defined on the TWS Presets page, and help ensure that your
+    /// price and size order values are reasonable. Orders sent from the API are also validated
+    /// against these safety constraints, and may be rejected if any constraint is violated. To
+    /// override validation, set this parameter’s value to True.
+    fn get_will_override_validation(&self) -> bool {
+        false
+    }
+
+    #[inline]
+    /// Return the option price in volatility, as calculated by TWS' Option Analytics.
+    ///
+    /// This value is expressed as a percent and is used to calculate the limit
+    /// price sent to the exchange.
+    fn get_volatility_quote(&self) -> Option<f64> {
+        None
+    }
+
+    #[inline]
+    /// Return the type of volatility associated with a volatility quote.
+    fn get_volatility_type(&self) -> Option<VolatilityType> {
+        None
+    }
+
+    #[inline]
+    /// Return the delta neutral order type.
+    ///
+    /// Enter an order type to instruct TWS to submit a delta neutral trade on full or partial
+    /// execution of the VOL order.
+    ///
+    /// VOL orders only. For no hedge delta order to be sent, specify NONE.
+    fn get_delta_neutral_order_type(&self) -> Option<&str> {
+        None
+    }
+
+    #[inline]
+    /// Return the auxiliary price associated with a delta neutral order.
+    ///
+    /// Use this field to enter a value if the value in the deltaNeutralOrderType field is an order
+    /// type that requires an Aux price, such as a REL order. VOL orders only.
+    fn get_delta_neutral_auxiliary_price(&self) -> Option<f64> {
+        None
+    }
+
+    #[inline]
+    /// Return the delta neutral order content if it exists.
+    fn get_delta_neutral_order_content(&self) -> MissingField<(), (i64, &str, &str, &str, &str, bool, i64, &str)> {
+        MissingField::default()
+    }
+
+    #[inline]
+    /// Return whether TWS will automatically update the limit price of the order as the
+    /// underlying price moves.
+    ///
+    /// VOL orders only.
+    fn get_continuous_update(&self) -> bool {
+        false
+    }
+
+    #[inline]
+    /// Return how you want TWS to calculate the limit price for options, and for stock range price monitoring.
+    /// VOL orders only.
+    fn get_reference_price_type(&self) -> Option<ReferencePriceType> {
+        None
+    }
+
+    #[inline]
+    /// Return the trailing stop price for trail limit orders
+    fn get_trail_stop_price(&self) -> Option<f64> {
+        None
+    }
+
+    #[inline]
+    /// Return the trailing amount of a trailing stop order as a percentage.
+    ///
+    /// Observe the following guidelines when using the trailingPercent field:
+    ///
+    /// This field is mutually exclusive with the existing trailing amount. That is, the API client can send one or the other but not both.
+    /// This field is read AFTER the stop price (barrier price) as follows: deltaNeutralAuxPrice stopPrice, trailingPercent, scale order attributes
+    /// The field will also be sent to the API in the openOrder message if the API client version is >= 56. It is sent after the stopPrice field as follows: stopPrice, trailingPct, basisPoint.
+    fn get_trailing_percent(&self) -> Option<f64> {
+        None
+    }
+
+    #[inline]
+    /// Return the size of the first, or initial, order component.
+    ///
+    /// For Scale orders only.
+    fn get_scale_initial_level_size(&self) -> Option<i64> {
+        None
+    }
+
+    #[inline]
+    /// Return the order size of the subsequent scale order components.
+    ///
+    /// For Scale orders only. Used in conjunction with scaleInitLevelSize().
+    fn get_scale_subs_level_size(&self) -> Option<i64> {
+        None
+    }
+
+    #[inline]
+    /// Return the price increment between scale components.
+    ///
+    /// For Scale orders only. This value is compulsory.
+    fn get_scale_price_increment(&self) -> Option<f64> {
+        None
+    }
+
+    #[inline]
+    /// Return the scale order content, if it exists.
+    fn get_scale_order_content(&self) -> MissingField<(), (f64, i64, f64, bool, i64, i64, bool)> {
+        MissingField::default()
+    }
+
+    #[inline]
+    /// Return the list of scale orders.
+    ///
+    /// Used for scale orders.
+    fn get_scale_table(&self) -> Option<&str> {
+        None
+    }
+
+    #[inline]
+    /// Return the start time of a GTC order.
+    fn get_active_start_time(&self) -> Option<&str> {
+        None
+    }
+
+    #[inline]
+    /// Return the stop time of a GTC order.
+    fn get_active_stop_time(&self) -> Option<&str> {
+        None
+    }
+
+    #[inline]
+    /// Return the type of hedge for a hedge order.
+    fn get_hedge_type(&self) -> Option<HedgeType> {
+        None
+    }
+
+    #[inline]
+    /// Return the hedge order content, if it exists.
+    ///
+    /// For hedge orders.
+    /// Beta = x for Beta hedge orders, ratio = y for Pair hedge order
+    fn get_hedge_parameter_content(&self) -> MissingField<(), &str> {
+        MissingField::default()
+    }
+
+    #[inline]
+    /// Return whether an order has opted out of SmartRouting for orders routed directly to ASX.
+    ///
+    /// This attribute defaults to false unless explicitly set to true.
+    /// When set to false, orders routed directly to ASX will NOT use SmartRouting.
+    /// When set to true, orders routed directly to ASX orders WILL use SmartRouting.
+    fn get_opt_out_smart_routing(&self) -> bool {
+        false
+    }
+
+    #[inline]
+    /// Return the true beneficiary of the order.
+    ///
+    /// For IBExecution customers.
+    ///
+    /// This value is required for FUT/FOP orders for reporting to the exchange.
+    fn get_clearing_account(&self) -> Option<&str> {
+        None
+    }
+
+    #[inline]
+    /// For execution-only clients to know where do they want their shares to be cleared at.
+    fn get_clearing_intent(&self) -> Option<ClearingIntent> {
+        None
+    }
+
+    #[inline]
+    /// Orders routed to IBDARK are tagged as “post only” and are held in IB's order book, where
+    /// incoming SmartRouted orders from other IB customers are eligible to trade against them.
+    ///
+    /// For IBDARK orders only.
+    fn get_is_not_held(&self) -> bool {
+        false
+    }
+
+    #[inline]
+    /// Return the delta neutral content, if it exists
+    fn get_delta_neutral_contract_content(&self) -> MissingField<bool, (bool, i64, f64, f64)> {
+        MissingField::Missing(false)
+    }
+
+    #[inline]
+    /// Return the algorithm strategy.
+    ///
+    /// For more information about IB's API algorithms, refer to
+    /// https://interactivebrokers.github.io/tws-api/ibalgos.html
+    fn get_algo_strategy(&self) -> Option<AlgoStrategy> {
+        None
+    }
+
+    #[inline]
+    /// Return the algorithm strategy content (ie. The list of parameters for the IB algorithm),
+    /// if it exists.
+    ///
+    /// For more information about IB's API algorithms, refer to
+    /// https://interactivebrokers.github.io/tws-api/ibalgos.html
+    fn get_algo_strategy_content(&self) -> MissingField<(), (u64, HashMap<&str, &str>)> {
+        MissingField::default()
+    }
+
+    #[inline]
+    /// Return the ID generated by algorithmic trading.
+    fn get_algo_id(&self) -> Option<&str> {
+        None
+    }
+
+    #[inline]
+    /// Return the what if information for an order.
+    ///
+    /// Allows to retrieve the commissions and margin information.
+    /// When placing an order with this attribute set to true, the order will not be placed as such. Instead it will used to request the commissions and margin information that would result from this order.
+    fn get_what_if(&self) -> bool {
+        false
+    }
+
+    #[inline]
+    /// Return whether an order was solicited.
+    ///
+    /// The Solicited field should be used for orders initiated or recommended by the broker or
+    /// adviser that were approved by the client (by phone, email, chat, verbally, etc.) prior to
+    /// entry. Please note that orders that the adviser or broker placed without specifically
+    /// discussing with the client are discretionary orders, not solicited.
+    fn get_solicited(&self) -> bool {
+        false
+    }
+
+    #[inline]
+    /// Return whether the order size will be randomized.
+    ///
+    /// Randomizes the order's size. Only for Volatility and Pegged to Volatility orders.
+    fn get_will_randomize_size(&self) -> bool {
+        false
+    }
+
+    #[inline]
+    /// Return whether the order price will be randomized.
+    ///
+    /// Randomizes the order's price. Only for Volatility and Pegged to Volatility orders.
+    fn get_will_randomize_price(&self) -> bool {
+        false
+    }
+
+    #[inline]
+    /// Return peg bench order content, if it exists.
+    fn get_peg_bench_order_content(&self) -> MissingField<(), (i64, bool, f64, f64, &str)> {
+        MissingField::default()
+    }
+
+    #[inline]
+    /// Return order conditions content.
+    fn get_order_conditions_content(&self) -> MissingField<usize, (usize, HashMap<&str, &str>, bool, bool)> {
+        MissingField::Missing(0)
+    }
+
+    #[inline]
+    /// Return the adjusted order type.
+    ///
+    /// Adjusted Stop orders: the parent order will be adjusted to the given type when the adjusted
+    /// trigger price is penetrated.
+    fn get_adjusted_order_type(&self) -> Option<&str> {
+        None
+    }
+
+    #[inline]
+    /// Return the trigger price.
+    ///
+    /// Adjusted Stop orders: specifies the trigger price to execute.
+    fn get_trigger_price(&self) -> Option<f64> {
+        None
+    }
+
+    #[inline]
+    /// Return limit price offset.
+    ///
+    /// Adjusted Stop orders: specifies the price offset for the stop to move in increments.
+    fn get_limit_price_offset(&self) -> Option<f64> {
+        None
+    }
+
+    #[inline]
+    /// Return the adjusted stop price.
+    ///
+    /// Adjusted Stop orders: specifies the stop price of the adjusted (STP) parent.
+    fn get_adjusted_stop_price(&self) -> Option<f64> {
+        None
+    }
+
+    #[inline]
+    /// Return the adjusted stop limit price.
+    ///
+    /// Adjusted Stop orders: specifies the stop limit price of the adjusted (STPL LMT) parent.
+    fn get_adjusted_stop_limit_price(&self) -> Option<f64> {
+        None
+    }
+
+    #[inline]
+    /// Return the adjusted trailing amount.
+    ///
+    /// Adjusted Stop orders: specifies the trailing amount of the adjusted (TRAIL) parent.
+    fn get_adjusted_trailing_amount(&self) -> Option<f64> {
+        None
+    }
+
+    #[inline]
+    /// Return the adjusted trailing unit.
+    ///
+    /// Adjusted Stop orders: specifies where the trailing unit is an amount
+    /// (set to 0) or a percentage (set to 1)
+    fn get_adjusted_trailing_unit(&self) -> AdjustedTrailingUnit {
+        AdjustedTrailingUnit::default()
+    }
+
+    #[inline]
+    /// Return the regulatory ext operator.
+    ///
+    /// This is a regulatory attribute that applies to all US Commodity (Futures) Exchanges,
+    /// provided to allow client to comply with CFTC Tag 50 Rules.
+    fn get_ext_operator(&self) -> Option<&str> {
+        None
+    }
+
+    #[inline]
+    /// Return the soft dollar tier information.
+    fn get_soft_dollar_tier(&self) -> (Option<&str>, Option<&str>) {
+        (None, None)
+    }
+
+    #[inline]
+    /// Return the cash quantity
+    fn get_cash_quantity(&self) -> f64 {
+        f64::MAX
+    }
+
+    #[inline]
+    /// Return the responsible party for investment decisions within the firm.
+    ///
+    /// Orders covered by MiFID 2 (Markets in Financial Instruments Directive 2) must include either
+    /// Mifid2DecisionMaker or Mifid2DecisionAlgo field (but not both). Requires TWS 969+.
+    fn get_decision_maker(&self) -> Option<&str> {
+        None
+    }
+
+    #[inline]
+    /// Return the algorithm responsible for investment decisions within the firm.
+    ///
+    /// Orders covered under MiFID 2 must include either Mifid2DecisionMaker or Mifid2DecisionAlgo,
+    /// but cannot have both. Requires TWS 969+.
+    fn get_decision_algorithm(&self) -> Option<&str> {
+        None
+    }
+
+    #[inline]
+    /// Returns the responsible party for the execution of a transaction within the firm.
+    ///
+    /// For MiFID 2 reporting; identifies a person as the responsible party for the execution of a
+    /// transaction within the firm. Requires TWS 969+.
+    fn get_execution_trader(&self) -> Option<&str> {
+        None
+    }
+
+    #[inline]
+    /// Return the algorithm responsible for the execution of a transaction within the firm.
+    ///
+    /// For MiFID 2 reporting; identifies the algorithm responsible for the execution of a
+    /// transaction within the firm. Requires TWS 969+.
+    fn get_execution_algorithm(&self) -> Option<&str> {
+        None
+    }
+
+    #[inline]
+    /// Return whether an auto price should not / should be used for hedging.
+    fn get_dont_use_auto_price_for_hedge(&self) -> bool {
+        false
+    }
+
+    #[inline]
+    /// Return whether tickets from API orders when TWS will be used as an OMS.
+    fn get_oms_container(&self) -> bool {
+        false
+    }
+
+    #[inline]
+    /// Return whether to convert order of type 'Primary Peg' to 'D-Peg'.
+    fn get_discretionary_up_to_limit_price(&self) -> bool {
+        false
+    }
+
+    #[inline]
+    /// Return whether to use a price management algorithm.
+    fn get_use_price_management_algorithm(&self) -> Option<bool> {
+        None
+    }
+
+    #[inline]
+    /// Return the duration of the order.
+    fn get_duration(&self) -> Option<i64> {
+        None
+    }
+
+    #[inline]
+    /// Return a value must be positive, and it is number of seconds that SMART order would be
+    /// parked for at IBKRATS before being routed to exchange.
+    fn get_post_to_ats(&self) -> Option<u64> {
+        None
+    }
+
+    #[inline]
+    /// Return whether the parent order will be cancelled if child order was cancelled.
+    fn get_auto_cancel_parent(&self) -> bool {
+        false
+    }
+
+    #[inline]
+    /// Return a list with parameters obtained from advancedOrderRejectJson.
+    fn get_advanced_error_override(&self) -> Option<&str> {
+        None
+    }
+
+    #[inline]
+    /// Return the manual order time.
+    ///
+    /// Used by brokers and advisors when manually entering, modifying or cancelling orders at the
+    /// direction of a client. Only used when allocating orders to specific groups or accounts.
+    /// Excluding "All" group.
+    fn get_manual_order_time(&self) -> Option<&str> {
+        None
+    }
 }
 
 
 #[inline]
-fn serialize_executable<E, Sec, Ser>(exec: &E, serializer: Ser) -> Result<Ser::Ok, Ser::Error>
-    where E: Executable<Sec>, Ser: Serializer {
-        (
-            exec.get_quantity(),
-            exec.get_order_type(),
-            exec.get_limit_price(),
-            exec.get_auxiliary_price(),
-            exec.get_time_in_force(),
-            exec.get_one_cancels_all_group(),
-            exec.get_account(),
-            None::<()>,
-            exec.get_origin(),
-            exec.get_order_reference(),
-            exec.get_will_transmit(),
-            exec.get_parent_id(),
-            exec.get_is_block_order(),
-            exec.get_is_sweep_to_fill(),
-            exec.get_iceberg_order_size(),
-            exec.get_trigger_method(),
-            exec.get_can_fill_outside_regular_trading_hours(),
-            exec.get_is_hidden_on_nasdaq_market_depth(),
-            None::<()>,
-            exec.get_discretionary_amount(),
-            exec.get_good_after_time(),
-            exec.get_good_until_date(),
-            [None::<()>; 3],
-            exec.get_model_code(),
-            0,
-            None::<()>,
-            -1,
+fn serialize_executable<E, S>(
+    exec: &E,
+    writer: &mut Writer
+) -> Result<(), Error>
+    where
+          E: Executable<S>,
+          S: crate::contract::Security,
+{
+    let msg = (
+        exec.get_quantity(),
+        exec.get_order_type(),
+        exec.get_limit_price(),
+        exec.get_auxiliary_price(),
+        exec.get_time_in_force(),
+        exec.get_one_cancels_all_group(),
+        exec.get_account(),
+        None::<()>,
+        exec.get_origin(),
+        exec.get_order_reference(),
+        exec.get_will_transmit(),
+        exec.get_parent_id(),
+        exec.get_is_block_order(),
+        exec.get_is_sweep_to_fill(),
+        exec.get_iceberg_order_size(),
+        exec.get_trigger_method(),
+        exec.get_can_fill_outside_regular_trading_hours(),
+        exec.get_is_hidden_on_nasdaq_market_depth(),
+        None::<()>,
+        exec.get_discretionary_amount(),
+        exec.get_good_after_time(),
+        exec.get_good_until_date(),
+        [None::<()>; 3],
+        exec.get_model_code(),
+        0,
+        None::<()>,
+        -1,
+        exec.get_one_cancels_all_type(),
+        exec.get_rule_80a(),
+        None::<()>,
+        exec.get_all_or_none(),
+        exec.get_minimum_quantity(),
+        exec.get_percent_offset(),
+        [false; 2],
+        None::<()>,
+        exec.get_box_auction_strategy(),
+        exec.get_box_starting_price(),
+        exec.get_box_stock_reference_price(),
+        exec.get_box_stock_delta(),
+        exec.get_box_vol_stock_range_lower(),
+        exec.get_box_vol_stock_range_upper(),
+        exec.get_will_override_validation(),
+        exec.get_volatility_quote(),
+        exec.get_volatility_type(),
+        exec.get_delta_neutral_order_type(),
+        exec.get_delta_neutral_auxiliary_price(),
+        exec.get_delta_neutral_order_content(),
+        exec.get_continuous_update(),
+        exec.get_reference_price_type(),
+        exec.get_trail_stop_price(),
+        exec.get_trailing_percent(),
+        exec.get_scale_initial_level_size(),
+        exec.get_scale_subs_level_size(),
+        exec.get_scale_price_increment(),
+        exec.get_scale_order_content(),
+        exec.get_scale_table(),
+        exec.get_active_start_time(),
+        exec.get_active_stop_time(),
+        exec.get_hedge_type(),
+        exec.get_hedge_parameter_content(),
+        exec.get_opt_out_smart_routing(),
+        exec.get_clearing_account(),
+        exec.get_clearing_intent(),
+        exec.get_is_not_held(),
+        exec.get_delta_neutral_order_content(),
+        exec.get_algo_strategy(),
+        exec.get_algo_strategy_content(),
+        exec.get_algo_id(),
+        exec.get_what_if(),
+        None::<()>,
+        exec.get_solicited(),
+        exec.get_will_randomize_size(),
+        exec.get_will_randomize_price(),
+        exec.get_peg_bench_order_content(),
+        exec.get_order_conditions_content(),
+        exec.get_adjusted_order_type(),
+        exec.get_trigger_price(),
+        exec.get_limit_price_offset(),
+        exec.get_adjusted_stop_price(),
+        exec.get_adjusted_stop_limit_price(),
+        exec.get_adjusted_trailing_amount(),
+        exec.get_adjusted_trailing_unit(),
+        exec.get_ext_operator(),
+        exec.get_soft_dollar_tier(),
+        exec.get_cash_quantity(),
+        exec.get_decision_maker(),
+        exec.get_decision_algorithm(),
+        exec.get_execution_trader(),
+        exec.get_execution_algorithm(),
+        exec.get_dont_use_auto_price_for_hedge(),
+        exec.get_oms_container(),
+        exec.get_discretionary_up_to_limit_price(),
+        exec.get_use_price_management_algorithm(),
+        exec.get_duration(),
+        exec.get_post_to_ats(),
+        exec.get_auto_cancel_parent(),
+        exec.get_advanced_error_override(),
+        exec.get_manual_order_time()
+    );
 
-
-        ).serialize(serializer)
 }
 
 #[derive(Debug, Default, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
@@ -368,13 +972,188 @@ pub enum Origin {
     Firm,
 }
 
+#[derive(Debug, Default, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+/// Represents the possible ways of handling one-cancels-all behavior for a group of orders.
+///
+/// Tells how to handle remaining orders in an OCA group when one order or part of an order
+/// executes.
+///
+/// If you use a value "with block" it gives the order overfill protection. This means that only one
+/// order in the group will be routed at a time to remove the possibility of an overfill.
+pub enum OneCancelsAllType {
+    #[default]
+    #[serde(rename(serialize="0"))]
+    /// The default one-cancels-all type, used for normal orders that do not implement
+    /// One-cancels-all behavior
+    Default,
+    #[serde(rename(serialize="1"))]
+    /// Cancel all remaining orders with block.
+    CancelWithBlock,
+    #[serde(rename(serialize="2"))]
+    /// Remaining orders are proportionately reduced in size with block.
+    ReduceWithBlock,
+    #[serde(rename(serialize="3"))]
+    /// Remaining orders are proportionately reduced in size with no block.
+    ReduceNonBlock,
+}
+
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+pub enum Rule80A {
+    #[serde(rename(serialize="I"))]
+    Individual,
+    #[serde(rename(serialize="A"))]
+    Agency,
+    #[serde(rename(serialize="W"))]
+    AgentOtherMember,
+    #[serde(rename(serialize="J"))]
+    IndividualPtia,
+    #[serde(rename(serialize="U"))]
+    AgencyPtia,
+    #[serde(rename(serialize="M"))]
+    AgentOtherMemberPtia,
+    #[serde(rename(serialize="K"))]
+    IndividualPt,
+    #[serde(rename(serialize="Y"))]
+    AgencyPt,
+    #[serde(rename(serialize="N"))]
+    AgentOtherMemberPt,
+}
+
+#[derive(Debug, Default, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+pub enum AuctionStrategy {
+    #[default]
+    #[serde(rename(serialize = "0"))]
+    /// Used for non-box orders that define no auction strategy.
+    Default,
+    #[serde(rename(serialize = "1"))]
+    /// Match strategy.
+    Match,
+    #[serde(rename(serialize = "2"))]
+    /// Improvement strategy.
+    Improvement,
+    #[serde(rename(serialize = "3"))]
+    /// transparent strategy.
+    Transparent,
+}
+
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+pub enum VolatilityType {
+    #[serde(rename(serialize="1"))]
+    Daily,
+    #[serde(rename(serialize="2"))]
+    Annual,
+}
+
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+pub enum ReferencePriceType {
+    #[serde(rename(serialize="1"))]
+    /// Average of NBBO.
+    Average,
+    #[serde(rename(serialize="2"))]
+    /// NBB or the NBO depending on the action and right.
+    BidOrAsk,
+}
+
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+pub enum HedgeType {
+    #[serde(rename(serialize="D"))]
+    Delta,
+    #[serde(rename(serialize="B"))]
+    Beta,
+    #[serde(rename(serialize="F"))]
+    Forex,
+    #[serde(rename(serialize="P"))]
+    Pair,
+}
+
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+pub enum ClearingIntent {
+    #[serde(rename(serialize="IB"))]
+    /// Interactive Brokers clearing
+    Ib,
+    #[serde(rename(serialize="Away"))]
+    /// Away
+    Away,
+    #[serde(rename(serialize="PTA"))]
+    /// Post-trade allocation
+    PostTradeAllocation,
+}
+
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+pub enum AlgoStrategy {
+    #[serde(rename(serialize="ArrivalPx"))]
+    /// Arrival price algorithm.
+    ArrivalPrice,
+    /// Dark ice algorithm.
+    DarkIce,
+    #[serde(rename(serialize="PctVol"))]
+    /// Percentage of volume algorithm.
+    PercentVolume,
+    /// TWAP (Time Weighted Average Price) algorithm.
+    Twap,
+    /// VWAP (Volume Weighted Average Price) algorithm.
+    Vwap,
+}
+
+#[derive(Debug, Default, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+pub enum AdjustedTrailingUnit {
+    #[default]
+    #[serde(rename(serialize="0"))]
+    Amount,
+    #[serde(rename(serialize="1"))]
+    Percentage,
+}
+
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+enum MissingField<T, U> {
+    /// A missing field
+    Missing(T),
+    /// A present field
+    Present(U),
+}
+
+impl<T: Default, U> Default for MissingField<T, U> {
+    fn default() -> Self {
+        MissingField::Missing(T::default())
+    }
+}
+
 macro_rules! impl_executable {
-    ($o_name: ident; $($s_name: ident),*) => {
+    ($o_name: ident; $($s_name: ident),*; $executable_impl: tt) => {
         $(
-            impl Executable<$s_name> for $o_name {}
+            impl Executable<$s_name> for $o_name
+                $executable_impl
         )*
     };
 }
 
-impl_executable!(Market; Forex, Crypto, Stock, Index, SecFuture, SecOption, Commodity);
-impl_executable!(Limit; Forex, Crypto, Stock, Index, SecFuture, SecOption, Commodity);
+impl_executable!(Market; Forex, Crypto, Stock, Index, SecFuture, SecOption, Commodity; {
+    fn get_quantity(&self) -> f64 {
+        self.quantity
+    }
+
+    fn get_order_type(&self) -> &'static str {
+        "MKT"
+    }
+
+    fn get_time_in_force(&self) -> TimeInForce {
+        self.time_in_force
+    }
+});
+impl_executable!(Limit; Forex, Crypto, Stock, Index, SecFuture, SecOption, Commodity; {
+    fn get_quantity(&self) -> f64 {
+        self.quantity
+    }
+
+    fn get_order_type(&self) -> &'static str {
+        "LMT"
+    }
+
+    fn get_time_in_force(&self) -> TimeInForce {
+        self.time_in_force
+    }
+
+    fn get_limit_price(&self) -> Option<f64> {
+        Some(self.price)
+    }
+});

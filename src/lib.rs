@@ -72,7 +72,6 @@ pub mod tick;
 /// Contains the definition of the [`wrapper::Wrapper`] trait. Implementing this trait on a custom
 /// type allows users to customize callback behavior.
 pub mod wrapper;
-mod annoying_order;
 
 #[allow(missing_docs, clippy::use_debug, clippy::print_stdout)]
 pub mod default_wrapper {
