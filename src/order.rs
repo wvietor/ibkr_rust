@@ -1,10 +1,8 @@
 #![allow(missing_docs)]
-use std::collections::HashMap;
-use serde::{Serialize, Serializer};
+use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Security, Stock};
 use serde::ser::SerializeTuple;
-use crate::{
-    contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Security, Stock},
-};
+use serde::{Serialize, Serializer};
+use std::collections::HashMap;
 
 // ==============================================
 // === Core Order Types (Market, Limit, etc.) ===
@@ -16,17 +14,17 @@ use crate::{
 /// The time periods for which an order is active and can be executed against.
 pub enum TimeInForce {
     #[default]
-    #[serde(rename(serialize="DAY"))]
+    #[serde(rename(serialize = "DAY"))]
     /// Valid for the day only.
     Day,
-    #[serde(rename(serialize="GTC"))]
+    #[serde(rename(serialize = "GTC"))]
     /// Good until canceled. The order will continue to work within the system and in the marketplace until it executes or is canceled. GTC orders will be automatically be cancelled under the following conditions:
     /// If a corporate action on a security results in a stock split (forward or reverse), exchange for shares, or distribution of shares. If you do not log into your IB account for 90 days.
     /// At the end of the calendar quarter following the current quarter. For example, an order placed during the third quarter of 2011 will be canceled at the end of the first quarter of 2012. If the last day is a non-trading day, the cancellation will occur at the close of the final trading day of that quarter. For example, if the last day of the quarter is Sunday, the orders will be cancelled on the preceding Friday.
     /// Orders that are modified will be assigned a new “Auto Expire” date consistent with the end of the calendar quarter following the current quarter.
     /// Orders submitted to IB that remain in force for more than one day will not be reduced for dividends. To allow adjustment to your order price on ex-dividend date, consider using a Good-Til-Date/Time (GTD) or Good-after-Time/Date (GAT) order type, or a combination of the two.
     Gtc,
-    #[serde(rename(serialize="IOC"))]
+    #[serde(rename(serialize = "IOC"))]
     /// Immediate or Cancel. Any portion that is not filled as soon as it becomes available in the market is canceled.
     Ioc,
     // #[serde(rename(serialize="GTD"))]
@@ -35,10 +33,10 @@ pub enum TimeInForce {
     // #[serde(rename(serialize="OPG"))]
     // /// Use OPG to send a market-on-open (MOO) or limit-on-open (LOO) order.
     // Opg,
-    #[serde(rename(serialize="FOK"))]
+    #[serde(rename(serialize = "FOK"))]
     /// If the entire Fill-or-Kill order does not execute as soon as it becomes available, the entire order is canceled.
     Fok,
-    #[serde(rename(serialize="DTC"))]
+    #[serde(rename(serialize = "DTC"))]
     /// Day until canceled.
     Dtc,
 }
@@ -78,9 +76,16 @@ pub enum Order<'o, S: Security, E: Executable<S>> {
     },
 }
 
-impl<Sec, E> Serialize for Order<'_, Sec, E> where Sec: Security, E: Executable<Sec> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-        let mut ser = serializer.serialize_tuple(1+crate::constants::ORDER_TUPLE_SIZE)?;
+impl<Sec, E> Serialize for Order<'_, Sec, E>
+where
+    Sec: Security,
+    E: Executable<Sec>,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut ser = serializer.serialize_tuple(1 + crate::constants::ORDER_TUPLE_SIZE)?;
         let (action, exec) = match *self {
             Self::Buy { execute_method, .. } => ("BUY", execute_method),
             Self::Sell { execute_method, .. } => ("SELL", execute_method),
@@ -109,7 +114,6 @@ impl<S: Security, E: Executable<S>> Order<'_, S, E> {
     }
 }
 
-
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 /// A market order: Buy or sell at the best available price for a given quantity. Sensitive to price fluctuations.
 pub struct Market {
@@ -135,12 +139,12 @@ pub struct Limit {
 // ==================================================
 
 pub type BagRequestContent<'a> = (u64, &'a str, u64, &'a str, u64, HashMap<&'a str, &'a str>);
-pub type DeltaNeutralOrderContent<'a> = (i64, &'a str, &'a str, &'a str, &'a str, bool, i64, &'a str);
+pub type DeltaNeutralOrderContent<'a> =
+    (i64, &'a str, &'a str, &'a str, &'a str, bool, i64, &'a str);
 pub type ScaleOrderContent = (f64, i64, f64, bool, i64, i64, bool);
 #[allow(clippy::module_name_repetitions)]
 pub type OrderConditionsContent<'a> = (usize, HashMap<&'a str, &'a str>, bool, bool);
 
-// todo! "Add support for BAG contract type/requests, delta-neutral contracts
 /// Implemented by all valid order types for a given security. In particular,
 /// if a type `O` implements [`Executable<S>`], then `O` is a valid order for `S`.
 pub trait Executable<S: Security>: Send + Sync {
@@ -201,7 +205,7 @@ pub trait Executable<S: Security>: Send + Sync {
 
     #[inline]
     /// Return the order ID of the parent order, used for bracket and auto trailing stop orders.
-    fn get_parent_id(&self)  -> i64 {
+    fn get_parent_id(&self) -> i64 {
         0
     }
 
@@ -783,7 +787,7 @@ pub trait Executable<S: Security>: Send + Sync {
     #[inline]
     /// Return a value must be positive, and it is number of seconds that SMART order would be
     /// parked for at IBKRATS before being routed to exchange.
-    fn get_post_to_ats(&self) -> i64  {
+    fn get_post_to_ats(&self) -> i64 {
         i64::from(i32::MAX)
     }
 
@@ -811,18 +815,18 @@ pub trait Executable<S: Security>: Send + Sync {
 
     #[inline]
     /// Return the peg-to-mid order content, if it exists
-    fn get_peg_to_mid_content(&self) -> MissingField<(), &str>{
+    fn get_peg_to_mid_content(&self) -> MissingField<(), &str> {
         MissingField::default()
     }
 }
 
 #[inline]
 #[allow(clippy::too_many_lines)]
-fn serialize_executable<E, Sec, Ser>(
-    exec: &E,
-    ser: &mut Ser
-) -> Result<(), Ser::Error>
-    where E: Executable<Sec>, Sec: crate::contract::Security, Ser: SerializeTuple
+fn serialize_executable<E, Sec, Ser>(exec: &E, ser: &mut Ser) -> Result<(), Ser::Error>
+where
+    E: Executable<Sec>,
+    Sec: crate::contract::Security,
+    Ser: SerializeTuple,
 {
     ser.serialize_element(&exec.get_quantity())?;
     ser.serialize_element(&exec.get_order_type())?;
@@ -956,9 +960,9 @@ pub enum TriggerMethod {
 #[derive(Debug, Default, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
 pub enum Origin {
     #[default]
-    #[serde(rename(serialize="0"))]
+    #[serde(rename(serialize = "0"))]
     Customer,
-    #[serde(rename(serialize="1"))]
+    #[serde(rename(serialize = "1"))]
     Firm,
 }
 
@@ -972,40 +976,40 @@ pub enum Origin {
 /// order in the group will be routed at a time to remove the possibility of an overfill.
 pub enum OneCancelsAllType {
     #[default]
-    #[serde(rename(serialize="0"))]
+    #[serde(rename(serialize = "0"))]
     /// The default one-cancels-all type, used for normal orders that do not implement
     /// One-cancels-all behavior
     Default,
-    #[serde(rename(serialize="1"))]
+    #[serde(rename(serialize = "1"))]
     /// Cancel all remaining orders with block.
     CancelWithBlock,
-    #[serde(rename(serialize="2"))]
+    #[serde(rename(serialize = "2"))]
     /// Remaining orders are proportionately reduced in size with block.
     ReduceWithBlock,
-    #[serde(rename(serialize="3"))]
+    #[serde(rename(serialize = "3"))]
     /// Remaining orders are proportionately reduced in size with no block.
     ReduceNonBlock,
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
 pub enum Rule80A {
-    #[serde(rename(serialize="I"))]
+    #[serde(rename(serialize = "I"))]
     Individual,
-    #[serde(rename(serialize="A"))]
+    #[serde(rename(serialize = "A"))]
     Agency,
-    #[serde(rename(serialize="W"))]
+    #[serde(rename(serialize = "W"))]
     AgentOtherMember,
-    #[serde(rename(serialize="J"))]
+    #[serde(rename(serialize = "J"))]
     IndividualPtia,
-    #[serde(rename(serialize="U"))]
+    #[serde(rename(serialize = "U"))]
     AgencyPtia,
-    #[serde(rename(serialize="M"))]
+    #[serde(rename(serialize = "M"))]
     AgentOtherMemberPtia,
-    #[serde(rename(serialize="K"))]
+    #[serde(rename(serialize = "K"))]
     IndividualPt,
-    #[serde(rename(serialize="Y"))]
+    #[serde(rename(serialize = "Y"))]
     AgencyPt,
-    #[serde(rename(serialize="N"))]
+    #[serde(rename(serialize = "N"))]
     AgentOtherMemberPt,
 }
 
@@ -1028,55 +1032,55 @@ pub enum AuctionStrategy {
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
 pub enum VolatilityType {
-    #[serde(rename(serialize="1"))]
+    #[serde(rename(serialize = "1"))]
     Daily,
-    #[serde(rename(serialize="2"))]
+    #[serde(rename(serialize = "2"))]
     Annual,
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
 pub enum ReferencePriceType {
-    #[serde(rename(serialize="1"))]
+    #[serde(rename(serialize = "1"))]
     /// Average of NBBO.
     Average,
-    #[serde(rename(serialize="2"))]
+    #[serde(rename(serialize = "2"))]
     /// NBB or the NBO depending on the action and right.
     BidOrAsk,
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
 pub enum HedgeType {
-    #[serde(rename(serialize="D"))]
+    #[serde(rename(serialize = "D"))]
     Delta,
-    #[serde(rename(serialize="B"))]
+    #[serde(rename(serialize = "B"))]
     Beta,
-    #[serde(rename(serialize="F"))]
+    #[serde(rename(serialize = "F"))]
     Forex,
-    #[serde(rename(serialize="P"))]
+    #[serde(rename(serialize = "P"))]
     Pair,
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
 pub enum ClearingIntent {
-    #[serde(rename(serialize="IB"))]
+    #[serde(rename(serialize = "IB"))]
     /// Interactive Brokers clearing
     Ib,
-    #[serde(rename(serialize="Away"))]
+    #[serde(rename(serialize = "Away"))]
     /// Away
     Away,
-    #[serde(rename(serialize="PTA"))]
+    #[serde(rename(serialize = "PTA"))]
     /// Post-trade allocation
     PostTradeAllocation,
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
 pub enum AlgoStrategy {
-    #[serde(rename(serialize="ArrivalPx"))]
+    #[serde(rename(serialize = "ArrivalPx"))]
     /// Arrival price algorithm.
     ArrivalPrice,
     /// Dark ice algorithm.
     DarkIce,
-    #[serde(rename(serialize="PctVol"))]
+    #[serde(rename(serialize = "PctVol"))]
     /// Percentage of volume algorithm.
     PercentVolume,
     /// TWAP (Time Weighted Average Price) algorithm.
@@ -1088,9 +1092,9 @@ pub enum AlgoStrategy {
 #[derive(Debug, Default, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
 pub enum AdjustedTrailingUnit {
     #[default]
-    #[serde(rename(serialize="0"))]
+    #[serde(rename(serialize = "0"))]
     Amount,
-    #[serde(rename(serialize="1"))]
+    #[serde(rename(serialize = "1"))]
     Percentage,
 }
 

@@ -1,9 +1,7 @@
-#![allow(unused_variables, dead_code)]
-
+use chrono::NaiveDateTime;
 use serde::{Serialize, Serializer};
 use std::fmt::{Display, Formatter};
 use std::io::{Error, Write};
-use chrono::NaiveDateTime;
 
 #[derive(Debug)]
 pub(crate) struct Writer {
@@ -113,6 +111,7 @@ impl From<SerializeMessageError> for std::io::Error {
     }
 }
 
+#[allow(unused_variables)]
 pub(crate) mod ser {
     use serde::{
         ser::{
@@ -507,6 +506,9 @@ pub(crate) mod ser {
     }
 }
 
-pub(crate) fn serialize_naive_datetime_yyyymmdd_hhcolon_mm_colon_ss<S: Serializer>(dt: &NaiveDateTime, serializer: S) -> Result<S::Ok, S::Error> {
+pub(crate) fn serialize_naive_datetime_yyyymmdd_hhcolon_mm_colon_ss<S: Serializer>(
+    dt: &NaiveDateTime,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
     dt.format("%Y%m%d %T").to_string().serialize(serializer)
 }

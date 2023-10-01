@@ -428,7 +428,10 @@ pub mod historical_ticks {
     }
 
     impl Serialize for TimeStamp {
-        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
             match *self {
                 Self::StartDateTime(dt) => {
                     (dt.format("%Y%m%d-%T").to_string(), None::<()>).serialize(serializer)
@@ -503,14 +506,18 @@ pub mod histogram {
     }
 
     impl Serialize for Duration {
-        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
             match *self {
                 Self::Second(s) => format!("{s} seconds"),
                 Self::Day(d) => format!("{d} days"),
                 Self::Week(w) => format!("{w} weeks"),
                 Self::Month(m) => format!("{m} months"),
                 Self::Year(y) => format!("{y} years"),
-            }.serialize(serializer)
+            }
+            .serialize(serializer)
         }
     }
 }
@@ -551,16 +558,16 @@ pub mod live_data {
 
     // === Type definitions ===
 
-    use std::fmt::Formatter;
     use serde::Serialize;
+    use std::fmt::Formatter;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
     /// The frequency at which data will be updated.
     pub enum RefreshType {
-        #[serde(rename(serialize="1"))]
+        #[serde(rename(serialize = "1"))]
         /// Return a snapshot of the market at a specific point in time.
         Snapshot,
-        #[serde(rename(serialize="0"))]
+        #[serde(rename(serialize = "0"))]
         /// Begin a streaming subscription.
         Streaming,
     }
@@ -568,16 +575,16 @@ pub mod live_data {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
     /// The type of market data to return.
     pub enum Class {
-        #[serde(rename(serialize="1"))]
+        #[serde(rename(serialize = "1"))]
         /// Real-time streaming data, which requires a subscription.
         Live,
-        #[serde(rename(serialize="2"))]
+        #[serde(rename(serialize = "2"))]
         /// The last data recorded at market close, which requires a subscription.
         Frozen,
-        #[serde(rename(serialize="3"))]
+        #[serde(rename(serialize = "3"))]
         /// Delayed data by 15-20 minutes, which does not require any subscription.
         Delayed,
-        #[serde(rename(serialize="4"))]
+        #[serde(rename(serialize = "4"))]
         /// Same as frozen, but does not require any subscription.
         DelayedFrozen,
     }

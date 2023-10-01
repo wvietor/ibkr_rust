@@ -12,12 +12,13 @@
     clippy::single_char_lifetime_names
 )]
 
+/// Contains types related to account information.
+pub mod account;
 /// Contains the all-important [`client::Client`] struct and its methods, which facilitate
 /// communication with the IBKR. Also contains a [`client::Builder`] struct to manage the
 /// creation of new connections.
 pub mod client;
-/// Contains types related to account information.
-pub mod account;
+mod comm;
 mod constants;
 /// Contains the definitions of all [`contract::Security`] implementors, which represent tradable
 /// contracts.
@@ -47,7 +48,6 @@ mod execution;
 /// and 3) Any types associated with implementors of the indicator types.
 pub mod market_data;
 mod message;
-mod message2;
 /// Contains types and traits related to orders.
 pub mod order;
 /// Contains the types that are parsed from API callbacks. They are used in the [`wrapper::Wrapper`]

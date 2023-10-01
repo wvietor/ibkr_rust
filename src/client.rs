@@ -4,8 +4,8 @@ use std::sync::Arc;
 use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
 
 use crate::account::Tag;
+use crate::comm::Writer;
 use crate::execution::Filter;
-use crate::message2::Writer;
 use crate::{
     constants,
     contract::{ContractId, Security},
@@ -945,7 +945,7 @@ impl Client<indicators::Active> {
             data,
             1,
             true,
-            None::<()>
+            None::<()>,
         ))?;
         self.writer.send().await?;
         Ok(id)
@@ -961,7 +961,8 @@ impl Client<indicators::Active> {
     pub async fn cancel_updating_historical_bar(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
 
-        self.writer.add_body((Out::CancelHistoricalData, VERSION, req_id))?;
+        self.writer
+            .add_body((Out::CancelHistoricalData, VERSION, req_id))?;
         self.writer.send().await
     }
 
@@ -997,7 +998,7 @@ impl Client<indicators::Active> {
             None::<()>,
             regular_trading_hours_only,
             data,
-            1
+            1,
         ))?;
         self.writer.send().await?;
         Ok(id)
@@ -1044,7 +1045,7 @@ impl Client<indicators::Active> {
             security,
             None::<()>,
             regular_trading_hours_only,
-            duration
+            duration,
         ))?;
         self.writer.send().await?;
         Ok(id)
@@ -1101,9 +1102,8 @@ impl Client<indicators::Active> {
             data,
             regular_trading_hours_only,
             None::<()>,
-            None::<()>
-            )
-        )?;
+            None::<()>,
+        ))?;
         self.writer.send().await?;
         Ok(id)
     }
@@ -1149,7 +1149,7 @@ impl Client<indicators::Active> {
             additional_data,
             refresh_type,
             use_regulatory_snapshot,
-            None::<()>
+            None::<()>,
         ))?;
         self.writer.send().await?;
         Ok(id)
@@ -1165,7 +1165,8 @@ impl Client<indicators::Active> {
     pub async fn cancel_market_data(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 2;
 
-        self.writer.add_body((Out::CancelMktData, VERSION, req_id))?;
+        self.writer
+            .add_body((Out::CancelMktData, VERSION, req_id))?;
         self.writer.send().await
     }
 
@@ -1179,7 +1180,8 @@ impl Client<indicators::Active> {
     pub async fn req_market_data_type(&mut self, variant: live_data::Class) -> ReqResult {
         const VERSION: u8 = 1;
 
-        self.writer.add_body((Out::ReqMarketDataType, VERSION, variant))?;
+        self.writer
+            .add_body((Out::ReqMarketDataType, VERSION, variant))?;
         self.writer.send().await
     }
 
@@ -1217,8 +1219,8 @@ impl Client<indicators::Active> {
             5_u32,
             data,
             regular_trading_hours_only,
-            None::<()>
-            ))?;
+            None::<()>,
+        ))?;
         self.writer.send().await?;
         Ok(id)
     }
@@ -1233,7 +1235,8 @@ impl Client<indicators::Active> {
     pub async fn cancel_real_time_bars(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
 
-        self.writer.add_body((Out::CancelRealTimeBars, VERSION, req_id))?;
+        self.writer
+            .add_body((Out::CancelRealTimeBars, VERSION, req_id))?;
         self.writer.send().await
     }
 
@@ -1272,8 +1275,8 @@ impl Client<indicators::Active> {
             security,
             tick_data,
             number_of_historical_ticks,
-            ignore_size
-            ))?;
+            ignore_size,
+        ))?;
         self.writer.send().await?;
         Ok(id)
     }
@@ -1317,7 +1320,7 @@ impl Client<indicators::Active> {
             security,
             number_of_rows,
             true,
-            None::<()>
+            None::<()>,
         ))?;
         self.writer.send().await?;
         Ok(id)
@@ -1342,7 +1345,8 @@ impl Client<indicators::Active> {
     pub async fn cancel_market_depth(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
 
-        self.writer.add_body((Out::CancelMktDepth, VERSION, req_id))?;
+        self.writer
+            .add_body((Out::CancelMktDepth, VERSION, req_id))?;
         self.writer.send().await
     }
 
@@ -1360,7 +1364,8 @@ impl Client<indicators::Active> {
     pub async fn req_smart_components(&mut self, exchange_id: ExchangeId) -> IdResult {
         let id = self.get_next_req_id();
 
-        self.writer.add_body((Out::ReqSmartComponents, id, exchange_id))?;
+        self.writer
+            .add_body((Out::ReqSmartComponents, id, exchange_id))?;
         self.writer.send().await?;
         Ok(id)
     }
@@ -1385,7 +1390,14 @@ impl Client<indicators::Active> {
     {
         let id = self.get_next_order_id();
 
-        self.writer.add_body((Out::PlaceOrder, id, order.get_security(), None::<()>, None::<()>, order))?;
+        self.writer.add_body((
+            Out::PlaceOrder,
+            id,
+            order.get_security(),
+            None::<()>,
+            None::<()>,
+            order,
+        ))?;
         self.writer.send().await?;
         Ok(id)
     }
@@ -1407,7 +1419,14 @@ impl Client<indicators::Active> {
         S: Security,
         E: Executable<S>,
     {
-        self.writer.add_body((Out::PlaceOrder, id, order.get_security(), None::<()>, None::<()>, order))?;
+        self.writer.add_body((
+            Out::PlaceOrder,
+            id,
+            order.get_security(),
+            None::<()>,
+            None::<()>,
+            order,
+        ))?;
         self.writer.send().await?;
         Ok(id)
     }
@@ -1425,7 +1444,8 @@ impl Client<indicators::Active> {
     {
         const VERSION: u8 = 1;
 
-        self.writer.add_body((Out::CancelOrder, VERSION, id, None::<()>))?;
+        self.writer
+            .add_body((Out::CancelOrder, VERSION, id, None::<()>))?;
         self.writer.send().await
     }
 
@@ -1465,7 +1485,8 @@ impl Client<indicators::Active> {
     pub async fn req_auto_open_orders(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
 
-        self.writer.add_body((Out::ReqAutoOpenOrders, VERSION, true))?;
+        self.writer
+            .add_body((Out::ReqAutoOpenOrders, VERSION, true))?;
         self.writer.send().await
     }
 
@@ -1498,7 +1519,8 @@ impl Client<indicators::Active> {
         const VERSION: u8 = 3;
         let req_id = self.get_next_req_id();
 
-        self.writer.add_body((Out::ReqExecutions, VERSION, req_id, filter))?;
+        self.writer
+            .add_body((Out::ReqExecutions, VERSION, req_id, filter))?;
         self.writer.send().await?;
         Ok(req_id)
     }
@@ -1522,8 +1544,8 @@ impl Client<indicators::Active> {
             VERSION,
             req_id,
             contract_id,
-            [None::<()>; 15]
-            ))?;
+            [None::<()>; 15],
+        ))?;
         self.writer.send().await?;
         Ok(())
     }

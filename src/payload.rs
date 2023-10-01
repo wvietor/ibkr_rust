@@ -1,8 +1,8 @@
 use chrono::NaiveDateTime;
 
 use crate::contract::ContractId;
-use std::str::FromStr;
 use serde::Serialize;
+use std::str::FromStr;
 
 // macro_rules! make_error {
 //     ($( #[doc = $name_doc:expr] )? $name: ident: $msg: literal) => {
