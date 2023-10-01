@@ -4,7 +4,6 @@ use std::{num::ParseIntError, str::FromStr};
 use crate::{
     currency::Currency,
     exchange::{Primary, Routing},
-    make_body,
 };
 use ibapi_derive::Security;
 use serde::{Serialize, Serializer};
@@ -258,8 +257,7 @@ mod indicators {
     use serde::Serialize;
 
     pub trait Valid:
-        ToString
-        + Serialize
+        Serialize
         + Send
         + Sync
         + TryFrom<Forex>

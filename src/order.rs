@@ -1,17 +1,14 @@
+#![allow(missing_docs)]
 use std::collections::HashMap;
-use std::io::Error;
-use serde::{Serialize};
+use serde::{Serialize, Serializer};
+use serde::ser::SerializeTuple;
 use crate::{
     contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Security, Stock},
-    make_body,
 };
-use crate::message2::Writer;
 
 // ==============================================
 // === Core Order Types (Market, Limit, etc.) ===
 // ==============================================
-
-const ORDER_NULL_STRING: &str = "\x00\x00\x000\x00\x001\x000\x000\x000\x000\x000\x000\x000\x00\x000\x00\x00\x00\x00\x00\x00\x000\x00\x00-1\x000\x00\x00\x000\x00\x00\x000\x000\x00\x000\x00\x00\x00\x00\x00\x000\x00\x00\x00\x00\x000\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x000\x00\x00\x000\x000\x00\x00\x000\x00\x000\x000\x000\x000\x00\x001.7976931348623157e+308\x001.7976931348623157e+308\x001.7976931348623157e+308\x001.7976931348623157e+308\x001.7976931348623157e+308\x000\x00\x00\x00\x001.7976931348623157e+308\x00\x00\x00\x00\x000\x000\x000\x00\x002147483647\x002147483647\x000\x00\x00\x00";
 
 // === Type definitions ===
 
@@ -81,6 +78,19 @@ pub enum Order<'o, S: Security, E: Executable<S>> {
     },
 }
 
+impl<Sec, E> Serialize for Order<'_, Sec, E> where Sec: Security, E: Executable<Sec> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        let mut ser = serializer.serialize_tuple(1+crate::constants::ORDER_TUPLE_SIZE)?;
+        let (action, exec) = match *self {
+            Self::Buy { execute_method, .. } => ("BUY", execute_method),
+            Self::Sell { execute_method, .. } => ("SELL", execute_method),
+        };
+        ser.serialize_element(action)?;
+        serialize_executable(exec, &mut ser)?;
+        ser.end()
+    }
+}
+
 impl<S: Security, E: Executable<S>> Order<'_, S, E> {
     #[must_use]
     /// Return the order's `security`
@@ -99,15 +109,6 @@ impl<S: Security, E: Executable<S>> Order<'_, S, E> {
     }
 }
 
-impl<S: Security, E: Executable<S>> ToString for Order<'_, S, E> {
-    fn to_string(&self) -> String {
-        let (action, execute_method) = match self {
-            Self::Buy { execute_method, .. } => ("BUY", execute_method),
-            Self::Sell { execute_method, .. } => ("SELL", execute_method),
-        };
-        make_body!(action, execute_method.to_string())
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 /// A market order: Buy or sell at the best available price for a given quantity. Sensitive to price fluctuations.
@@ -129,41 +130,20 @@ pub struct Limit {
     pub time_in_force: TimeInForce,
 }
 
-// === Type implementations ===
-
-impl ToString for Market {
-    fn to_string(&self) -> String {
-        make_body!(
-            self.quantity,
-            "MKT",
-            "",
-            "",
-            self.time_in_force;
-            ORDER_NULL_STRING
-        )
-    }
-}
-
-impl ToString for Limit {
-    fn to_string(&self) -> String {
-        make_body!(
-            self.quantity,
-            "LMT",
-            self.price,
-            "",
-            self.time_in_force;
-            ORDER_NULL_STRING
-        )
-    }
-}
-
 // ==================================================
 // === Order Trait Definition and Implementations ===
 // ==================================================
 
+pub type BagRequestContent<'a> = (u64, &'a str, u64, &'a str, u64, HashMap<&'a str, &'a str>);
+pub type DeltaNeutralOrderContent<'a> = (i64, &'a str, &'a str, &'a str, &'a str, bool, i64, &'a str);
+pub type ScaleOrderContent = (f64, i64, f64, bool, i64, i64, bool);
+#[allow(clippy::module_name_repetitions)]
+pub type OrderConditionsContent<'a> = (usize, HashMap<&'a str, &'a str>, bool, bool);
+
+// todo! "Add support for BAG contract type/requests, delta-neutral contracts
 /// Implemented by all valid order types for a given security. In particular,
 /// if a type `O` implements [`Executable<S>`], then `O` is a valid order for `S`.
-pub trait Executable<S: Security>: ToString + Send + Sync {
+pub trait Executable<S: Security>: Send + Sync {
     /// Return the total number of contracts being bought/sold.
     fn get_quantity(&self) -> f64;
 
@@ -272,6 +252,12 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
     }
 
     #[inline]
+    /// Return the BAG request and combo leg content, if it exists.
+    fn get_bag_request_content(&self) -> MissingField<(), BagRequestContent> {
+        MissingField::default()
+    }
+
+    #[inline]
     /// Return the amount off the limit price allowed for discretionary orders.
     fn get_discretionary_amount(&self) -> f64 {
         0.0
@@ -289,7 +275,7 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
     /// Return the date and time until the order will be active.
     ///
     /// You must enter GTD as the time in force to use this string. The trade's "Good Till Date,"
-    /// format "yyyyMMdd HH:mm:ss (optional time zone)" or UTC "yyyyMMdd-HH:mm:ss".
+    /// format "`yyyyMMdd HH:mm:ss` (optional time zone)" or UTC "yyyyMMdd-HH:mm:ss".
     fn get_good_until_date(&self) -> Option<&str> {
         None
     }
@@ -320,7 +306,7 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
 
     #[inline]
     /// Returns whether or not all the order has to be filled on a single execution.
-    fn get_all_or_none(&self) -> bool {
+    fn get_is_all_or_none(&self) -> bool {
         false
     }
 
@@ -424,7 +410,7 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
     #[inline]
     /// Return the auxiliary price associated with a delta neutral order.
     ///
-    /// Use this field to enter a value if the value in the deltaNeutralOrderType field is an order
+    /// Use this field to enter a value if the value in the `deltaNeutralOrderType` field is an order
     /// type that requires an Aux price, such as a REL order. VOL orders only.
     fn get_delta_neutral_auxiliary_price(&self) -> Option<f64> {
         None
@@ -432,7 +418,7 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
 
     #[inline]
     /// Return the delta neutral order content if it exists.
-    fn get_delta_neutral_order_content(&self) -> MissingField<(), (i64, &str, &str, &str, &str, bool, i64, &str)> {
+    fn get_delta_neutral_order_content(&self) -> MissingField<(), DeltaNeutralOrderContent> {
         MissingField::default()
     }
 
@@ -464,7 +450,7 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
     /// Observe the following guidelines when using the trailingPercent field:
     ///
     /// This field is mutually exclusive with the existing trailing amount. That is, the API client can send one or the other but not both.
-    /// This field is read AFTER the stop price (barrier price) as follows: deltaNeutralAuxPrice stopPrice, trailingPercent, scale order attributes
+    /// This field is read AFTER the stop price (barrier price) as follows: `deltaNeutralAuxPrice` stopPrice, trailingPercent, scale order attributes
     /// The field will also be sent to the API in the openOrder message if the API client version is >= 56. It is sent after the stopPrice field as follows: stopPrice, trailingPct, basisPoint.
     fn get_trailing_percent(&self) -> Option<f64> {
         None
@@ -481,7 +467,7 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
     #[inline]
     /// Return the order size of the subsequent scale order components.
     ///
-    /// For Scale orders only. Used in conjunction with scaleInitLevelSize().
+    /// For Scale orders only. Used in conjunction with `scaleInitLevelSize`.
     fn get_scale_subs_level_size(&self) -> Option<i64> {
         None
     }
@@ -496,7 +482,7 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
 
     #[inline]
     /// Return the scale order content, if it exists.
-    fn get_scale_order_content(&self) -> MissingField<(), (f64, i64, f64, bool, i64, i64, bool)> {
+    fn get_scale_order_content(&self) -> MissingField<(), ScaleOrderContent> {
         MissingField::default()
     }
 
@@ -536,11 +522,11 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
     }
 
     #[inline]
-    /// Return whether an order has opted out of SmartRouting for orders routed directly to ASX.
+    /// Return whether an order has opted out of `SmartRouting` for orders routed directly to ASX.
     ///
     /// This attribute defaults to false unless explicitly set to true.
-    /// When set to false, orders routed directly to ASX will NOT use SmartRouting.
-    /// When set to true, orders routed directly to ASX orders WILL use SmartRouting.
+    /// When set to false, orders routed directly to ASX will NOT use `SmartRouting`.
+    /// When set to true, orders routed directly to ASX orders WILL use `SmartRouting`.
     fn get_opt_out_smart_routing(&self) -> bool {
         false
     }
@@ -548,7 +534,7 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
     #[inline]
     /// Return the true beneficiary of the order.
     ///
-    /// For IBExecution customers.
+    /// For `IBExecution` customers.
     ///
     /// This value is required for FUT/FOP orders for reporting to the exchange.
     fn get_clearing_account(&self) -> Option<&str> {
@@ -563,7 +549,7 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
 
     #[inline]
     /// Orders routed to IBDARK are tagged as “post only” and are held in IB's order book, where
-    /// incoming SmartRouted orders from other IB customers are eligible to trade against them.
+    /// incoming `SmartRouted` orders from other IB customers are eligible to trade against them.
     ///
     /// For IBDARK orders only.
     fn get_is_not_held(&self) -> bool {
@@ -579,8 +565,8 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
     #[inline]
     /// Return the algorithm strategy.
     ///
-    /// For more information about IB's API algorithms, refer to
-    /// https://interactivebrokers.github.io/tws-api/ibalgos.html
+    /// For more information about IB's API algorithms, refer to IBKR's
+    /// [IB algorithm description](https://interactivebrokers.github.io/tws-api/ibalgos.html)
     fn get_algo_strategy(&self) -> Option<AlgoStrategy> {
         None
     }
@@ -589,8 +575,8 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
     /// Return the algorithm strategy content (ie. The list of parameters for the IB algorithm),
     /// if it exists.
     ///
-    /// For more information about IB's API algorithms, refer to
-    /// https://interactivebrokers.github.io/tws-api/ibalgos.html
+    /// For more information about IB's API algorithms, refer to IBKR's
+    /// [IB algorithm description](https://interactivebrokers.github.io/tws-api/ibalgos.html)
     fn get_algo_strategy_content(&self) -> MissingField<(), (u64, HashMap<&str, &str>)> {
         MissingField::default()
     }
@@ -645,7 +631,7 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
 
     #[inline]
     /// Return order conditions content.
-    fn get_order_conditions_content(&self) -> MissingField<usize, (usize, HashMap<&str, &str>, bool, bool)> {
+    fn get_order_conditions_content(&self) -> MissingField<usize, OrderConditionsContent> {
         MissingField::Missing(0)
     }
 
@@ -662,40 +648,40 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
     /// Return the trigger price.
     ///
     /// Adjusted Stop orders: specifies the trigger price to execute.
-    fn get_trigger_price(&self) -> Option<f64> {
-        None
+    fn get_trigger_price(&self) -> f64 {
+        f64::MAX
     }
 
     #[inline]
     /// Return limit price offset.
     ///
     /// Adjusted Stop orders: specifies the price offset for the stop to move in increments.
-    fn get_limit_price_offset(&self) -> Option<f64> {
-        None
+    fn get_limit_price_offset(&self) -> f64 {
+        f64::MAX
     }
 
     #[inline]
     /// Return the adjusted stop price.
     ///
     /// Adjusted Stop orders: specifies the stop price of the adjusted (STP) parent.
-    fn get_adjusted_stop_price(&self) -> Option<f64> {
-        None
+    fn get_adjusted_stop_price(&self) -> f64 {
+        f64::MAX
     }
 
     #[inline]
     /// Return the adjusted stop limit price.
     ///
     /// Adjusted Stop orders: specifies the stop limit price of the adjusted (STPL LMT) parent.
-    fn get_adjusted_stop_limit_price(&self) -> Option<f64> {
-        None
+    fn get_adjusted_stop_limit_price(&self) -> f64 {
+        f64::MAX
     }
 
     #[inline]
     /// Return the adjusted trailing amount.
     ///
     /// Adjusted Stop orders: specifies the trailing amount of the adjusted (TRAIL) parent.
-    fn get_adjusted_trailing_amount(&self) -> Option<f64> {
-        None
+    fn get_adjusted_trailing_amount(&self) -> f64 {
+        f64::MAX
     }
 
     #[inline]
@@ -731,8 +717,8 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
     #[inline]
     /// Return the responsible party for investment decisions within the firm.
     ///
-    /// Orders covered by MiFID 2 (Markets in Financial Instruments Directive 2) must include either
-    /// Mifid2DecisionMaker or Mifid2DecisionAlgo field (but not both). Requires TWS 969+.
+    /// Orders covered by `MiFID` 2 (Markets in Financial Instruments Directive 2) must include either
+    /// `Mifid2DecisionMaker` or `Mifid2DecisionAlgo` field (but not both). Requires TWS 969+.
     fn get_decision_maker(&self) -> Option<&str> {
         None
     }
@@ -740,7 +726,7 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
     #[inline]
     /// Return the algorithm responsible for investment decisions within the firm.
     ///
-    /// Orders covered under MiFID 2 must include either Mifid2DecisionMaker or Mifid2DecisionAlgo,
+    /// Orders covered under `MiFID` 2 must include either `Mifid2DecisionMaker` or `Mifid2DecisionAlgo`,
     /// but cannot have both. Requires TWS 969+.
     fn get_decision_algorithm(&self) -> Option<&str> {
         None
@@ -749,7 +735,7 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
     #[inline]
     /// Returns the responsible party for the execution of a transaction within the firm.
     ///
-    /// For MiFID 2 reporting; identifies a person as the responsible party for the execution of a
+    /// For `MiFID` 2 reporting; identifies a person as the responsible party for the execution of a
     /// transaction within the firm. Requires TWS 969+.
     fn get_execution_trader(&self) -> Option<&str> {
         None
@@ -758,7 +744,7 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
     #[inline]
     /// Return the algorithm responsible for the execution of a transaction within the firm.
     ///
-    /// For MiFID 2 reporting; identifies the algorithm responsible for the execution of a
+    /// For `MiFID` 2 reporting; identifies the algorithm responsible for the execution of a
     /// transaction within the firm. Requires TWS 969+.
     fn get_execution_algorithm(&self) -> Option<&str> {
         None
@@ -790,15 +776,15 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
 
     #[inline]
     /// Return the duration of the order.
-    fn get_duration(&self) -> Option<i64> {
-        None
+    fn get_duration(&self) -> i64 {
+        i64::from(i32::MAX)
     }
 
     #[inline]
     /// Return a value must be positive, and it is number of seconds that SMART order would be
     /// parked for at IBKRATS before being routed to exchange.
-    fn get_post_to_ats(&self) -> Option<u64> {
-        None
+    fn get_post_to_ats(&self) -> i64  {
+        i64::from(i32::MAX)
     }
 
     #[inline]
@@ -808,7 +794,7 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
     }
 
     #[inline]
-    /// Return a list with parameters obtained from advancedOrderRejectJson.
+    /// Return a list with parameters obtained from `advancedOrderRejectJson`.
     fn get_advanced_error_override(&self) -> Option<&str> {
         None
     }
@@ -822,119 +808,123 @@ pub trait Executable<S: Security>: ToString + Send + Sync {
     fn get_manual_order_time(&self) -> Option<&str> {
         None
     }
+
+    #[inline]
+    /// Return the peg-to-mid order content, if it exists
+    fn get_peg_to_mid_content(&self) -> MissingField<(), &str>{
+        MissingField::default()
+    }
 }
 
-
 #[inline]
-fn serialize_executable<E, S>(
+#[allow(clippy::too_many_lines)]
+fn serialize_executable<E, Sec, Ser>(
     exec: &E,
-    writer: &mut Writer
-) -> Result<(), Error>
-    where
-          E: Executable<S>,
-          S: crate::contract::Security,
+    ser: &mut Ser
+) -> Result<(), Ser::Error>
+    where E: Executable<Sec>, Sec: crate::contract::Security, Ser: SerializeTuple
 {
-    let msg = (
-        exec.get_quantity(),
-        exec.get_order_type(),
-        exec.get_limit_price(),
-        exec.get_auxiliary_price(),
-        exec.get_time_in_force(),
-        exec.get_one_cancels_all_group(),
-        exec.get_account(),
-        None::<()>,
-        exec.get_origin(),
-        exec.get_order_reference(),
-        exec.get_will_transmit(),
-        exec.get_parent_id(),
-        exec.get_is_block_order(),
-        exec.get_is_sweep_to_fill(),
-        exec.get_iceberg_order_size(),
-        exec.get_trigger_method(),
-        exec.get_can_fill_outside_regular_trading_hours(),
-        exec.get_is_hidden_on_nasdaq_market_depth(),
-        None::<()>,
-        exec.get_discretionary_amount(),
-        exec.get_good_after_time(),
-        exec.get_good_until_date(),
-        [None::<()>; 3],
-        exec.get_model_code(),
-        0,
-        None::<()>,
-        -1,
-        exec.get_one_cancels_all_type(),
-        exec.get_rule_80a(),
-        None::<()>,
-        exec.get_all_or_none(),
-        exec.get_minimum_quantity(),
-        exec.get_percent_offset(),
-        [false; 2],
-        None::<()>,
-        exec.get_box_auction_strategy(),
-        exec.get_box_starting_price(),
-        exec.get_box_stock_reference_price(),
-        exec.get_box_stock_delta(),
-        exec.get_box_vol_stock_range_lower(),
-        exec.get_box_vol_stock_range_upper(),
-        exec.get_will_override_validation(),
-        exec.get_volatility_quote(),
-        exec.get_volatility_type(),
-        exec.get_delta_neutral_order_type(),
-        exec.get_delta_neutral_auxiliary_price(),
-        exec.get_delta_neutral_order_content(),
-        exec.get_continuous_update(),
-        exec.get_reference_price_type(),
-        exec.get_trail_stop_price(),
-        exec.get_trailing_percent(),
-        exec.get_scale_initial_level_size(),
-        exec.get_scale_subs_level_size(),
-        exec.get_scale_price_increment(),
-        exec.get_scale_order_content(),
-        exec.get_scale_table(),
-        exec.get_active_start_time(),
-        exec.get_active_stop_time(),
-        exec.get_hedge_type(),
-        exec.get_hedge_parameter_content(),
-        exec.get_opt_out_smart_routing(),
-        exec.get_clearing_account(),
-        exec.get_clearing_intent(),
-        exec.get_is_not_held(),
-        exec.get_delta_neutral_order_content(),
-        exec.get_algo_strategy(),
-        exec.get_algo_strategy_content(),
-        exec.get_algo_id(),
-        exec.get_what_if(),
-        None::<()>,
-        exec.get_solicited(),
-        exec.get_will_randomize_size(),
-        exec.get_will_randomize_price(),
-        exec.get_peg_bench_order_content(),
-        exec.get_order_conditions_content(),
-        exec.get_adjusted_order_type(),
-        exec.get_trigger_price(),
-        exec.get_limit_price_offset(),
-        exec.get_adjusted_stop_price(),
-        exec.get_adjusted_stop_limit_price(),
-        exec.get_adjusted_trailing_amount(),
-        exec.get_adjusted_trailing_unit(),
-        exec.get_ext_operator(),
-        exec.get_soft_dollar_tier(),
-        exec.get_cash_quantity(),
-        exec.get_decision_maker(),
-        exec.get_decision_algorithm(),
-        exec.get_execution_trader(),
-        exec.get_execution_algorithm(),
-        exec.get_dont_use_auto_price_for_hedge(),
-        exec.get_oms_container(),
-        exec.get_discretionary_up_to_limit_price(),
-        exec.get_use_price_management_algorithm(),
-        exec.get_duration(),
-        exec.get_post_to_ats(),
-        exec.get_auto_cancel_parent(),
-        exec.get_advanced_error_override(),
-        exec.get_manual_order_time()
-    );
-
+    ser.serialize_element(&exec.get_quantity())?;
+    ser.serialize_element(&exec.get_order_type())?;
+    ser.serialize_element(&exec.get_limit_price())?;
+    ser.serialize_element(&exec.get_auxiliary_price())?;
+    ser.serialize_element(&exec.get_time_in_force())?;
+    ser.serialize_element(&exec.get_one_cancels_all_group())?;
+    ser.serialize_element(&exec.get_account())?;
+    ser.serialize_element(&None::<()>)?;
+    ser.serialize_element(&exec.get_origin())?;
+    ser.serialize_element(&exec.get_order_reference())?;
+    ser.serialize_element(&exec.get_will_transmit())?;
+    ser.serialize_element(&exec.get_parent_id())?;
+    ser.serialize_element(&exec.get_is_block_order())?;
+    ser.serialize_element(&exec.get_is_sweep_to_fill())?;
+    ser.serialize_element(&exec.get_iceberg_order_size())?;
+    ser.serialize_element(&exec.get_trigger_method())?;
+    ser.serialize_element(&exec.get_can_fill_outside_regular_trading_hours())?;
+    ser.serialize_element(&exec.get_is_hidden_on_nasdaq_market_depth())?;
+    ser.serialize_element(&exec.get_bag_request_content())?;
+    ser.serialize_element(&None::<()>)?;
+    ser.serialize_element(&exec.get_discretionary_amount())?;
+    ser.serialize_element(&exec.get_good_after_time())?;
+    ser.serialize_element(&exec.get_good_until_date())?;
+    ser.serialize_element(&[None::<()>; 3])?;
+    ser.serialize_element(&exec.get_model_code())?;
+    ser.serialize_element(&0)?;
+    ser.serialize_element(&None::<()>)?;
+    ser.serialize_element(&-1)?;
+    ser.serialize_element(&exec.get_one_cancels_all_type())?;
+    ser.serialize_element(&exec.get_rule_80a())?;
+    ser.serialize_element(&None::<()>)?;
+    ser.serialize_element(&exec.get_is_all_or_none())?;
+    ser.serialize_element(&exec.get_minimum_quantity())?;
+    ser.serialize_element(&exec.get_percent_offset())?;
+    ser.serialize_element(&false)?;
+    ser.serialize_element(&false)?;
+    ser.serialize_element(&None::<()>)?;
+    ser.serialize_element(&exec.get_box_auction_strategy())?;
+    ser.serialize_element(&exec.get_box_starting_price())?;
+    ser.serialize_element(&exec.get_box_stock_reference_price())?;
+    ser.serialize_element(&exec.get_box_stock_delta())?;
+    ser.serialize_element(&exec.get_box_vol_stock_range_lower())?;
+    ser.serialize_element(&exec.get_box_vol_stock_range_upper())?;
+    ser.serialize_element(&exec.get_will_override_validation())?;
+    ser.serialize_element(&exec.get_volatility_quote())?;
+    ser.serialize_element(&exec.get_volatility_type())?;
+    ser.serialize_element(&exec.get_delta_neutral_order_type())?;
+    ser.serialize_element(&exec.get_delta_neutral_auxiliary_price())?;
+    ser.serialize_element(&exec.get_delta_neutral_order_content())?;
+    ser.serialize_element(&exec.get_continuous_update())?;
+    ser.serialize_element(&exec.get_reference_price_type())?;
+    ser.serialize_element(&exec.get_trail_stop_price())?;
+    ser.serialize_element(&exec.get_trailing_percent())?;
+    ser.serialize_element(&exec.get_scale_initial_level_size())?;
+    ser.serialize_element(&exec.get_scale_subs_level_size())?;
+    ser.serialize_element(&exec.get_scale_price_increment())?;
+    ser.serialize_element(&exec.get_scale_order_content())?;
+    ser.serialize_element(&exec.get_scale_table())?;
+    ser.serialize_element(&exec.get_active_start_time())?;
+    ser.serialize_element(&exec.get_active_stop_time())?;
+    ser.serialize_element(&exec.get_hedge_type())?;
+    ser.serialize_element(&exec.get_hedge_parameter_content())?;
+    ser.serialize_element(&exec.get_opt_out_smart_routing())?;
+    ser.serialize_element(&exec.get_clearing_account())?;
+    ser.serialize_element(&exec.get_clearing_intent())?;
+    ser.serialize_element(&exec.get_is_not_held())?;
+    ser.serialize_element(&exec.get_delta_neutral_contract_content())?;
+    ser.serialize_element(&exec.get_algo_strategy())?;
+    ser.serialize_element(&exec.get_algo_strategy_content())?;
+    ser.serialize_element(&exec.get_algo_id())?;
+    ser.serialize_element(&exec.get_what_if())?;
+    ser.serialize_element(&None::<()>)?;
+    ser.serialize_element(&exec.get_solicited())?;
+    ser.serialize_element(&exec.get_will_randomize_size())?;
+    ser.serialize_element(&exec.get_will_randomize_price())?;
+    ser.serialize_element(&exec.get_peg_bench_order_content())?;
+    ser.serialize_element(&exec.get_order_conditions_content())?;
+    ser.serialize_element(&exec.get_adjusted_order_type())?;
+    ser.serialize_element(&exec.get_trigger_price())?;
+    ser.serialize_element(&exec.get_limit_price_offset())?;
+    ser.serialize_element(&exec.get_adjusted_stop_price())?;
+    ser.serialize_element(&exec.get_adjusted_stop_limit_price())?;
+    ser.serialize_element(&exec.get_adjusted_trailing_amount())?;
+    ser.serialize_element(&exec.get_adjusted_trailing_unit())?;
+    ser.serialize_element(&exec.get_ext_operator())?;
+    ser.serialize_element(&exec.get_soft_dollar_tier())?;
+    ser.serialize_element(&exec.get_cash_quantity())?;
+    ser.serialize_element(&exec.get_decision_maker())?;
+    ser.serialize_element(&exec.get_decision_algorithm())?;
+    ser.serialize_element(&exec.get_execution_trader())?;
+    ser.serialize_element(&exec.get_execution_algorithm())?;
+    ser.serialize_element(&exec.get_dont_use_auto_price_for_hedge())?;
+    ser.serialize_element(&exec.get_oms_container())?;
+    ser.serialize_element(&exec.get_discretionary_up_to_limit_price())?;
+    ser.serialize_element(&exec.get_use_price_management_algorithm())?;
+    ser.serialize_element(&exec.get_duration())?;
+    ser.serialize_element(&exec.get_post_to_ats())?;
+    ser.serialize_element(&exec.get_auto_cancel_parent())?;
+    ser.serialize_element(&exec.get_advanced_error_override())?;
+    ser.serialize_element(&exec.get_manual_order_time())?;
+    ser.serialize_element(&exec.get_peg_to_mid_content())
 }
 
 #[derive(Debug, Default, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
@@ -1105,7 +1095,7 @@ pub enum AdjustedTrailingUnit {
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
-enum MissingField<T, U> {
+pub enum MissingField<T, U> {
     /// A missing field
     Missing(T),
     /// A present field

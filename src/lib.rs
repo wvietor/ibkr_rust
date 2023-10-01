@@ -16,8 +16,6 @@
 /// communication with the IBKR. Also contains a [`client::Builder`] struct to manage the
 /// creation of new connections.
 pub mod client;
-#[macro_use]
-mod comm;
 /// Contains types related to account information.
 pub mod account;
 mod constants;

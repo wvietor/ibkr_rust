@@ -382,7 +382,6 @@ pub mod updating_historical_bar {
 /// [`crate::client::Client::req_head_timestamp`].
 pub mod historical_ticks {
     use serde::{Serialize, Serializer};
-    use crate::make_body;
 
     // === Type definitions ===
 
@@ -425,20 +424,6 @@ pub mod historical_ticks {
     impl ToString for NumberOfTicks {
         fn to_string(&self) -> String {
             self.0.to_string()
-        }
-    }
-
-    impl ToString for TimeStamp {
-        #[inline]
-        fn to_string(&self) -> String {
-            match *self {
-                Self::StartDateTime(dt) => {
-                    make_body!(dt.format("%Y%m%d-%T"); "")
-                }
-                Self::EndDateTime(dt) => {
-                    make_body!(""; dt.format("%Y%m%d-%T"))
-                }
-            }
         }
     }
 

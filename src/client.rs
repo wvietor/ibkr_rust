@@ -9,7 +9,7 @@ use crate::message2::Writer;
 use crate::{
     constants,
     contract::{ContractId, Security},
-    decode, make_msg,
+    decode,
     market_data::{
         histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks,
         updating_historical_bar,
@@ -1384,9 +1384,8 @@ impl Client<indicators::Active> {
         E: Executable<S>,
     {
         let id = self.get_next_order_id();
-        let msg = make_msg!(Out::PlaceOrder, id, order.get_security(), "", "", order);
 
-        self.writer.add_prefix(&msg)?;
+        self.writer.add_body((Out::PlaceOrder, id, order.get_security(), None::<()>, None::<()>, order))?;
         self.writer.send().await?;
         Ok(id)
     }
@@ -1408,8 +1407,7 @@ impl Client<indicators::Active> {
         S: Security,
         E: Executable<S>,
     {
-        let msg = make_msg!(Out::PlaceOrder, id, order.get_security(), "", "", order);
-        self.writer.add_prefix(&msg)?;
+        self.writer.add_body((Out::PlaceOrder, id, order.get_security(), None::<()>, None::<()>, order))?;
         self.writer.send().await?;
         Ok(id)
     }
@@ -1426,8 +1424,8 @@ impl Client<indicators::Active> {
         S: Security,
     {
         const VERSION: u8 = 1;
-        let msg = make_msg!(Out::CancelOrder, VERSION, id, "");
-        self.writer.add_prefix(&msg)?;
+
+        self.writer.add_body((Out::CancelOrder, VERSION, id, None::<()>))?;
         self.writer.send().await
     }
 
@@ -1437,8 +1435,8 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_all_orders(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(Out::ReqGlobalCancel, VERSION);
-        self.writer.add_prefix(&msg)?;
+
+        self.writer.add_body((Out::ReqGlobalCancel, VERSION))?;
         self.writer.send().await
     }
 
@@ -1451,9 +1449,8 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn req_all_open_orders(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(Out::ReqAllOpenOrders, VERSION);
 
-        self.writer.add_prefix(&msg)?;
+        self.writer.add_body((Out::ReqAllOpenOrders, VERSION))?;
         self.writer.send().await
     }
 
@@ -1467,9 +1464,8 @@ impl Client<indicators::Active> {
     /// the calling client does not have ID 0.
     pub async fn req_auto_open_orders(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(Out::ReqAutoOpenOrders, VERSION, u8::from(true));
 
-        self.writer.add_prefix(&msg)?;
+        self.writer.add_body((Out::ReqAutoOpenOrders, VERSION, true))?;
         self.writer.send().await
     }
 
@@ -1481,9 +1477,8 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     pub async fn req_open_orders(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
-        let msg = make_msg!(Out::ReqOpenOrders, VERSION);
 
-        self.writer.add_prefix(&msg)?;
+        self.writer.add_body((Out::ReqOpenOrders, VERSION))?;
         self.writer.send().await
     }
 
@@ -1502,9 +1497,8 @@ impl Client<indicators::Active> {
     pub async fn req_executions(&mut self, filter: Filter) -> IdResult {
         const VERSION: u8 = 3;
         let req_id = self.get_next_req_id();
-        let msg = make_msg!(Out::ReqExecutions, VERSION, req_id, filter);
 
-        self.writer.add_prefix(&msg)?;
+        self.writer.add_body((Out::ReqExecutions, VERSION, req_id, filter))?;
         self.writer.send().await?;
         Ok(req_id)
     }

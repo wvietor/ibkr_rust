@@ -240,25 +240,6 @@ fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
     let gen = quote! {
         impl crate::contract::indicators::Valid for #name {}
 
-        impl ToString for #name {
-            fn to_string(&self) -> String {
-                make_body!(
-                    self.get_contract_id().0,
-                    self.get_symbol(),
-                    self.get_security_type(),
-                    self.get_expiration_date().map(|d| d.format("%Y%m%d").to_string()).unwrap_or_default(),
-                    self.get_strike().map(|s| s.to_string()).unwrap_or_default(),
-                    self.get_right().unwrap_or_default(),
-                    self.get_multiplier().map(|m| m.to_string()).unwrap_or_default(),
-                    self.get_exchange(),
-                    self.get_primary_exchange().map(|p| p.to_string()).unwrap_or_default(),
-                    self.get_currency(),
-                    self.get_local_symbol();
-                    self.get_trading_class().unwrap_or("")
-                )
-            }
-        }
-
         impl serde::Serialize for #name {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
                 (

@@ -1,8 +1,9 @@
 #![allow(unused_variables, dead_code)]
 
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use std::fmt::{Display, Formatter};
 use std::io::{Error, Write};
+use chrono::NaiveDateTime;
 
 #[derive(Debug)]
 pub(crate) struct Writer {
@@ -61,7 +62,7 @@ impl Writer {
 
     #[inline]
     pub(crate) async fn send(&mut self) -> Result<(), Error> {
-        println!("{:?}", std::str::from_utf8(&self.buf).unwrap());
+        println!("{:?}", &std::str::from_utf8(&self.buf[4..]));
         tokio::io::AsyncWriteExt::write_all(&mut self.writer, &self.buf).await?;
         self.buf.clear();
         self.offset = None;
@@ -504,4 +505,8 @@ pub(crate) mod ser {
             Ok(())
         }
     }
+}
+
+pub(crate) fn serialize_naive_datetime_yyyymmdd_hhcolon_mm_colon_ss<S: Serializer>(dt: &NaiveDateTime, serializer: S) -> Result<S::Ok, S::Error> {
+    dt.format("%Y%m%d %T").to_string().serialize(serializer)
 }

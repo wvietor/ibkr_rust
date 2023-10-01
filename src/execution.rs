@@ -1,10 +1,13 @@
 use crate::exchange::Primary;
 use chrono::NaiveDateTime;
+use serde::Serialize;
+use crate::message2::serialize_naive_datetime_yyyymmdd_hhcolon_mm_colon_ss;
 
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize)]
 pub struct Filter {
     pub client_id: i64,
     pub account_number: String,
+    #[serde(serialize_with="serialize_naive_datetime_yyyymmdd_hhcolon_mm_colon_ss")]
     pub start_time: NaiveDateTime,
     pub symbol: String,
     pub contract_type: ContractType,
@@ -12,38 +15,31 @@ pub struct Filter {
     pub side: OrderSide,
 }
 
-impl ToString for Filter {
-    fn to_string(&self) -> String {
-        make_body!(
-            self.client_id,
-            self.account_number,
-            self.start_time.format("%Y%m%d %T").to_string(),
-            self.symbol,
-            self.contract_type,
-            self.exchange;
-            self.side
-        )
-    }
-}
-
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize)]
 pub enum ContractType {
+    #[serde(rename(serialize="CASH"))]
     /// A [`crate::contract::Forex`] contract.
     Forex,
+    #[serde(rename(serialize="CRYPTO"))]
     /// A [`crate::contract::Crypto`] contract.
     Crypto,
+    #[serde(rename(serialize="STK"))]
     /// A [`crate::contract::Stock`] contract.
     Stock,
+    #[serde(rename(serialize="IND"))]
     /// An [`crate::contract::Index`] contract.
     Index,
     //Cfd,
+    #[serde(rename(serialize="FUT"))]
     /// A [`crate::contract::SecFuture`] contract.
     SecFuture,
+    #[serde(rename(serialize="OPT"))]
     /// A [`crate::contract::SecOption`] contract.
     SecOption,
     //FutureSecOption,
     //Bond,
     //MutualFund,
+    #[serde(rename(serialize="CMDTY"))]
     /// A [`crate::contract::Commodity`] contract.
     Commodity,
     //Warrant,
@@ -65,9 +61,11 @@ impl ToString for ContractType {
     }
 }
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq, Hash, Serialize)]
 pub enum OrderSide {
+    #[serde(rename(serialize="BUY"))]
     Buy,
+    #[serde(rename(serialize="SELL"))]
     Sell,
 }
 
