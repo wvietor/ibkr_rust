@@ -203,7 +203,8 @@ impl FromStr for In {
     }
 }
 
-#[allow(dead_code)] // Temporary to avoid annoying lint
+// Ok, we haven't implemented all of the outgoing client messages
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub enum Out {
     #[serde(rename(serialize = "1"))]

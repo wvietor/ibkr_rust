@@ -1,4 +1,3 @@
-#![allow(missing_docs)]
 use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Security, Stock};
 use serde::ser::SerializeTuple;
 use serde::{Serialize, Serializer};
@@ -138,11 +137,15 @@ pub struct Limit {
 // === Order Trait Definition and Implementations ===
 // ==================================================
 
+/// Represents the data that will be serialized for BAG contracts (which are not currently supported).
 pub type BagRequestContent<'a> = (u64, &'a str, u64, &'a str, u64, HashMap<&'a str, &'a str>);
+/// Represents the data that will be serialized for delta neutral orders (which are not currently implemented).
 pub type DeltaNeutralOrderContent<'a> =
     (i64, &'a str, &'a str, &'a str, &'a str, bool, i64, &'a str);
+/// Represents the data that will be serialized for scale orders (which are not currently implemented).
 pub type ScaleOrderContent = (f64, i64, f64, bool, i64, i64, bool);
 #[allow(clippy::module_name_repetitions)]
+/// Represents the data that will be serialized for order conditions (which are not currently implemented)
 pub type OrderConditionsContent<'a> = (usize, HashMap<&'a str, &'a str>, bool, bool);
 
 /// Implemented by all valid order types for a given security. In particular,
@@ -257,8 +260,8 @@ pub trait Executable<S: Security>: Send + Sync {
 
     #[inline]
     /// Return the BAG request and combo leg content, if it exists.
-    fn get_bag_request_content(&self) -> MissingField<(), BagRequestContent> {
-        MissingField::default()
+    fn get_bag_request_content(&self) -> ConditionalField<(), BagRequestContent> {
+        ConditionalField::default()
     }
 
     #[inline]
@@ -422,8 +425,8 @@ pub trait Executable<S: Security>: Send + Sync {
 
     #[inline]
     /// Return the delta neutral order content if it exists.
-    fn get_delta_neutral_order_content(&self) -> MissingField<(), DeltaNeutralOrderContent> {
-        MissingField::default()
+    fn get_delta_neutral_order_content(&self) -> ConditionalField<(), DeltaNeutralOrderContent> {
+        ConditionalField::default()
     }
 
     #[inline]
@@ -486,8 +489,8 @@ pub trait Executable<S: Security>: Send + Sync {
 
     #[inline]
     /// Return the scale order content, if it exists.
-    fn get_scale_order_content(&self) -> MissingField<(), ScaleOrderContent> {
-        MissingField::default()
+    fn get_scale_order_content(&self) -> ConditionalField<(), ScaleOrderContent> {
+        ConditionalField::default()
     }
 
     #[inline]
@@ -521,8 +524,8 @@ pub trait Executable<S: Security>: Send + Sync {
     ///
     /// For hedge orders.
     /// Beta = x for Beta hedge orders, ratio = y for Pair hedge order
-    fn get_hedge_parameter_content(&self) -> MissingField<(), &str> {
-        MissingField::default()
+    fn get_hedge_parameter_content(&self) -> ConditionalField<(), &str> {
+        ConditionalField::default()
     }
 
     #[inline]
@@ -562,8 +565,8 @@ pub trait Executable<S: Security>: Send + Sync {
 
     #[inline]
     /// Return the delta neutral content, if it exists
-    fn get_delta_neutral_contract_content(&self) -> MissingField<bool, (bool, i64, f64, f64)> {
-        MissingField::Missing(false)
+    fn get_delta_neutral_contract_content(&self) -> ConditionalField<bool, (bool, i64, f64, f64)> {
+        ConditionalField::Missing(false)
     }
 
     #[inline]
@@ -581,8 +584,8 @@ pub trait Executable<S: Security>: Send + Sync {
     ///
     /// For more information about IB's API algorithms, refer to IBKR's
     /// [IB algorithm description](https://interactivebrokers.github.io/tws-api/ibalgos.html)
-    fn get_algo_strategy_content(&self) -> MissingField<(), (u64, HashMap<&str, &str>)> {
-        MissingField::default()
+    fn get_algo_strategy_content(&self) -> ConditionalField<(), (u64, HashMap<&str, &str>)> {
+        ConditionalField::default()
     }
 
     #[inline]
@@ -629,14 +632,14 @@ pub trait Executable<S: Security>: Send + Sync {
 
     #[inline]
     /// Return peg bench order content, if it exists.
-    fn get_peg_bench_order_content(&self) -> MissingField<(), (i64, bool, f64, f64, &str)> {
-        MissingField::default()
+    fn get_peg_bench_order_content(&self) -> ConditionalField<(), (i64, bool, f64, f64, &str)> {
+        ConditionalField::default()
     }
 
     #[inline]
     /// Return order conditions content.
-    fn get_order_conditions_content(&self) -> MissingField<usize, OrderConditionsContent> {
-        MissingField::Missing(0)
+    fn get_order_conditions_content(&self) -> ConditionalField<usize, OrderConditionsContent> {
+        ConditionalField::Missing(0)
     }
 
     #[inline]
@@ -815,8 +818,8 @@ pub trait Executable<S: Security>: Send + Sync {
 
     #[inline]
     /// Return the peg-to-mid order content, if it exists
-    fn get_peg_to_mid_content(&self) -> MissingField<(), &str> {
-        MissingField::default()
+    fn get_peg_to_mid_content(&self) -> ConditionalField<(), &str> {
+        ConditionalField::default()
     }
 }
 
@@ -932,6 +935,7 @@ where
 }
 
 #[derive(Debug, Default, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+/// The types of data that can be used for triggering a given order (like a stop or stop limit order).
 pub enum TriggerMethod {
     #[default]
     #[serde(rename(serialize = "0"))]
@@ -958,11 +962,14 @@ pub enum TriggerMethod {
 }
 
 #[derive(Debug, Default, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+/// Represents the party who created a given order.
 pub enum Origin {
     #[default]
     #[serde(rename(serialize = "0"))]
+    /// An IBKR customer.
     Customer,
     #[serde(rename(serialize = "1"))]
+    /// A firm.
     Firm,
 }
 
@@ -992,28 +999,39 @@ pub enum OneCancelsAllType {
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+/// Represents the possible codes describing rule 80A parameters.
 pub enum Rule80A {
     #[serde(rename(serialize = "I"))]
+    /// Individual
     Individual,
     #[serde(rename(serialize = "A"))]
+    /// Agency
     Agency,
     #[serde(rename(serialize = "W"))]
+    /// Agent other member
     AgentOtherMember,
     #[serde(rename(serialize = "J"))]
+    /// Inidividual PTIA
     IndividualPtia,
     #[serde(rename(serialize = "U"))]
+    /// Agency PTIA
     AgencyPtia,
     #[serde(rename(serialize = "M"))]
+    /// Agent other member PTIA
     AgentOtherMemberPtia,
     #[serde(rename(serialize = "K"))]
+    /// Individual PT
     IndividualPt,
     #[serde(rename(serialize = "Y"))]
+    /// Agency PT
     AgencyPt,
     #[serde(rename(serialize = "N"))]
+    /// Agent other member PT
     AgentOtherMemberPt,
 }
 
 #[derive(Debug, Default, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+/// The list of potential strategies for executing an auction order.
 pub enum AuctionStrategy {
     #[default]
     #[serde(rename(serialize = "0"))]
@@ -1031,14 +1049,19 @@ pub enum AuctionStrategy {
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+/// The potential methods for specifying a given volatility figure.
 pub enum VolatilityType {
     #[serde(rename(serialize = "1"))]
+    /// Daily volatility calculations
     Daily,
     #[serde(rename(serialize = "2"))]
+    /// Annualized volatility calculations
     Annual,
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+/// Specifies how you want TWS to calculate the limit price for options,
+/// and for stock range price monitoring.
 pub enum ReferencePriceType {
     #[serde(rename(serialize = "1"))]
     /// Average of NBBO.
@@ -1049,18 +1072,24 @@ pub enum ReferencePriceType {
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+/// The potential methods for hedging an order.
 pub enum HedgeType {
     #[serde(rename(serialize = "D"))]
+    /// Delta-hedged
     Delta,
     #[serde(rename(serialize = "B"))]
+    /// Beta-hedged
     Beta,
     #[serde(rename(serialize = "F"))]
+    /// FX-hedged
     Forex,
     #[serde(rename(serialize = "P"))]
+    /// Pair-hedged
     Pair,
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+/// For execution-only clients to know where do they want their shares to be cleared at.
 pub enum ClearingIntent {
     #[serde(rename(serialize = "IB"))]
     /// Interactive Brokers clearing
@@ -1074,6 +1103,7 @@ pub enum ClearingIntent {
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+/// The potential execution algorithms for algo orders.
 pub enum AlgoStrategy {
     #[serde(rename(serialize = "ArrivalPx"))]
     /// Arrival price algorithm.
@@ -1090,25 +1120,32 @@ pub enum AlgoStrategy {
 }
 
 #[derive(Debug, Default, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+/// Adjusted Stop orders: specifies where the trailing unit is an amount (set to 0) or a
+/// percentage (set to 1).
 pub enum AdjustedTrailingUnit {
     #[default]
     #[serde(rename(serialize = "0"))]
+    /// The trailing unit is a raw amount.
     Amount,
     #[serde(rename(serialize = "1"))]
+    /// The trailing unit is a percentage.
     Percentage,
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
-pub enum MissingField<T, U> {
+/// Represents a field that may or may not exist. If the condition is not met,
+/// [`ConditionalField::Missing`] value is serialized. If  the condition is met, the
+/// [`ConditionalField::Present`] value is serialized.
+pub enum ConditionalField<T, U> {
     /// A missing field
     Missing(T),
     /// A present field
     Present(U),
 }
 
-impl<T: Default, U> Default for MissingField<T, U> {
+impl<T: Default, U> Default for ConditionalField<T, U> {
     fn default() -> Self {
-        MissingField::Missing(T::default())
+        ConditionalField::Missing(T::default())
     }
 }
 
