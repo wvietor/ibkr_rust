@@ -262,6 +262,19 @@ impl std::str::FromStr for RemainingDayTrades {
     }
 }
 
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
+/// Represents the different tag and value pairs in an account summary callback.
+pub enum TagValue {
+    /// A tag whose value is a String
+    String(Tag, String),
+    /// A tag whose value is an integer (i64)
+    Int(Tag, i64),
+    /// A tag whose valued is a float (f64)
+    Float(Tag, f64),
+    /// A tag whose value is a float (f64), Currency pair
+    Currency(Tag, f64, Currency),
+}
+
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, PartialEq, Eq, Hash, Serialize)]
 /// Represents the different types of account information available for a
 /// [`crate::client::Client::req_account_summary`] request.
@@ -328,4 +341,43 @@ pub enum Tag {
     DayTradesRemaining,
     /// GrossPositionValue / NetLiquidation.
     Leverage,
+}
+
+impl std::str::FromStr for Tag {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "AccountType" => Self::AccountType,
+            "NetLiquidation" => Self::NetLiquidation,
+            "TotalCashValue" => Self::TotalCashValue,
+            "SettledCash" => Self::SettledCash,
+            "AccruedCash" => Self::AccruedCash,
+            "BuyingPower" => Self::BuyingPower,
+            "EquityWithLoanValue" => Self::EquityWithLoanValue,
+            "PreviousEquityWithLoanValue" => Self::PreviousEquityWithLoanValue,
+            "GrossPositionValue" => Self::GrossPositionValue,
+            "RegTEquity" => Self::RegTEquity,
+            "RegTMargin" => Self::RegTMargin,
+            "SMA" => Self::Sma,
+            "InitMarginReq" => Self::InitMarginReq,
+            "MaintMarginReq" => Self::MaintenanceMarginReq,
+            "AvailableFunds" => Self::AvailableFunds,
+            "ExcessLiquidity" => Self::ExcessLiquidity,
+            "Cushion" => Self::Cushion,
+            "FullInitMarginReq" => Self::FullInitMarginReq,
+            "FullMaintMarginReq" => Self::FullMaintenanceMarginReq,
+            "FullAvailableFunds" => Self::FullAvailableFunds,
+            "FullExcessLiquidity" => Self::FullExcessLiquidity,
+            "LookAheadNextChange" => Self::LookAheadNextChange,
+            "LookAheadInitMarginReq" => Self::LookAheadInitMarginReq,
+            "LookAheadMaintMarginReq" => Self::LookAheadMaintenanceMarginReq,
+            "LookAheadAvailableFunds" => Self::LookAheadAvailableFunds,
+            "LookAheadExcessLiquidity" => Self::LookAheadExcessLiquidity,
+            "HighestSeverity" => Self::HighestSeverity,
+            "DayTradesRemaining" => Self::DayTradesRemaining,
+            "Leverage" => Self::Leverage,
+            s => return Err(anyhow::Error::msg(format!("Invalid tag value encountered while parsing: {s}")))
+        })
+    }
 }

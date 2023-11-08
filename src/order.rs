@@ -2,6 +2,8 @@ use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Sec
 use serde::ser::SerializeTuple;
 use serde::{Serialize, Serializer};
 use std::collections::HashMap;
+use std::fmt::Formatter;
+use std::str::FromStr;
 
 // ==============================================
 // === Core Order Types (Market, Limit, etc.) ===
@@ -52,6 +54,35 @@ impl ToString for TimeInForce {
             Self::Dtc => "DTC",
         }
         .to_owned()
+    }
+}
+
+#[derive(Debug, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+/// A basic error type that represents an invalid [`TimeInForce`]
+pub struct ParseTimeInForceError(String);
+
+impl std::fmt::Display for ParseTimeInForceError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Invalid time in force: {}", self.0)
+    }
+}
+
+impl std::error::Error for ParseTimeInForceError {}
+
+
+impl FromStr for TimeInForce {
+    type Err = ParseTimeInForceError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "DAY" => Self::Day,
+            "GTC" => Self::Gtc,
+            "IOC" => Self::Ioc,
+            // "GTD" => Self::Gtd,
+            "FOK" => Self::Fok,
+            "DTC" => Self::Dtc,
+            _ => return Err(ParseTimeInForceError(s.to_owned())),
+        })
     }
 }
 

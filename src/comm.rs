@@ -60,7 +60,6 @@ impl Writer {
 
     #[inline]
     pub(crate) async fn send(&mut self) -> Result<(), Error> {
-        println!("{:?}", &std::str::from_utf8(&self.buf[4..]));
         tokio::io::AsyncWriteExt::write_all(&mut self.writer, &self.buf).await?;
         self.buf.clear();
         self.offset = None;

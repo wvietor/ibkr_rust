@@ -1,4 +1,4 @@
-use crate::account::Attribute;
+use crate::account::{Attribute, TagValue};
 use crate::payload::{Pnl, Position, PositionSummary};
 use crate::{
     payload::{self, ExchangeId, HistogramEntry, HistoricalBar, Tick},
@@ -113,4 +113,16 @@ pub trait Wrapper: Send + Sync {
     fn pnl(&mut self, req_id: i64, pnl: Pnl);
     /// The callback message containing P&L information for a single position from [`crate::client::Client::req_single_position_pnl`].
     fn single_position_pnl(&mut self, req_id: i64, pnl: Pnl, position: f64, market_value: f64);
+    /// The callback message indicating that all the information for a given account has been received.
+    fn account_download_end(&mut self, account_number: String);
+    /// The callback message associated with account summary information from [`crate::client::Client::req_account_summary`].
+    fn account_summary(&mut self, req_id: i64, account_number: String, summary: TagValue);
+    /// The callback message indicating that all the position information has been received.
+    fn position_end(&mut self);
+    /// The callback message indicating that all the account summary information has been received.
+    fn account_summary_end(&mut self, req_id: i64);
+    /// The callback message indicating that all the contract information has been received.
+    fn contract_data_end(&mut self, req_id: i64);
+    /// The callback message indicating that all order information has been received.
+    fn open_order_end(&mut self);
 }

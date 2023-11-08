@@ -73,7 +73,7 @@ pub mod wrapper;
 
 #[allow(missing_docs, clippy::use_debug, clippy::print_stdout)]
 pub mod default_wrapper {
-    use crate::account::Attribute;
+    use crate::account::{Attribute, TagValue};
     use crate::payload::{Pnl, Position, PositionSummary};
     use crate::tick::{
         Accessibility, AuctionData, Class, Dividends, EtfNav, ExtremeValue, Ipo, MarkPrice, News,
@@ -321,6 +321,36 @@ pub mod default_wrapper {
         #[inline]
         fn single_position_pnl(&mut self, req_id: i64, pnl: Pnl, position: f64, market_value: f64) {
             println!("According to Req ID: {req_id}, we have {position} of something with market_value {market_value}. Out P&L is {pnl:?}");
+        }
+
+        #[inline]
+        fn account_download_end(&mut self, account_number: String) {
+            println!("We're done downloading all of the account data for account number {account_number}");
+        }
+
+        #[inline]
+        fn account_summary(&mut self, req_id: i64, account_number: String, summary: TagValue) {
+            println!("Account summary from Req ID: {req_id}, account number {account_number}: {summary:?}");
+        }
+
+        #[inline]
+        fn position_end(&mut self) {
+            println!("All done with position information!");
+        }
+
+        #[inline]
+        fn account_summary_end(&mut self, req_id: i64) {
+            println!("All done with account summary information for Req ID: {req_id}");
+        }
+
+        #[inline]
+        fn contract_data_end(&mut self, req_id: i64) {
+            println!("All done with contract data for Req ID: {req_id}");
+        }
+
+        #[inline]
+        fn open_order_end(&mut self) {
+            println!("All done with the order information!");
         }
     }
 }

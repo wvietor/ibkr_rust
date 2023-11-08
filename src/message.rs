@@ -268,11 +268,11 @@ pub enum Out {
     #[serde(rename(serialize = "53"))]
     CancelFundamentalData,
     #[serde(rename(serialize = "54"))]
-    ReqCalcImpliedVolat,
+    ReqCalcImpliedVolatility,
     #[serde(rename(serialize = "55"))]
     ReqCalcOptionPrice,
     #[serde(rename(serialize = "56"))]
-    CancelCalcImpliedVolat,
+    CancelCalcImpliedVolatility,
     #[serde(rename(serialize = "57"))]
     CancelCalcOptionPrice,
     #[serde(rename(serialize = "58"))]
@@ -402,9 +402,9 @@ impl ToString for Out {
             Self::CancelRealTimeBars => "51",
             Self::ReqFundamentalData => "52",
             Self::CancelFundamentalData => "53",
-            Self::ReqCalcImpliedVolat => "54",
+            Self::ReqCalcImpliedVolatility => "54",
             Self::ReqCalcOptionPrice => "55",
-            Self::CancelCalcImpliedVolat => "56",
+            Self::CancelCalcImpliedVolatility => "56",
             Self::CancelCalcOptionPrice => "57",
             Self::ReqGlobalCancel => "58",
             Self::ReqMarketDataType => "59",

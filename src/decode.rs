@@ -4,7 +4,7 @@ use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use crate::payload::{
     market_depth::{CompleteEntry, Entry, Operation},
     ExchangeId, HistogramEntry, HistoricalBar, HistoricalBarCore, MarketDataClass, Pnl, Position,
-    PositionSummary, Tick,
+    PositionSummary, Tick
 };
 use crate::tick::{
     Accessibility, AuctionData, CalculationResult, Class, Dividends, EtfNav, ExtremeValue, Ipo,
@@ -22,7 +22,9 @@ use crate::{
     exchange::Routing,
     message::{ToClient, ToWrapper},
     wrapper::Wrapper,
+    order::TimeInForce
 };
+use crate::account::{Tag, TagValue};
 
 type Tx = tokio::sync::mpsc::Sender<ToClient>;
 type Rx = tokio::sync::mpsc::Receiver<ToWrapper>;
@@ -239,7 +241,17 @@ pub fn err_msg_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::
 
 #[inline]
 pub fn open_order_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(
+        fields =>
+            order_id @ 1: i64,
+            contract_id @ 0: ContractId,
+            action @ 10: String,
+            quantity @ 0: f64,
+            order_type @ 0: String,
+            price @ 0: String,
+            aux_price @ 0: String,
+            time_in_force @ 0: TimeInForce
+    );
     Ok(())
 }
 
@@ -1135,13 +1147,14 @@ pub fn contract_data_end_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(fields => req_id @ 2: i64);
+    wrapper.contract_data_end(req_id);
     Ok(())
 }
 
 #[inline]
 pub fn open_order_end_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    wrapper.open_order_end();
     Ok(())
 }
 
@@ -1150,7 +1163,10 @@ pub fn acct_download_end_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(
+        fields => account_number @ 2: String
+    );
+    wrapper.account_download_end(account_number);
     Ok(())
 }
 
@@ -1160,6 +1176,7 @@ pub fn execution_data_end_msg<W: Wrapper>(
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
     println!("{:?}", &fields);
+
     Ok(())
 }
 
@@ -1224,13 +1241,30 @@ pub fn position_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> an
 
 #[inline]
 pub fn position_end_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    wrapper.position_end();
     Ok(())
 }
 
 #[inline]
 pub fn account_summary_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(
+        fields =>
+            req_id @ 2: i64,
+            account_number @ 0: String,
+            tag @ 0: Tag,
+            value @ 0: String,
+            currency @ 0: String
+    );
+    let summary = match tag {
+        Tag::AccountType => TagValue::String(Tag::AccountType, value),
+        Tag::Cushion => TagValue::Float(Tag::Cushion, value.parse()?),
+        Tag::LookAheadNextChange => TagValue::Int(Tag::LookAheadNextChange, value.parse()?),
+        Tag::HighestSeverity => TagValue::String(Tag::HighestSeverity, value),
+        Tag::DayTradesRemaining => TagValue::Int(Tag::DayTradesRemaining, value.parse()?),
+        Tag::Leverage => TagValue::Float(Tag::Leverage, value.parse()?),
+        t=> TagValue::Currency(t, value.parse()?, currency.parse()?),
+    };
+    wrapper.account_summary(req_id, account_number, summary);
     Ok(())
 }
 
@@ -1239,7 +1273,10 @@ pub fn account_summary_end_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(
+        fields => req_id @ 2: i64
+    );
+    wrapper.account_summary_end(req_id);
     Ok(())
 }
 
