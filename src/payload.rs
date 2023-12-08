@@ -178,7 +178,7 @@ pub struct HistogramEntry {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
 /// A single historical bar
-pub struct HistoricalBarCore {
+pub struct BarCore {
     /// The ending datetime for the bar.
     pub datetime: NaiveDateTime,
     /// The bar's open price.
@@ -192,14 +192,14 @@ pub struct HistoricalBarCore {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-/// A single historical bar.
-pub enum HistoricalBar {
+/// A single bar.
+pub enum Bar {
     /// The ordinary bar data returned from non [`crate::market_data::historical_bar::data_types::Trades`] requests.
-    Ordinary(HistoricalBarCore),
+    Ordinary(BarCore),
     /// The bar data returned from a [`crate::market_data::historical_bar::data_types::Trades`] request.
     Trades {
         /// The core bar with open, high, low, close, etc.
-        bar: HistoricalBarCore,
+        bar: BarCore,
         /// The bar's traded volume.
         volume: f64,
         /// The bar's Weighted Average Price.
@@ -290,6 +290,8 @@ pub struct Pnl {
     pub realized: f64,
 }
 
+
+#[allow(non_snake_case, missing_docs)]
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct OrderDetails {
     pub OcaGroup: Option<String>,

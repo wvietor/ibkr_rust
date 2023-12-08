@@ -1,7 +1,7 @@
 use crate::account::{Attribute, TagValue};
 use crate::payload::{Pnl, Position, PositionSummary};
 use crate::{
-    payload::{self, ExchangeId, HistogramEntry, HistoricalBar, Tick},
+    payload::{self, ExchangeId, HistogramEntry, Bar, Tick},
     tick::{
         self, Accessibility, AuctionData, Class, Dividends, ExtremeValue, Ipo, MarkPrice, News,
         OpenInterest, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
@@ -92,9 +92,9 @@ pub trait Wrapper: Send + Sync {
         histogram: std::collections::HashMap<usize, HistogramEntry>,
     );
     /// The callback message containing historical bar data from [`crate::client::Client::req_historical_bar`].
-    fn historical_bars(&mut self, req_id: i64, bars: Vec<HistoricalBar>);
+    fn historical_bars(&mut self, req_id: i64, bars: Vec<Bar>);
     /// The callback message containing an updated historical bar from [`crate::client::Client::req_updating_historical_bar`].
-    fn updating_historical_bar(&mut self, req_id: i64, bar: HistoricalBar);
+    fn updating_historical_bar(&mut self, req_id: i64, bar: Bar);
     /// The callback message containing a timestamp for the beginning of data for a contract and specified data type from [`crate::client::Client::req_head_timestamp`].
     fn head_timestamp(&mut self, req_id: i64, timestamp: NaiveDateTime);
     /// The callback message containing a vector of historical ticks from [`crate::client::Client::req_historical_ticks`] for [`crate::client::Client::req_tick_by_tick_data`].
@@ -125,4 +125,6 @@ pub trait Wrapper: Send + Sync {
     fn contract_data_end(&mut self, req_id: i64);
     /// The callback message indicating that all order information has been received.
     fn open_order_end(&mut self);
+    /// The callback message that contains live bar data from [`crate::client::Client::req_real_time_bars`].
+    fn real_time_bar(&mut self, req_id: i64, bar: Bar);
 }

@@ -3,7 +3,7 @@ use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
 use crate::payload::{
     market_depth::{CompleteEntry, Entry, Operation},
-    ExchangeId, HistogramEntry, HistoricalBar, HistoricalBarCore, MarketDataClass, Pnl, Position,
+    ExchangeId, HistogramEntry, Bar, BarCore, MarketDataClass, Pnl, Position,
     PositionSummary, Tick
 };
 use crate::tick::{
@@ -845,7 +845,7 @@ pub fn historical_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> 
     let mut bars = Vec::with_capacity(count);
     for chunk in fields.collect::<Vec<String>>().chunks(8) {
         if let [date, open, high, low, close, volume, wap, trade_count] = chunk {
-            let core = HistoricalBarCore {
+            let core = BarCore {
                 datetime: NaiveDateTime::parse_and_remainder(date, "%Y%m%d %T")?.0,
                 open: open.parse()?,
                 high: high.parse()?,
@@ -855,14 +855,14 @@ pub fn historical_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> 
             let (volume, wap, trade_count) =
                 (volume.parse()?, wap.parse()?, trade_count.parse::<i64>()?);
             let bar = if volume > 0. && wap > 0. && trade_count > 0 {
-                HistoricalBar::Trades {
+                Bar::Trades {
                     bar: core,
                     volume,
                     wap,
                     trade_count: trade_count.try_into()?,
                 }
             } else {
-                HistoricalBar::Ordinary(core)
+                Bar::Ordinary(core)
             };
             bars.push(bar);
         }
@@ -1114,7 +1114,8 @@ pub fn tick_efp_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow:
 pub fn current_time_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
-            datetime @ 2: i64
+            req_id @ 1: i64,
+            datetime @ 0: i64
     );
 
     wrapper.current_time(
@@ -1129,7 +1130,36 @@ pub fn current_time_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> any
 
 #[inline]
 pub fn real_time_bars_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
-    println!("{:?}", &fields);
+    decode_fields!(
+        fields =>
+            req_id @ 2: i64,
+            date_time @ 0: i64,
+            open @ 0: f64,
+            high @ 0: f64,
+            low @ 0: f64,
+            close @ 0: f64,
+            volume @ 0: f64,
+            wap @ 0: f64,
+            trade_count @ 0: i64
+    );
+    let core = BarCore {
+        datetime: NaiveDateTime::from_timestamp_opt(date_time, 0).ok_or(anyhow::Error::msg("Invalid timestamp"))?,
+        open,
+        high,
+        low,
+        close,
+    };
+    let bar = if trade_count > 0 && wap > 0. && volume > 0. {
+        Bar::Trades {
+            bar: core,
+            volume,
+            wap,
+            trade_count: trade_count.try_into()?,
+        }
+    } else {
+        Bar::Ordinary(core)
+    };
+    wrapper.real_time_bar(req_id, bar);
     Ok(())
 }
 
@@ -1524,7 +1554,7 @@ pub fn historical_data_update_msg<W: Wrapper>(
             wap @ 0: f64,
             volume @ 0: f64
     );
-    let core = HistoricalBarCore {
+    let core = BarCore {
         datetime: NaiveDateTime::parse_and_remainder(datetime_str.as_str(), "%Y%m%d %T")?.0,
         open,
         high,
@@ -1532,14 +1562,14 @@ pub fn historical_data_update_msg<W: Wrapper>(
         close,
     };
     let bar = if trade_count > 0 && wap > 0. && volume > 0. {
-        HistoricalBar::Trades {
+        Bar::Trades {
             bar: core,
             volume,
             wap,
             trade_count: trade_count.try_into()?,
         }
     } else {
-        HistoricalBar::Ordinary(core)
+        Bar::Ordinary(core)
     };
     wrapper.updating_historical_bar(req_id, bar);
     Ok(())

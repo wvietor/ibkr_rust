@@ -1,17 +1,17 @@
 use ibapi;
 use ibapi::client;
 use ibapi::contract::{ContractId, Stock};
+use ibapi::default_wrapper::DefaultWrapper;
 use ibapi::order::{Limit, Order};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn place_order_test() -> Result<(), Box<dyn std::error::Error>> {
-    let wrapper = ibapi::default_wrapper::DefaultWrapper;
     let mut client = client::Builder::from_config_file(
         client::Mode::Paper,
         client::Host::Gateway,
         Some("./config.toml"),
     )?
-    .connect(10, wrapper)
+    .connect(3, DefaultWrapper)
     .await?
     .run()
     .await;

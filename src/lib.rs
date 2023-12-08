@@ -74,7 +74,7 @@ pub mod wrapper;
 #[allow(missing_docs, clippy::use_debug, clippy::print_stdout)]
 pub mod default_wrapper {
     use crate::account::{Attribute, TagValue};
-    use crate::payload::{Pnl, Position, PositionSummary};
+    use crate::payload::{Bar, Pnl, Position, PositionSummary};
     use crate::tick::{
         Accessibility, AuctionData, Class, Dividends, EtfNav, ExtremeValue, Ipo, MarkPrice, News,
         OpenInterest, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
@@ -267,12 +267,12 @@ pub mod default_wrapper {
         }
 
         #[inline]
-        fn historical_bars(&mut self, req_id: i64, bars: Vec<crate::payload::HistoricalBar>) {
+        fn historical_bars(&mut self, req_id: i64, bars: Vec<crate::payload::Bar>) {
             println!("Some cool historical data from Req ID: {req_id}. The bars are {bars:?}");
         }
 
         #[inline]
-        fn updating_historical_bar(&mut self, req_id: i64, bar: crate::payload::HistoricalBar) {
+        fn updating_historical_bar(&mut self, req_id: i64, bar: crate::payload::Bar) {
             println!(
                 "We're updating our historical data from Req ID: {req_id}. The bar is {bar:?}"
             );
@@ -351,6 +351,11 @@ pub mod default_wrapper {
         #[inline]
         fn open_order_end(&mut self) {
             println!("All done with the order information!");
+        }
+
+        #[inline]
+        fn real_time_bar(&mut self, req_id: i64, bar: Bar) {
+            println!("Got live bar data from Req ID: {req_id}. {bar:?}");
         }
     }
 }

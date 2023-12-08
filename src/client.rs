@@ -536,7 +536,10 @@ impl<W: 'static + Wrapper> Client<indicators::Inactive<W>> {
                             };
                             match status {
                                 Ok(()) => (),
-                                Err(e) => println!("\x1B[31m{e}\x1B[0m")
+                                Err(e) => {
+                                    println!("\x1B[31m{}", e);
+                                    println!("{}\x1B[0m", e.root_cause());
+                                }
                             }
                         }
                     } => (),

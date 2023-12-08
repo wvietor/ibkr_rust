@@ -4,10 +4,9 @@ use ibapi::{
 };
 #[tokio::test(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let wrapper = DefaultWrapper;
     let mut client =
         client::Builder::from_config_file(Mode::Paper, Host::Gateway, Some("config.toml"))?
-            .connect(0, wrapper)
+            .connect(1, DefaultWrapper)
             .await?
             .run()
             .await;
@@ -31,10 +30,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn temp() -> Result<(), Box<dyn std::error::Error>> {
-    let wrapper = DefaultWrapper;
     let mut client =
         client::Builder::from_config_file(Mode::Paper, Host::Gateway, Some("config.toml"))?
-            .connect(1, wrapper)
+            .connect(2, DefaultWrapper)
             .await?
             .run()
             .await;
