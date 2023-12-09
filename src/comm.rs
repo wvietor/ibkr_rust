@@ -7,7 +7,7 @@ use std::io::{Error, Write};
 pub(crate) struct Writer {
     buf: Vec<u8>,
     offset: Option<usize>,
-    writer: tokio::net::tcp::OwnedWriteHalf,
+    inner: tokio::net::tcp::OwnedWriteHalf,
 }
 
 impl Writer {
@@ -25,7 +25,7 @@ impl Writer {
         Self {
             buf,
             offset: None,
-            writer,
+            inner: writer,
         }
     }
 
@@ -60,7 +60,7 @@ impl Writer {
 
     #[inline]
     pub(crate) async fn send(&mut self) -> Result<(), Error> {
-        tokio::io::AsyncWriteExt::write_all(&mut self.writer, &self.buf).await?;
+        tokio::io::AsyncWriteExt::write_all(&mut self.inner, &self.buf).await?;
         self.buf.clear();
         self.offset = None;
 
@@ -69,12 +69,12 @@ impl Writer {
 
     #[inline]
     pub(crate) async fn flush(&mut self) -> Result<(), Error> {
-        tokio::io::AsyncWriteExt::flush(&mut self.writer).await
+        tokio::io::AsyncWriteExt::flush(&mut self.inner).await
     }
 
     #[inline]
     pub(crate) async fn shutdown(&mut self) -> Result<(), Error> {
-        tokio::io::AsyncWriteExt::shutdown(&mut self.writer).await
+        tokio::io::AsyncWriteExt::shutdown(&mut self.inner).await
     }
 }
 

@@ -31,7 +31,7 @@ pub trait Integrated: Wrapper {
     fn client(&mut self) -> &mut crate::client::ActiveClient;
     /// The main entry point for an [`Integrated`] application. This method is called immediately
     /// after the client is successfully connected.
-    async fn main(&mut self) {}
+    async fn main(&mut self);
 }
 
 /// Contains the "callback functions" that correspond to the requests made by a [`crate::client::Client`].

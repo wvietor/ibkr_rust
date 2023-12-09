@@ -425,7 +425,7 @@ async fn decode_msg<W: Wrapper>(
     tx: &mut mpsc::Sender<ToClient>,
     rx: &mut mpsc::Receiver<ToWrapper>,
 ) {
-    let status = match fields.get(0) {
+    let status = match fields.first() {
         None => Err(anyhow::Error::msg("Empty fields received from reader")),
         Some(s) => match s.parse() {
             Ok(In::TickPrice) => decode::tick_price_msg(&mut fields.into_iter(), wrapper)
