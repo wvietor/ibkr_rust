@@ -780,7 +780,7 @@ impl<W: 'static + Standalone> Client<indicators::Inactive<W>> {
     }
 }
 
-impl<W: 'static + Integrated> Client<indicators::Inactive<W>> {
+impl<W: Integrated> Client<indicators::Inactive<W>> {
     /// Initiates the main message loop and spawns all helper threads to manage the application.
     ///
     /// # Returns
@@ -792,7 +792,7 @@ impl<W: 'static + Integrated> Client<indicators::Inactive<W>> {
             process_start_api_callbacks(&mut self.status.client_rx).await;
         let c_loop_disconnect = disconnect.clone();
 
-        let mut client = Client {
+        let client = Client {
             mode: self.mode,
             host: self.host,
             port: self.port,
@@ -811,7 +811,7 @@ impl<W: 'static + Integrated> Client<indicators::Inactive<W>> {
                 req_id: 0_i64..,
             },
         };
-        self.status.wrapper.attach_client(&mut client);
+        self.status.wrapper.attach_client(client);
         self.status.wrapper.main().await;
 
         loop {
@@ -830,8 +830,8 @@ impl<W: 'static + Integrated> Client<indicators::Inactive<W>> {
         }
 
         Builder(Inner::Manual {
-            port: client.port,
-            address: client.address,
+            port: self.port,
+            address: self.address,
         })
     }
 }

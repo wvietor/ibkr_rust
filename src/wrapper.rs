@@ -26,7 +26,7 @@ pub trait Integrated: Wrapper {
     /// Attach a reference to the client to the underlying wrapper struct. This allows the wrapper
     /// methods to access the client using the [`Integrated::client`] method to respond to trading
     /// information.
-    fn attach_client(&mut self, client: &mut crate::client::ActiveClient);
+    fn attach_client(&mut self, client: crate::client::ActiveClient);
     /// Return a reference to the attached client.
     fn client(&mut self) -> &mut crate::client::ActiveClient;
     /// The main entry point for an [`Integrated`] application. This method is called immediately
@@ -61,7 +61,11 @@ pub trait Wrapper {
     /// The callback message that corresponds to the high/low prices over a period from [`crate::client::Client::req_market_data`]..
     async fn extreme_data(&mut self, req_id: i64, value: ExtremeValue);
     /// The callback message that corresponds to the results of options computations (implied volatility, greeks, etc.) from [`crate::client::Client::req_market_data`]..
-    async fn sec_option_computation(&mut self, req_id: i64, calc: Class<SecOptionCalculationSource>);
+    async fn sec_option_computation(
+        &mut self,
+        req_id: i64,
+        calc: Class<SecOptionCalculationSource>,
+    );
     /// The callback message that corresponds to the list of exchanges actively quoting the best bid / best offer / last traded prices from [`crate::client::Client::req_market_data`].
     async fn quoting_exchanges(&mut self, req_id: i64, quoting_exchanges: QuotingExchanges);
     /// The callback message that corresponds to the open interest of various derivatives contracts from [`crate::client::Client::req_market_data`].
@@ -107,7 +111,11 @@ pub trait Wrapper {
     /// The callback message containing information about the class of data that will be returned from [`crate::client::Client::req_market_data`].
     async fn market_data_class(&mut self, req_id: i64, class: payload::MarketDataClass);
     /// The callback message containing information about updating an existing order book from [`crate::client::Client::req_market_depth`].
-    async fn update_market_depth(&mut self, req_id: i64, operation: payload::market_depth::Operation);
+    async fn update_market_depth(
+        &mut self,
+        req_id: i64,
+        operation: payload::market_depth::Operation,
+    );
     /// The callback message containing a complete histogram from [`crate::client::Client::req_histogram_data`].
     async fn histogram(
         &mut self,
@@ -135,7 +143,13 @@ pub trait Wrapper {
     /// The callback message containing aggregate P&L information from [`crate::client::Client::req_pnl`].
     async fn pnl(&mut self, req_id: i64, pnl: Pnl);
     /// The callback message containing P&L information for a single position from [`crate::client::Client::req_single_position_pnl`].
-    async fn single_position_pnl(&mut self, req_id: i64, pnl: Pnl, position: f64, market_value: f64);
+    async fn single_position_pnl(
+        &mut self,
+        req_id: i64,
+        pnl: Pnl,
+        position: f64,
+        market_value: f64,
+    );
     /// The callback message indicating that all the information for a given account has been received.
     async fn account_download_end(&mut self, account_number: String);
     /// The callback message associated with account summary information from [`crate::client::Client::req_account_summary`].
