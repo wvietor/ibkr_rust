@@ -290,7 +290,6 @@ pub struct Pnl {
     pub realized: f64,
 }
 
-
 #[allow(non_snake_case, missing_docs)]
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct OrderDetails {

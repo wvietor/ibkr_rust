@@ -1,10 +1,11 @@
 use anyhow::Context;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
+use crate::account::{Tag, TagValue};
 use crate::payload::{
     market_depth::{CompleteEntry, Entry, Operation},
-    ExchangeId, HistogramEntry, Bar, BarCore, MarketDataClass, Pnl, Position,
-    PositionSummary, Tick
+    Bar, BarCore, ExchangeId, HistogramEntry, MarketDataClass, Pnl, Position, PositionSummary,
+    Tick,
 };
 use crate::tick::{
     Accessibility, AuctionData, CalculationResult, Class, Dividends, EtfNav, ExtremeValue, Ipo,
@@ -21,10 +22,9 @@ use crate::{
     currency::Currency,
     exchange::Routing,
     message::{ToClient, ToWrapper},
+    order::TimeInForce,
     wrapper::Wrapper,
-    order::TimeInForce
 };
-use crate::account::{Tag, TagValue};
 
 type Tx = tokio::sync::mpsc::Sender<ToClient>;
 type Rx = tokio::sync::mpsc::Receiver<ToWrapper>;
@@ -1143,7 +1143,8 @@ pub fn real_time_bars_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> a
             trade_count @ 0: i64
     );
     let core = BarCore {
-        datetime: NaiveDateTime::from_timestamp_opt(date_time, 0).ok_or(anyhow::Error::msg("Invalid timestamp"))?,
+        datetime: NaiveDateTime::from_timestamp_opt(date_time, 0)
+            .ok_or(anyhow::Error::msg("Invalid timestamp"))?,
         open,
         high,
         low,
@@ -1292,7 +1293,7 @@ pub fn account_summary_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> 
         Tag::HighestSeverity => TagValue::String(Tag::HighestSeverity, value),
         Tag::DayTradesRemaining => TagValue::Int(Tag::DayTradesRemaining, value.parse()?),
         Tag::Leverage => TagValue::Float(Tag::Leverage, value.parse()?),
-        t=> TagValue::Currency(t, value.parse()?, currency.parse()?),
+        t => TagValue::Currency(t, value.parse()?, currency.parse()?),
     };
     wrapper.account_summary(req_id, account_number, summary);
     Ok(())

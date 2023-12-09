@@ -377,7 +377,11 @@ impl std::str::FromStr for Tag {
             "HighestSeverity" => Self::HighestSeverity,
             "DayTradesRemaining" => Self::DayTradesRemaining,
             "Leverage" => Self::Leverage,
-            s => return Err(anyhow::Error::msg(format!("Invalid tag value encountered while parsing: {s}")))
+            s => {
+                return Err(anyhow::Error::msg(format!(
+                    "Invalid tag value encountered while parsing: {s}"
+                )))
+            }
         })
     }
 }

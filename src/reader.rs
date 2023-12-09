@@ -26,8 +26,8 @@ impl Reader {
     pub async fn run(mut self) -> Self {
         loop {
             tokio::select! {
-                _ = self.r_disconnect.cancelled() => {println!("Reader thread: disconnecting"); break self},
-                _ = async {
+                () = self.r_disconnect.cancelled() => {println!("Reader thread: disconnecting"); break self},
+                () = async {
                     if let Ok(Ok(len)) = self.r_reader.read_u32().await.map(usize::try_from) {
                         let mut buf = BytesMut::with_capacity(len);
                         if len == self.r_reader.read_buf(&mut buf).await.unwrap_or(0) {

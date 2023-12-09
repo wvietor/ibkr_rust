@@ -69,7 +69,6 @@ impl std::fmt::Display for ParseTimeInForceError {
 
 impl std::error::Error for ParseTimeInForceError {}
 
-
 impl FromStr for TimeInForce {
     type Err = ParseTimeInForceError;
 

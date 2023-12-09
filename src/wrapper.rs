@@ -1,7 +1,8 @@
 use crate::account::{Attribute, TagValue};
+use crate::client::indicators::Active;
 use crate::payload::{Pnl, Position, PositionSummary};
 use crate::{
-    payload::{self, ExchangeId, HistogramEntry, Bar, Tick},
+    payload::{self, Bar, ExchangeId, HistogramEntry, Tick},
     tick::{
         self, Accessibility, AuctionData, Class, Dividends, ExtremeValue, Ipo, MarkPrice, News,
         OpenInterest, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
@@ -11,8 +12,27 @@ use crate::{
 };
 use chrono::{NaiveDateTime, NaiveTime};
 
+/// A standalone [`Wrapper`], which defines an application in which the client and wrapper are each
+/// on their own thread. This means that trading behavior is defined in the scope in which the
+/// client is created, not in the wrapper methods.
+///
+/// Note that this approach requires inter-thread communication between the wrapper and the client.
+pub trait Standalone: Wrapper + Send + Sync {}
+
+/// An integrated [`Wrapper`], which defines an application in which the client and wrapper share
+/// the same thread. This allows the client to be invoked directly by the wrapper, without the
+/// need for inter-thread communication.
+pub trait Integrated: Wrapper {
+    /// Attach a reference to the client to the underlying wrapper struct. This allows the wrapper
+    /// methods to access the client using the [`Integrated::client`] method to respond to trading
+    /// information.
+    fn attach_client(&mut self, client: &mut crate::client::Client<Active>);
+    /// Return a reference to the attached client.
+    fn client(&mut self) -> &mut crate::client::Client<Active>;
+}
+
 /// Contains the "callback functions" that correspond to the requests made by a [`crate::client::Client`].
-pub trait Wrapper: Send + Sync {
+pub trait Wrapper {
     /// The callback that corresponds to any error that encounters after an API request.
     ///
     /// Errors sent by the TWS are received here.
