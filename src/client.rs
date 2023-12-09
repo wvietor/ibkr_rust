@@ -268,6 +268,10 @@ impl Builder {
 // === Status Trait Definition ===
 // ===============================
 
+#[allow(clippy::module_name_repetitions)]
+/// An active client, which can request information from IBKR trading systems.
+pub type ActiveClient = Client<indicators::Active>;
+
 pub(crate) mod indicators {
     use std::collections::HashSet;
 

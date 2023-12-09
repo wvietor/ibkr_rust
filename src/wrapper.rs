@@ -1,5 +1,4 @@
 use crate::account::{Attribute, TagValue};
-use crate::client::indicators::Active;
 use crate::payload::{Pnl, Position, PositionSummary};
 use crate::{
     payload::{self, Bar, ExchangeId, HistogramEntry, Tick},
@@ -26,9 +25,9 @@ pub trait Integrated: Wrapper {
     /// Attach a reference to the client to the underlying wrapper struct. This allows the wrapper
     /// methods to access the client using the [`Integrated::client`] method to respond to trading
     /// information.
-    fn attach_client(&mut self, client: &mut crate::client::Client<Active>);
+    fn attach_client(&mut self, client: &mut crate::client::ActiveClient);
     /// Return a reference to the attached client.
-    fn client(&mut self) -> &mut crate::client::Client<Active>;
+    fn client(&mut self) -> &mut crate::client::ActiveClient;
 }
 
 /// Contains the "callback functions" that correspond to the requests made by a [`crate::client::Client`].
