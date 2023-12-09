@@ -126,7 +126,7 @@ pub trait Wrapper {
     async fn live_tick(&mut self, req_id: i64, tick: Tick);
     /// The callback message containing account attributes from [`crate::client::Client::req_account_updates`].
     async fn account_attribute(&mut self, attribute: Attribute, account_number: String);
-    /// The callback message containing information about a single [`crate::payload::Position`] from [`crate::client::Client::req_positions`].
+    /// The callback message containing information about a single [`Position`] from [`crate::client::Client::req_positions`].
     async fn position(&mut self, position: Position);
     /// The callback message containing information about the time at which [`Wrapper::account_attribute`] data is valid.
     async fn account_attribute_time(&mut self, time: NaiveTime);

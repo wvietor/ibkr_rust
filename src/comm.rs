@@ -81,7 +81,7 @@ impl Writer {
 #[derive(Debug, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub(crate) struct SerializeMessageError(String);
 
-impl std::fmt::Display for SerializeMessageError {
+impl Display for SerializeMessageError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Failed to serialize message {}", self.0)
     }
@@ -98,15 +98,15 @@ impl serde::ser::Error for SerializeMessageError {
     }
 }
 
-impl From<std::io::Error> for SerializeMessageError {
+impl From<Error> for SerializeMessageError {
     fn from(value: Error) -> Self {
         Self(value.to_string())
     }
 }
 
-impl From<SerializeMessageError> for std::io::Error {
+impl From<SerializeMessageError> for Error {
     fn from(value: SerializeMessageError) -> Self {
-        std::io::Error::new(std::io::ErrorKind::InvalidData, value.0)
+        Error::new(std::io::ErrorKind::InvalidData, value.0)
     }
 }
 
