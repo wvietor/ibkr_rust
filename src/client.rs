@@ -812,6 +812,7 @@ impl<W: 'static + Integrated> Client<indicators::Inactive<W>> {
             },
         };
         self.status.wrapper.attach_client(&mut client);
+        self.status.wrapper.main().await;
 
         loop {
             if c_loop_disconnect.is_cancelled() {
