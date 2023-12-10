@@ -1660,7 +1660,7 @@ impl Client<indicators::Active> {
     ///
     /// # Returns
     /// Returns the unique ID associated with the request.
-    pub async fn req_place_order<S, E>(&mut self, order: &Order<'_, S, E>) -> IdResult
+    pub async fn req_place_order<S, E>(&mut self, order: &Order<S, E>) -> IdResult
     where
         S: Security,
         E: Executable<S>,
@@ -1691,7 +1691,7 @@ impl Client<indicators::Active> {
     ///
     /// # Returns
     /// Returns the unique ID associated with the request.
-    pub async fn req_modify_order<S, E>(&mut self, order: &Order<'_, S, E>, id: i64) -> IdResult
+    pub async fn req_modify_order<S, E>(&mut self, order: &Order<S, E>, id: i64) -> IdResult
     where
         S: Security,
         E: Executable<S>,
@@ -1715,10 +1715,7 @@ impl Client<indicators::Active> {
     ///
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
-    pub async fn cancel_order<S>(&mut self, id: i64) -> ReqResult
-    where
-        S: Security,
-    {
+    pub async fn cancel_order(&mut self, id: i64) -> ReqResult {
         const VERSION: u8 = 1;
 
         self.writer

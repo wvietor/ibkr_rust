@@ -1,25 +1,6 @@
 use core::str::FromStr;
 
 // === Type definitions ===
-/*
-           Self::AustralianDollar => "AUD",
-           Self::BritishPound => "GBP",
-           Self::CanadianDollar => "CAD",
-           Self::ChineseYuan => "CNH",
-           Self::DanishKrone => "DKK",
-           Self::Euro => "EUR",
-           Self::HongKongDollar => "HKD",
-           Self::IndianRupee => "INR",
-           Self::IsraeliNewShekel => "ILS",
-           Self::JapaneseYen => "JPY",
-           Self::KoreanWon => "KRW",
-           Self::MexicanPeso => "MXN",
-           Self::NewZealandDollar => "NZD",
-           Self::NorwegianKrone => "NOK",
-           Self::SwedishKrona => "SEK",
-           Self::SwissFranc => "CHF",
-           Self::USDollar => "USD",
-*/
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 /// Represents all the possible currencies available for trading at IBKR.
 pub enum Currency {

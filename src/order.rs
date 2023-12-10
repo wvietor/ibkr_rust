@@ -3,6 +3,8 @@ use serde::ser::SerializeTuple;
 use serde::{Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt::Formatter;
+use std::ops::Deref;
+use std::rc::Rc;
 use std::str::FromStr;
 
 // ==============================================
@@ -85,27 +87,27 @@ impl FromStr for TimeInForce {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 /// A generic order to buy or sell a security `S`: `Security` according to the parameters specified by the generic
 /// parameter `E`: `Executable`.
-pub enum Order<'o, S: Security, E: Executable<S>> {
+pub enum Order<S: Security, E: Executable<S>> {
     /// An order to Buy `S`: `Security`] according to the method described by `E`: `Executable`.
     Buy {
         /// The security to buy.
-        security: &'o S,
+        security: Rc<S>,
         /// The execution method to use.
-        execute_method: E,
+        execute_method: Rc<E>,
     },
     /// An order to Sell `S`: `Security` according to the method described by `E`: `Executable`.
     Sell {
         /// The security to sell.
-        security: &'o S,
+        security: Rc<S>,
         /// The execution method to use.
-        execute_method: E,
+        execute_method: Rc<E>,
     },
 }
 
-impl<Sec, E> Serialize for Order<'_, Sec, E>
+impl<Sec, E> Serialize for Order<Sec, E>
 where
     Sec: Security,
     E: Executable<Sec>,
@@ -120,25 +122,25 @@ where
             Self::Sell { execute_method, .. } => ("SELL", execute_method),
         };
         ser.serialize_element(action)?;
-        serialize_executable(exec, &mut ser)?;
+        serialize_executable(Rc::deref(exec), &mut ser)?;
         ser.end()
     }
 }
 
-impl<S: Security, E: Executable<S>> Order<'_, S, E> {
+impl<S: Security, E: Executable<S>> Order<S, E> {
     #[must_use]
     /// Return the order's `security`
-    pub const fn get_security(&self) -> &S {
+    pub fn get_security(&self) -> &S {
         match self {
-            Self::Buy { security, .. } | Self::Sell { security, .. } => security,
+            Self::Buy { security, .. } | Self::Sell { security, .. } => Rc::deref(security),
         }
     }
 
     #[must_use]
     /// Return the order's `execute_method`
-    pub const fn get_execute_method(&self) -> &E {
+    pub fn get_execute_method(&self) -> &E {
         match self {
-            Self::Buy { execute_method, .. } | Self::Sell { execute_method, .. } => execute_method,
+            Self::Buy { execute_method, .. } | Self::Sell { execute_method, .. } => Rc::deref(execute_method),
         }
     }
 }
