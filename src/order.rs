@@ -140,7 +140,9 @@ impl<S: Security, E: Executable<S>> Order<S, E> {
     /// Return the order's `execute_method`
     pub fn get_execute_method(&self) -> &E {
         match self {
-            Self::Buy { execute_method, .. } | Self::Sell { execute_method, .. } => Rc::deref(execute_method),
+            Self::Buy { execute_method, .. } | Self::Sell { execute_method, .. } => {
+                Rc::deref(execute_method)
+            }
         }
     }
 }
