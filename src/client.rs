@@ -10,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 use crate::account::Tag;
 use crate::comm::Writer;
 use crate::execution::Filter;
-use crate::wrapper::{Integrated, Standalone};
+use crate::wrapper::{Borrowed, Owned, Standalone};
 use crate::{
     constants,
     contract::{ContractId, Security},
@@ -726,67 +726,17 @@ impl<W: 'static + Wrapper> Client<indicators::Inactive<W>> {
         self.writer.send().await?;
         Ok(())
     }
-}
 
-impl<W: 'static + Standalone> Client<indicators::Inactive<W>> {
-    /// Initiates the main message loop and spawns all helper threads to manage the application.
-    ///
-    /// # Returns
-    /// An active client that can be used to make useful queries, process market data, place
-    /// orders, etc.
-    pub async fn run_standalone(mut self) -> Client<indicators::Active> {
-        let (disconnect, queue, r_thread) = spawn_reader_thread(self.status.reader);
-        let c_loop_disconnect = disconnect.clone();
-
-        tokio::spawn(async move {
-            let (mut wrapper, mut tx, mut rx) = (
-                self.status.wrapper,
-                self.status.wrapper_tx,
-                self.status.wrapper_rx,
-            );
-            loop {
-                tokio::select! {
-                    () = c_loop_disconnect.cancelled() => {println!("Client loop: disconnecting"); break},
-                    () = async {
-                            if let Some(fields) = queue.pop() {
-                                decode_msg(fields, &mut wrapper, &mut tx, &mut rx).await;
-                            }
-                    } => (),
-                }
-            }
-        });
-
-        let (managed_accounts, valid_id) =
-            process_start_api_callbacks(&mut self.status.client_rx).await;
-        Client {
-            mode: self.mode,
-            host: self.host,
-            port: self.port,
-            address: self.address,
-            client_id: self.client_id,
-            server_version: self.server_version,
-            conn_time: self.conn_time,
-            writer: self.writer,
-            status: indicators::Active {
-                r_thread,
-                disconnect,
-                tx: self.status.client_tx,
-                rx: self.status.client_rx,
-                managed_accounts,
-                order_id: valid_id,
-                req_id: 0_i64..,
-            },
-        }
-    }
-}
-
-impl<W: Integrated> Client<indicators::Inactive<W>> {
-    /// Initiates the main message loop and spawns all helper threads to manage the application.
-    ///
-    /// # Returns
-    /// This function does not return until [`Client::disconnect`] is called in a [`Wrapper`] method. When such a call occurs,
-    /// a [`Builder`] is returned, which can be used to construct a new [`Client`].
-    pub async fn run_integrated(mut self) -> Builder {
+    async fn into_active(
+        mut self,
+    ) -> (
+        Client<indicators::Active>,
+        W,
+        mpsc::Sender<ToClient>,
+        mpsc::Receiver<ToWrapper>,
+        Arc<SegQueue<Vec<String>>>,
+        CancellationToken,
+    ) {
         let (disconnect, queue, r_thread) = spawn_reader_thread(self.status.reader);
         let (managed_accounts, valid_id) =
             process_start_api_callbacks(&mut self.status.client_rx).await;
@@ -811,28 +761,96 @@ impl<W: Integrated> Client<indicators::Inactive<W>> {
                 req_id: 0_i64..,
             },
         };
-        self.status.wrapper.attach_client(client);
-        self.status.wrapper.main().await;
+        (
+            client,
+            self.status.wrapper,
+            self.status.wrapper_tx,
+            self.status.wrapper_rx,
+            queue,
+            c_loop_disconnect,
+        )
+    }
+}
+
+impl<W: 'static + Standalone> Client<indicators::Inactive<W>> {
+    /// Initiates the main message loop and spawns all helper threads to manage the application.
+    ///
+    /// # Returns
+    /// An active client that can be used to make useful queries, process market data, place
+    /// orders, etc.
+    pub async fn run_standalone(self) -> Client<indicators::Active> {
+        let (client, mut wrapper, mut tx, mut rx, queue, c_loop_disconnect) =
+            self.into_active().await;
+
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    () = c_loop_disconnect.cancelled() => {println!("Client loop: disconnecting"); break},
+                    () = async {
+                            if let Some(fields) = queue.pop() {
+                                decode_msg(fields, &mut wrapper, &mut tx, &mut rx).await;
+                            }
+                    } => (),
+                }
+            }
+        });
+
+        client
+    }
+}
+
+impl<W: 'static + Owned> Client<indicators::Inactive<W>> {
+    /// Initiates the main message loop and spawns all helper threads to manage the application.
+    ///
+    /// # Returns
+    /// This function does not return until [`Client::disconnect`] is called in an [`Owned`] method.
+    /// When such a call occurs, a [`Builder`] is returned, which can be used to construct a new [`Client`].
+    pub async fn run_owned(self) -> Builder {
+        let (port, address) = (self.get_port(), self.get_address());
+        let (client, mut wrapper, mut tx, mut rx, queue, c_loop_disconnect) =
+            self.into_active().await;
+
+        wrapper.attach_client(client);
+        wrapper.init().await;
 
         loop {
             if c_loop_disconnect.is_cancelled() {
                 break;
             }
             if let Some(fields) = queue.pop() {
-                decode_msg(
-                    fields,
-                    &mut self.status.wrapper,
-                    &mut self.status.wrapper_tx,
-                    &mut self.status.wrapper_rx,
-                )
-                .await;
+                decode_msg(fields, &mut wrapper, &mut tx, &mut rx).await;
             }
+            wrapper.recurring().await;
         }
 
-        Builder(Inner::Manual {
-            port: self.port,
-            address: self.address,
-        })
+        Builder(Inner::Manual { port, address })
+    }
+}
+
+impl<W: 'static + Borrowed> Client<indicators::Inactive<W>> {
+    /// Initiates the main message loop and spawns all helper threads to manage the application.
+    ///
+    /// # Returns
+    /// This function does not return until [`Client::disconnect`] is called in a [`Borrowed`] method.
+    /// When such a call occurs, a [`Builder`] is returned, which can be used to construct a new [`Client`].
+    pub async fn run_borrowed(self) -> Builder {
+        let (port, address) = (self.get_port(), self.get_address());
+        let (mut client, mut wrapper, mut tx, mut rx, queue, c_loop_disconnect) =
+            self.into_active().await;
+
+        wrapper.init(&mut client).await;
+
+        loop {
+            if c_loop_disconnect.is_cancelled() {
+                break;
+            }
+            if let Some(fields) = queue.pop() {
+                decode_msg(fields, &mut wrapper, &mut tx, &mut rx).await;
+            }
+            wrapper.recurring(&mut client).await;
+        }
+
+        Builder(Inner::Manual { port, address })
     }
 }
 

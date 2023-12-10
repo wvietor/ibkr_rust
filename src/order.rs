@@ -94,14 +94,14 @@ pub enum Order<'o, S: Security, E: Executable<S>> {
         /// The security to buy.
         security: &'o S,
         /// The execution method to use.
-        execute_method: &'o E,
+        execute_method: E,
     },
     /// An order to Sell `S`: `Security` according to the method described by `E`: `Executable`.
     Sell {
         /// The security to sell.
         security: &'o S,
         /// The execution method to use.
-        execute_method: &'o E,
+        execute_method: E,
     },
 }
 
@@ -115,7 +115,7 @@ where
         S: Serializer,
     {
         let mut ser = serializer.serialize_tuple(1 + crate::constants::ORDER_TUPLE_SIZE)?;
-        let (action, exec) = match *self {
+        let (action, exec) = match self {
             Self::Buy { execute_method, .. } => ("BUY", execute_method),
             Self::Sell { execute_method, .. } => ("SELL", execute_method),
         };

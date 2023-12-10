@@ -22,16 +22,27 @@ pub trait Standalone: Wrapper + Send + Sync {}
 /// An integrated [`Wrapper`], which defines an application in which the client and wrapper share
 /// the same thread. This allows the client to be invoked directly by the wrapper, without the
 /// need for inter-thread communication.
-pub trait Integrated: Wrapper {
-    /// Attach a reference to the client to the underlying wrapper struct. This allows the wrapper
-    /// methods to access the client using the [`Integrated::client`] method to respond to trading
-    /// information.
+pub trait Owned: Wrapper {
+    /// Attach the client to the underlying wrapper struct. This will make the client accessible
+    /// for use in any wrapper method.
     fn attach_client(&mut self, client: crate::client::ActiveClient);
-    /// Return a reference to the attached client.
-    fn client(&mut self) -> &mut crate::client::ActiveClient;
-    /// The main entry point for an [`Integrated`] application. This method is called immediately
-    /// after the client is successfully connected.
-    async fn main(&mut self);
+    /// The main entry point for an [`Owned`] application. This method is called exactly once
+    /// immediately after the client is successfully connected.
+    async fn init(&mut self);
+    /// The method that is executed during each iteration of the main client loop.
+    async fn recurring(&mut self);
+}
+
+/// An integrated [`Wrapper`], which defines an application in which the client and wrapper share
+/// the same thread. However, unlike an [`Owned`] wrapper, in this case, implementors do not take
+/// ownership of the client; instead, they receive a reference to it in each pass of the main client
+/// loop via the [`Borrowed::recurring`] method.
+pub trait Borrowed: Wrapper {
+    /// The main entry point for a [`Borrowed`] application. This method is called exactly once
+    /// immediately after the client is successfully connected.
+    async fn init(&mut self, client: &mut crate::client::ActiveClient);
+    /// The method that is executed during each iteration of the main client loop.
+    async fn recurring(&mut self, client: &mut crate::client::ActiveClient);
 }
 
 /// Contains the "callback functions" that correspond to the requests made by a [`crate::client::Client`].
