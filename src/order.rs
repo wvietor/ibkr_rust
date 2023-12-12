@@ -44,21 +44,6 @@ pub enum TimeInForce {
     Dtc,
 }
 
-impl ToString for TimeInForce {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Day => "DAY",
-            Self::Gtc => "GTC",
-            Self::Ioc => "IOC",
-            // Self::Gtd => "GTD",
-            // Self::Opg => "OPG",
-            Self::Fok => "FOK",
-            Self::Dtc => "DTC",
-        }
-        .to_owned()
-    }
-}
-
 #[derive(Debug, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 /// A basic error type that represents an invalid [`TimeInForce`]
 pub struct ParseTimeInForceError(String);

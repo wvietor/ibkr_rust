@@ -164,12 +164,6 @@ pub enum Attribute {
     WhatIfPMEnabled(bool),
 }
 
-impl ToString for Tag {
-    fn to_string(&self) -> String {
-        String::new()
-    }
-}
-
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
 /// The particular account groups managed by a given client.
 pub enum Group {
@@ -177,16 +171,6 @@ pub enum Group {
     All,
     /// A specific account.
     Name(String),
-}
-
-impl ToString for Group {
-    fn to_string(&self) -> String {
-        match self {
-            Self::All => "All",
-            Self::Name(s) => s,
-        }
-        .to_owned()
-    }
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]

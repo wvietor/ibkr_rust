@@ -46,35 +46,10 @@ pub enum ContractType {
     //StructuredProduct,
 }
 
-impl ToString for ContractType {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Forex => "CASH",
-            Self::Crypto => "CRYPTO",
-            Self::Stock => "STK",
-            Self::Index => "IND",
-            Self::SecFuture => "FUT",
-            Self::SecOption => "OPT",
-            Self::Commodity => "CMDTY",
-        }
-        .to_owned()
-    }
-}
-
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq, Hash, Serialize)]
 pub enum OrderSide {
     #[serde(rename(serialize = "BUY"))]
     Buy,
     #[serde(rename(serialize = "SELL"))]
     Sell,
-}
-
-impl ToString for OrderSide {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Buy => "BUY",
-            Self::Sell => "SELL",
-        }
-        .to_owned()
-    }
 }

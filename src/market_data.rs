@@ -161,27 +161,6 @@ pub mod historical_bar {
         }
     }
 
-    impl ToString for EndDateTime {
-        fn to_string(&self) -> String {
-            match *self {
-                Self::Past(dt) => dt.format("%Y%m%d %H%M%S").to_string(),
-                Self::Present => String::new(),
-            }
-        }
-    }
-
-    impl ToString for Duration {
-        fn to_string(&self) -> String {
-            match *self {
-                Self::Second(s) => format!("{s} S"),
-                Self::Day(d) => format!("{d} D"),
-                Self::Week(w) => format!("{w} W"),
-                Self::Month(m) => format!("{m} M"),
-                Self::Year(y) => format!("{y} Y"),
-            }
-        }
-    }
-
     impl Serialize for Duration {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
@@ -195,41 +174,6 @@ pub mod historical_bar {
                 Self::Year(y) => format!("{y} Y"),
             }
             .serialize(serializer)
-        }
-    }
-
-    impl ToString for Size {
-        fn to_string(&self) -> String {
-            match *self {
-                Self::Seconds(s) => match s {
-                    SecondSize::One => "1 secs",
-                    SecondSize::Five => "5 secs",
-                    SecondSize::Ten => "10 secs",
-                    SecondSize::Fifteen => "15 secs",
-                    SecondSize::Thirty => "30 secs",
-                },
-                Self::Minutes(m) => match m {
-                    MinuteSize::One => "1 min",
-                    MinuteSize::Two => "2 mins",
-                    MinuteSize::Three => "3 mins",
-                    MinuteSize::Five => "5 mins",
-                    MinuteSize::Ten => "10 mins",
-                    MinuteSize::Fifteen => "15 mins",
-                    MinuteSize::Twenty => "20 mins",
-                    MinuteSize::Thirty => "30 mins",
-                },
-                Self::Hours(h) => match h {
-                    HourSize::One => "1 hour",
-                    HourSize::Two => "2 hours",
-                    HourSize::Three => "3 hours",
-                    HourSize::Four => "4 hours",
-                    HourSize::Eight => "8 hours",
-                },
-                Self::Day => "1 day",
-                Self::Week => "1 week",
-                Self::Month => "1 month",
-            }
-            .to_owned()
         }
     }
 
@@ -421,12 +365,6 @@ pub mod historical_ticks {
         }
     }
 
-    impl ToString for NumberOfTicks {
-        fn to_string(&self) -> String {
-            self.0.to_string()
-        }
-    }
-
     impl Serialize for TimeStamp {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
@@ -491,19 +429,6 @@ pub mod histogram {
     }
 
     // === Type implementations ===
-
-    impl ToString for Duration {
-        #[inline]
-        fn to_string(&self) -> String {
-            match *self {
-                Self::Second(s) => format!("{s} seconds"),
-                Self::Day(d) => format!("{d} days"),
-                Self::Week(w) => format!("{w} weeks"),
-                Self::Month(m) => format!("{m} months"),
-                Self::Year(y) => format!("{y} years"),
-            }
-        }
-    }
 
     impl Serialize for Duration {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -594,28 +519,6 @@ pub mod live_data {
     pub struct ParseClassError(String);
 
     // === Type implementations ===
-
-    impl ToString for RefreshType {
-        fn to_string(&self) -> String {
-            match self {
-                Self::Snapshot => "1",
-                Self::Streaming => "0",
-            }
-            .to_owned()
-        }
-    }
-
-    impl ToString for Class {
-        fn to_string(&self) -> String {
-            match self {
-                Self::Live => "1",
-                Self::Frozen => "2",
-                Self::Delayed => "3",
-                Self::DelayedFrozen => "4",
-            }
-            .to_owned()
-        }
-    }
 
     impl std::str::FromStr for Class {
         type Err = ParseClassError;
