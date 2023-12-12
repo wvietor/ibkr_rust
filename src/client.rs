@@ -690,22 +690,6 @@ async fn decode_msg<W: Wrapper>(
     }
 }
 
-#[inline]
-#[allow(clippy::unwrap_used, clippy::missing_panics_doc)]
-async fn process_start_api_callbacks(
-    rx: &mut mpsc::Receiver<ToClient>,
-) -> (std::collections::HashSet<String>, std::ops::RangeFrom<i64>) {
-    let (mut managed_accounts, mut valid_id) = (None, None);
-    while managed_accounts.is_none() || valid_id.is_none() {
-        match rx.recv().await {
-            Some(ToClient::StartApiManagedAccts(accounts)) => managed_accounts = Some(accounts),
-            Some(ToClient::StartApiNextValidId(id)) => valid_id = Some(id..),
-            _ => (),
-        }
-    }
-    (managed_accounts.unwrap(), valid_id.unwrap())
-}
-
 impl<W: 'static + Wrapper> Client<indicators::Inactive<W>> {
     // ==========================================
     // === Methods That Initiate the API Loop ===
@@ -727,6 +711,7 @@ impl<W: 'static + Wrapper> Client<indicators::Inactive<W>> {
         Ok(())
     }
 
+    #[allow(clippy::unwrap_used, clippy::missing_panics_doc)]
     async fn into_active(
         mut self,
     ) -> (
@@ -738,8 +723,28 @@ impl<W: 'static + Wrapper> Client<indicators::Inactive<W>> {
         CancellationToken,
     ) {
         let (disconnect, queue, r_thread) = spawn_reader_thread(self.status.reader);
-        let (managed_accounts, valid_id) =
-            process_start_api_callbacks(&mut self.status.client_rx).await;
+
+        let (mut managed_accounts, mut valid_id) = (None, None);
+        while managed_accounts.is_none() || valid_id.is_none() {
+            if let Some(fields) = queue.pop() {
+                decode_msg(
+                    fields,
+                    &mut self.status.wrapper,
+                    &mut self.status.wrapper_tx,
+                    &mut self.status.wrapper_rx,
+                )
+                .await;
+                match self.status.client_rx.recv().await {
+                    Some(ToClient::StartApiManagedAccts(accounts)) => {
+                        managed_accounts = Some(accounts);
+                    }
+                    Some(ToClient::StartApiNextValidId(id)) => valid_id = Some(id..),
+                    _ => (),
+                }
+            }
+        }
+        let (managed_accounts, valid_id) = (managed_accounts.unwrap(), valid_id.unwrap());
+
         let c_loop_disconnect = disconnect.clone();
 
         let client = Client {
