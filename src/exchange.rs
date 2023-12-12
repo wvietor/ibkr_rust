@@ -455,7 +455,6 @@ impl FromStr for Routing {
     }
 }
 
-
 impl FromStr for Primary {
     type Err = ParseExchangeError;
 
