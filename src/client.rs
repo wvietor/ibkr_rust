@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tokio::net::tcp::OwnedReadHalf;
 use tokio::task::JoinHandle;
 use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
+use tokio::runtime::Runtime;
 use tokio_util::sync::CancellationToken;
 
 use crate::account::Tag;
@@ -819,13 +820,15 @@ impl<W: 'static + Owned> Client<indicators::Inactive<W>> {
         wrapper.init().await;
 
         loop {
-            if c_loop_disconnect.is_cancelled() {
-                break;
-            }
-            if let Some(fields) = queue.pop() {
-                decode_msg(fields, &mut wrapper, &mut tx, &mut rx).await;
-            }
-            wrapper.recurring().await;
+            tokio::select! {
+                    () = c_loop_disconnect.cancelled() => {println!("Client loop: disconnecting"); break},
+                    () = async {
+                            if let Some(fields) = queue.pop() {
+                                decode_msg(fields, &mut wrapper, &mut tx, &mut rx).await;
+                            }
+                    wrapper.recurring().await;
+                    } => (),
+                }
         }
 
         Builder(Inner::Manual { port, address })
@@ -846,13 +849,15 @@ impl<W: 'static + Borrowed> Client<indicators::Inactive<W>> {
         wrapper.init(&mut client).await;
 
         loop {
-            if c_loop_disconnect.is_cancelled() {
-                break;
-            }
-            if let Some(fields) = queue.pop() {
-                decode_msg(fields, &mut wrapper, &mut tx, &mut rx).await;
-            }
-            wrapper.recurring(&mut client).await;
+            tokio::select! {
+                    () = c_loop_disconnect.cancelled() => {println!("Client loop: disconnecting"); break},
+                    () = async {
+                            if let Some(fields) = queue.pop() {
+                                decode_msg(fields, &mut wrapper, &mut tx, &mut rx).await;
+                            }
+                    wrapper.recurring(&mut client).await;
+                    } => (),
+                }
         }
 
         Builder(Inner::Manual { port, address })
