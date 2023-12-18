@@ -1,7 +1,7 @@
 use anyhow::Context;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
-use crate::account::{Tag, TagValue};
+use crate::account::{self, Tag, TagValue};
 use crate::payload::{
     market_depth::{CompleteEntry, Entry, Operation},
     Bar, BarCore, ExchangeId, HistogramEntry, MarketDataClass, Pnl, Position, PositionSummary,
@@ -13,12 +13,11 @@ use crate::tick::{
     RealTimeVolumeBase, SecOptionCalculationResults, SecOptionCalculationSource,
     SecOptionCalculations, SecOptionVolume, Size, SummaryVolume, TimeStamp, Volatility, Yield,
 };
-use crate::{
-    account,
-    contract::{
+use crate::contract::{
         Commodity, Contract, ContractId, Crypto, Forex, Index, SecFuture, SecOption,
         SecOptionInner, SecurityId, Stock,
-    },
+};
+use crate::{
     currency::Currency,
     exchange::Routing,
     message::{ToClient, ToWrapper},
@@ -88,7 +87,7 @@ macro_rules! impl_seg_variants {
 }
 
 #[inline]
-pub fn tick_price_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn tick_price_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             req_id @ 2: i64,
@@ -126,9 +125,9 @@ pub fn tick_price_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyho
                 (14, _) => (Price::Open(price), None),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.price_data(req_id, Class::Live(price));
+            wrapper.price_data(req_id, Class::Live(price)).await;
             if let Some(sz) = size {
-                wrapper.size_data(req_id, Class::Live(sz));
+                wrapper.size_data(req_id, Class::Live(sz)).await;
             }
         }
         15..=20 => {
@@ -141,10 +140,10 @@ pub fn tick_price_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyho
                 20 => ExtremeValue::High(Period::FiftyTwoWeek(price)),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.extreme_data(req_id, value);
+            wrapper.extreme_data(req_id, value).await;
         }
         35 => {
-            wrapper.auction(req_id, AuctionData::Price(price));
+            wrapper.auction(req_id, AuctionData::Price(price)).await;
         }
         37 | 79 => {
             let mark = match tick_type {
@@ -152,7 +151,7 @@ pub fn tick_price_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyho
                 79 => MarkPrice::Slow(price),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.mark_price(req_id, mark);
+            wrapper.mark_price(req_id, mark).await;
         }
         50..=52 => {
             let yld = match tick_type {
@@ -161,10 +160,10 @@ pub fn tick_price_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyho
                 52 => Yield::Last(price),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.yield_data(req_id, yld);
+            wrapper.yield_data(req_id, yld).await;
         }
         57 => {
-            wrapper.price_data(req_id, Class::Live(Price::LastRthTrade(price)));
+            wrapper.price_data(req_id, Class::Live(Price::LastRthTrade(price))).await;
         }
         66..=68 | 72 | 73 | 75 | 76 => {
             let (price, size) = match (tick_type, size) {
@@ -180,9 +179,9 @@ pub fn tick_price_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyho
                 (76, _) => (Price::Open(price), None),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.price_data(req_id, Class::Delayed(price));
+            wrapper.price_data(req_id, Class::Delayed(price)).await;
             if let Some(sz) = size {
-                wrapper.size_data(req_id, Class::Delayed(sz));
+                wrapper.size_data(req_id, Class::Delayed(sz)).await;
             }
         }
         92..=99 => {
@@ -197,7 +196,7 @@ pub fn tick_price_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyho
                 99 => EtfNav::Low(price),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.etf_nav(req_id, nav);
+            wrapper.etf_nav(req_id, nav).await;
         }
         t => {
             return Err(anyhow::Error::msg(format!(
@@ -209,25 +208,25 @@ pub fn tick_price_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyho
 }
 
 #[inline]
-pub fn tick_size_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn tick_size_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             req_id @ 2: i64,
             tick_type @ 0: u16,
             value @ 0: f64
     );
-    decode_generic_tick_msg(req_id, tick_type, value, wrapper)
+    decode_generic_tick_msg(req_id, tick_type, value, wrapper).await
 }
 
 #[inline]
-pub fn order_status_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn order_status_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
 
 #[inline]
 // todo: Implement a proper Error Enum
-pub fn err_msg_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn err_msg_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             req_id @ 2: i64,
@@ -235,12 +234,12 @@ pub fn err_msg_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::
             error_string @ 0: String,
             advanced_order_reject_json @ 0: String
     );
-    wrapper.error(req_id, error_code, error_string, advanced_order_reject_json);
+    wrapper.error(req_id, error_code, error_string, advanced_order_reject_json).await;
     Ok(())
 }
 
 #[inline]
-pub fn open_order_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn open_order_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             order_id @ 1: i64,
@@ -256,7 +255,7 @@ pub fn open_order_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyho
 }
 
 #[inline]
-pub fn acct_value_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn acct_value_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             name @ 2: String,
@@ -478,12 +477,12 @@ pub fn acct_value_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyho
             )))
         }
     };
-    wrapper.account_attribute(attribute, account_number);
+    wrapper.account_attribute(attribute, account_number).await;
     Ok(())
 }
 
 #[inline]
-pub fn portfolio_value_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn portfolio_value_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             contract_id @ 2: ContractId,
@@ -509,7 +508,7 @@ pub fn portfolio_value_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> 
 }
 
 #[inline]
-pub fn acct_update_time_msg<W: Wrapper>(
+pub async fn acct_update_time_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -517,7 +516,7 @@ pub fn acct_update_time_msg<W: Wrapper>(
         fields =>
             timestamp @ 2: String
     );
-    wrapper.account_attribute_time(NaiveTime::parse_from_str(timestamp.as_str(), "%H:%M")?);
+    wrapper.account_attribute_time(NaiveTime::parse_from_str(timestamp.as_str(), "%H:%M")?).await;
     Ok(())
 }
 
@@ -744,13 +743,13 @@ pub(crate) async fn contract_data_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn execution_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn execution_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
 
 #[inline]
-pub fn market_depth_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn market_depth_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             req_id @ 1: i64,
@@ -764,12 +763,12 @@ pub fn market_depth_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> any
     let entry = CompleteEntry::Ordinary(Entry::try_from((side, position, price, size))?);
     let operation = Operation::try_from((operation, entry))?;
 
-    wrapper.update_market_depth(req_id, operation);
+    wrapper.update_market_depth(req_id, operation).await;
     Ok(())
 }
 
 #[inline]
-pub fn market_depth_l2_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn market_depth_l2_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             req_id @ 2: i64,
@@ -799,12 +798,12 @@ pub fn market_depth_l2_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> 
     };
     let operation = Operation::try_from((operation, entry))?;
 
-    wrapper.update_market_depth(req_id, operation);
+    wrapper.update_market_depth(req_id, operation).await;
     Ok(())
 }
 
 #[inline]
-pub fn news_bulletins_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn news_bulletins_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
@@ -828,13 +827,13 @@ pub(crate) async fn managed_accts_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn receive_fa_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn receive_fa_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
 
 #[inline]
-pub fn historical_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn historical_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             req_id @ 1: i64,
@@ -867,12 +866,12 @@ pub fn historical_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> 
             bars.push(bar);
         }
     }
-    wrapper.historical_bars(req_id, bars);
+    wrapper.historical_bars(req_id, bars).await;
     Ok(())
 }
 
 #[inline]
-pub fn bond_contract_data_msg<W: Wrapper>(
+pub async fn bond_contract_data_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -881,7 +880,7 @@ pub fn bond_contract_data_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn scanner_parameters_msg<W: Wrapper>(
+pub async fn scanner_parameters_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -890,13 +889,13 @@ pub fn scanner_parameters_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn scanner_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn scanner_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
 
 #[inline]
-pub fn tick_option_computation_msg<W: Wrapper>(
+pub async fn tick_option_computation_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -951,24 +950,24 @@ pub fn tick_option_computation_msg<W: Wrapper>(
         }),
         _ => panic!("The impossible occurred"),
     };
-    wrapper.sec_option_computation(req_id, calc);
+    wrapper.sec_option_computation(req_id, calc).await;
 
     Ok(())
 }
 
 #[inline]
-pub fn tick_generic_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn tick_generic_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             req_id @ 2: i64,
             tick_type @ 0: u16,
             value @ 0: f64
     );
-    decode_generic_tick_msg(req_id, tick_type, value, wrapper)
+    decode_generic_tick_msg(req_id, tick_type, value, wrapper).await
 }
 
 #[inline]
-pub fn tick_string_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn tick_string_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             req_id @ 2: i64,
@@ -983,7 +982,7 @@ pub fn tick_string_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyh
                 84 => QuotingExchanges::Last(value.chars().collect()),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.quoting_exchanges(req_id, quoting_exchanges);
+            wrapper.quoting_exchanges(req_id, quoting_exchanges).await;
         }
         45 | 85 | 88 => {
             let value = value
@@ -1004,7 +1003,7 @@ pub fn tick_string_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyh
                 88 => Class::Delayed(TimeStamp::Last(timestamp)),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.timestamp(req_id, timestamp);
+            wrapper.timestamp(req_id, timestamp).await;
         }
         48 | 77 => {
             let mut vols = value.split(';');
@@ -1058,7 +1057,7 @@ pub fn tick_string_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyh
                 77 => RealTimeVolume::Trades(base),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.real_time_volume(req_id, volume);
+            wrapper.real_time_volume(req_id, volume).await;
         }
         59 => {
             let mut divs = value.split(',');
@@ -1091,10 +1090,10 @@ pub fn tick_string_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyh
                         .with_context(|| "Invalid value in Dividends next_dividend decode value")?,
                 ),
             };
-            wrapper.dividends(req_id, dividends);
+            wrapper.dividends(req_id, dividends).await;
         }
         62 => {
-            wrapper.news(req_id, value);
+            wrapper.news(req_id, value).await;
         }
         t => {
             return Err(anyhow::Error::msg(format!(
@@ -1106,12 +1105,12 @@ pub fn tick_string_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyh
 }
 
 #[inline]
-pub fn tick_efp_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn tick_efp_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     unimplemented!();
 }
 
 #[inline]
-pub fn current_time_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn current_time_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             req_id @ 1: i64,
@@ -1129,7 +1128,7 @@ pub fn current_time_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> any
 }
 
 #[inline]
-pub fn real_time_bars_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn real_time_bars_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             req_id @ 2: i64,
@@ -1160,12 +1159,12 @@ pub fn real_time_bars_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> a
     } else {
         Bar::Ordinary(core)
     };
-    wrapper.real_time_bar(req_id, bar);
+    wrapper.real_time_bar(req_id, bar).await;
     Ok(())
 }
 
 #[inline]
-pub fn fundamental_data_msg<W: Wrapper>(
+pub async fn fundamental_data_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1174,35 +1173,35 @@ pub fn fundamental_data_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn contract_data_end_msg<W: Wrapper>(
+pub async fn contract_data_end_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
     decode_fields!(fields => req_id @ 2: i64);
-    wrapper.contract_data_end(req_id);
+    wrapper.contract_data_end(req_id).await;
     Ok(())
 }
 
 #[inline]
-pub fn open_order_end_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
-    wrapper.open_order_end();
+pub async fn open_order_end_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+    wrapper.open_order_end().await;
     Ok(())
 }
 
 #[inline]
-pub fn acct_download_end_msg<W: Wrapper>(
+pub async fn acct_download_end_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
     decode_fields!(
         fields => account_number @ 2: String
     );
-    wrapper.account_download_end(account_number);
+    wrapper.account_download_end(account_number).await;
     Ok(())
 }
 
 #[inline]
-pub fn execution_data_end_msg<W: Wrapper>(
+pub async fn execution_data_end_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1212,7 +1211,7 @@ pub fn execution_data_end_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn delta_neutral_validation_msg<W: Wrapper>(
+pub async fn delta_neutral_validation_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1221,7 +1220,7 @@ pub fn delta_neutral_validation_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn tick_snapshot_end_msg<W: Wrapper>(
+pub async fn tick_snapshot_end_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1230,7 +1229,7 @@ pub fn tick_snapshot_end_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn market_data_type_msg<W: Wrapper>(
+pub async fn market_data_type_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1239,12 +1238,12 @@ pub fn market_data_type_msg<W: Wrapper>(
             req_id @ 2: i64,
             class @ 0: MarketDataClass
     );
-    wrapper.market_data_class(req_id, class);
+    wrapper.market_data_class(req_id, class).await;
     Ok(())
 }
 
 #[inline]
-pub fn commission_report_msg<W: Wrapper>(
+pub async fn commission_report_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1253,7 +1252,7 @@ pub fn commission_report_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn position_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn position_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             account_number @ 2: String,
@@ -1271,13 +1270,13 @@ pub fn position_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> an
 }
 
 #[inline]
-pub fn position_end_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
-    wrapper.position_end();
+pub async fn position_end_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+    wrapper.position_end().await;
     Ok(())
 }
 
 #[inline]
-pub fn account_summary_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn account_summary_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             req_id @ 2: i64,
@@ -1295,24 +1294,24 @@ pub fn account_summary_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> 
         Tag::Leverage => TagValue::Float(Tag::Leverage, value.parse()?),
         t => TagValue::Currency(t, value.parse()?, currency.parse()?),
     };
-    wrapper.account_summary(req_id, account_number, summary);
+    wrapper.account_summary(req_id, account_number, summary).await;
     Ok(())
 }
 
 #[inline]
-pub fn account_summary_end_msg<W: Wrapper>(
+pub async fn account_summary_end_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
     decode_fields!(
         fields => req_id @ 2: i64
     );
-    wrapper.account_summary_end(req_id);
+    wrapper.account_summary_end(req_id).await;
     Ok(())
 }
 
 #[inline]
-pub fn verify_message_api_msg<W: Wrapper>(
+pub async fn verify_message_api_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1321,7 +1320,7 @@ pub fn verify_message_api_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn verify_completed_msg<W: Wrapper>(
+pub async fn verify_completed_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1330,7 +1329,7 @@ pub fn verify_completed_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn display_group_list_msg<W: Wrapper>(
+pub async fn display_group_list_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1339,7 +1338,7 @@ pub fn display_group_list_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn display_group_updated_msg<W: Wrapper>(
+pub async fn display_group_updated_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1348,7 +1347,7 @@ pub fn display_group_updated_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn verify_and_auth_message_api_msg<W: Wrapper>(
+pub async fn verify_and_auth_message_api_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1357,7 +1356,7 @@ pub fn verify_and_auth_message_api_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn verify_and_auth_completed_msg<W: Wrapper>(
+pub async fn verify_and_auth_completed_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1366,13 +1365,13 @@ pub fn verify_and_auth_completed_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn position_multi_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn position_multi_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
 
 #[inline]
-pub fn position_multi_end_msg<W: Wrapper>(
+pub async fn position_multi_end_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1381,7 +1380,7 @@ pub fn position_multi_end_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn account_update_multi_msg<W: Wrapper>(
+pub async fn account_update_multi_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1390,7 +1389,7 @@ pub fn account_update_multi_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn account_update_multi_end_msg<W: Wrapper>(
+pub async fn account_update_multi_end_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1399,7 +1398,7 @@ pub fn account_update_multi_end_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn security_definition_option_parameter_msg<W: Wrapper>(
+pub async fn security_definition_option_parameter_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1408,7 +1407,7 @@ pub fn security_definition_option_parameter_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn security_definition_option_parameter_end_msg<W: Wrapper>(
+pub async fn security_definition_option_parameter_end_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1417,7 +1416,7 @@ pub fn security_definition_option_parameter_end_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn soft_dollar_tiers_msg<W: Wrapper>(
+pub async fn soft_dollar_tiers_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1426,19 +1425,19 @@ pub fn soft_dollar_tiers_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn family_codes_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn family_codes_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
 
 #[inline]
-pub fn symbol_samples_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn symbol_samples_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
 
 #[inline]
-pub fn mkt_depth_exchanges_msg<W: Wrapper>(
+pub async fn mkt_depth_exchanges_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1447,7 +1446,7 @@ pub fn mkt_depth_exchanges_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn tick_req_params_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn tick_req_params_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             req_id @ 1: i64,
@@ -1455,12 +1454,12 @@ pub fn tick_req_params_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> 
             exchange_id @ 0: ExchangeId,
             snapshot_permissions @ 0: u32
     );
-    wrapper.tick_params(req_id, min_tick, exchange_id, snapshot_permissions);
+    wrapper.tick_params(req_id, min_tick, exchange_id, snapshot_permissions).await;
     Ok(())
 }
 
 #[inline]
-pub fn smart_components_msg<W: Wrapper>(
+pub async fn smart_components_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1469,31 +1468,31 @@ pub fn smart_components_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn news_article_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn news_article_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
 
 #[inline]
-pub fn tick_news_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn tick_news_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
 
 #[inline]
-pub fn news_providers_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn news_providers_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
 
 #[inline]
-pub fn historical_news_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn historical_news_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
 
 #[inline]
-pub fn historical_news_end_msg<W: Wrapper>(
+pub async fn historical_news_end_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1502,7 +1501,7 @@ pub fn historical_news_end_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn head_timestamp_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn head_timestamp_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             req_id @ 1: i64,
@@ -1516,7 +1515,7 @@ pub fn head_timestamp_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> a
 }
 
 #[inline]
-pub fn histogram_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn histogram_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             req_id @ 1: i64,
@@ -1534,12 +1533,12 @@ pub fn histogram_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> a
             hist.insert(bin, HistogramEntry { price, size });
         }
     }
-    wrapper.histogram(req_id, hist);
+    wrapper.histogram(req_id, hist).await;
     Ok(())
 }
 
 #[inline]
-pub fn historical_data_update_msg<W: Wrapper>(
+pub async fn historical_data_update_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1572,12 +1571,12 @@ pub fn historical_data_update_msg<W: Wrapper>(
     } else {
         Bar::Ordinary(core)
     };
-    wrapper.updating_historical_bar(req_id, bar);
+    wrapper.updating_historical_bar(req_id, bar).await;
     Ok(())
 }
 
 #[inline]
-pub fn reroute_mkt_data_req_msg<W: Wrapper>(
+pub async fn reroute_mkt_data_req_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1586,7 +1585,7 @@ pub fn reroute_mkt_data_req_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn reroute_mkt_depth_req_msg<W: Wrapper>(
+pub async fn reroute_mkt_depth_req_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1595,13 +1594,13 @@ pub fn reroute_mkt_depth_req_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn market_rule_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn market_rule_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
 
 #[inline]
-pub fn pnl_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn pnl_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             req_id @ 1: i64,
@@ -1614,12 +1613,12 @@ pub fn pnl_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Resu
         unrealized: unrealized_pnl,
         realized: realized_pnl,
     };
-    wrapper.pnl(req_id, pnl);
+    wrapper.pnl(req_id, pnl).await;
     Ok(())
 }
 
 #[inline]
-pub fn pnl_single_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn pnl_single_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             req_id @ 1: i64,
@@ -1639,7 +1638,7 @@ pub fn pnl_single_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyho
 }
 
 #[inline]
-pub fn historical_ticks_midpoint_msg<W: Wrapper>(
+pub async fn historical_ticks_midpoint_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1662,12 +1661,12 @@ pub fn historical_ticks_midpoint_msg<W: Wrapper>(
             });
         }
     }
-    wrapper.historical_ticks(req_id, ticks);
+    wrapper.historical_ticks(req_id, ticks).await;
     Ok(())
 }
 
 #[inline]
-pub fn historical_ticks_bid_ask_msg<W: Wrapper>(
+pub async fn historical_ticks_bid_ask_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1693,12 +1692,12 @@ pub fn historical_ticks_bid_ask_msg<W: Wrapper>(
             });
         }
     }
-    wrapper.historical_ticks(req_id, ticks);
+    wrapper.historical_ticks(req_id, ticks).await;
     Ok(())
 }
 
 #[inline]
-pub fn historical_ticks_last_msg<W: Wrapper>(
+pub async fn historical_ticks_last_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1723,12 +1722,12 @@ pub fn historical_ticks_last_msg<W: Wrapper>(
             });
         }
     }
-    wrapper.historical_ticks(req_id, ticks);
+    wrapper.historical_ticks(req_id, ticks).await;
     Ok(())
 }
 
 #[inline]
-pub fn tick_by_tick_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn tick_by_tick_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             req_id @ 1: i64,
@@ -1766,24 +1765,24 @@ pub fn tick_by_tick_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> any
         },
         _ => Err(anyhow::Error::msg("Unexpected tick type"))?,
     };
-    wrapper.live_tick(req_id, tick);
+    wrapper.live_tick(req_id, tick).await;
     Ok(())
 }
 
 #[inline]
-pub fn order_bound_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn order_bound_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
 
 #[inline]
-pub fn completed_order_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn completed_order_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
 
 #[inline]
-pub fn completed_orders_end_msg<W: Wrapper>(
+pub async fn completed_orders_end_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1792,25 +1791,25 @@ pub fn completed_orders_end_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn replace_fa_end_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn replace_fa_end_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
 
 #[inline]
-pub fn wsh_meta_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn wsh_meta_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
 
 #[inline]
-pub fn wsh_event_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn wsh_event_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
 
 #[inline]
-pub fn historical_schedule_msg<W: Wrapper>(
+pub async fn historical_schedule_msg<W: Wrapper>(
     fields: &mut Fields,
     wrapper: &mut W,
 ) -> anyhow::Result<()> {
@@ -1819,7 +1818,7 @@ pub fn historical_schedule_msg<W: Wrapper>(
 }
 
 #[inline]
-pub fn user_info_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
+pub async fn user_info_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
     println!("{:?}", &fields);
     Ok(())
 }
@@ -1856,7 +1855,7 @@ fn nth(fields: &mut Fields, n: usize) -> Result<String, MissingInputData> {
 }
 
 #[inline]
-fn decode_generic_tick_msg<W: Wrapper>(
+async fn decode_generic_tick_msg<W: Wrapper>(
     req_id: i64,
     tick_type: u16,
     value: f64,
@@ -1870,7 +1869,7 @@ fn decode_generic_tick_msg<W: Wrapper>(
                 5 => Size::Last(value),
                 _ => panic!("The impossible occurred"),
             });
-            wrapper.size_data(req_id, size);
+            wrapper.size_data(req_id, size).await;
         }
         8 | 74 => {
             let volume = match tick_type {
@@ -1878,7 +1877,7 @@ fn decode_generic_tick_msg<W: Wrapper>(
                 74 => Class::Delayed(value),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.volume(req_id, volume);
+            wrapper.volume(req_id, volume).await;
         }
         21 | 63 | 64 | 65 => {
             let volume = match tick_type {
@@ -1888,7 +1887,7 @@ fn decode_generic_tick_msg<W: Wrapper>(
                 65 => SummaryVolume::TenMinutes(value),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.summary_volume(req_id, volume);
+            wrapper.summary_volume(req_id, volume).await;
         }
         23 | 24 | 58 => {
             let vol = match tick_type {
@@ -1897,7 +1896,7 @@ fn decode_generic_tick_msg<W: Wrapper>(
                 58 => Volatility::RealTimeHistorical(value),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.volatility(req_id, vol);
+            wrapper.volatility(req_id, vol).await;
         }
         29 | 30 | 87 => {
             let volume = match tick_type {
@@ -1906,7 +1905,7 @@ fn decode_generic_tick_msg<W: Wrapper>(
                 87 => SecOptionVolume::Average(value),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.sec_option_volume(req_id, volume);
+            wrapper.sec_option_volume(req_id, volume).await;
         }
         34 | 36 | 61 => {
             let auction = match tick_type {
@@ -1915,7 +1914,7 @@ fn decode_generic_tick_msg<W: Wrapper>(
                 61 => AuctionData::Regulatory(value),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.auction(req_id, auction);
+            wrapper.auction(req_id, auction).await;
         }
         27 | 28 | 86 => {
             let open_interest = match tick_type {
@@ -1924,7 +1923,7 @@ fn decode_generic_tick_msg<W: Wrapper>(
                 86 => OpenInterest::SecFuture(value),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.open_interest(req_id, open_interest);
+            wrapper.open_interest(req_id, open_interest).await;
         }
         31 | 60 => {
             let factor = match tick_type {
@@ -1932,7 +1931,7 @@ fn decode_generic_tick_msg<W: Wrapper>(
                 60 => PriceFactor::BondFactorMultiplier(value),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.price_factor(req_id, factor);
+            wrapper.price_factor(req_id, factor).await;
         }
         46 | 49 | 89 => {
             let access = match tick_type {
@@ -1941,10 +1940,10 @@ fn decode_generic_tick_msg<W: Wrapper>(
                 89 => Accessibility::ShortableShares(value),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.accessibility(req_id, access);
+            wrapper.accessibility(req_id, access).await;
         }
         54 => {
-            wrapper.trade_count(req_id, value);
+            wrapper.trade_count(req_id, value).await;
         }
         55 | 56 => {
             let rate = match tick_type {
@@ -1952,7 +1951,7 @@ fn decode_generic_tick_msg<W: Wrapper>(
                 56 => Rate::Volume(value),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.rate(req_id, rate);
+            wrapper.rate(req_id, rate).await;
         }
         69..=71 => {
             let size = Class::Delayed(match tick_type {
@@ -1961,7 +1960,7 @@ fn decode_generic_tick_msg<W: Wrapper>(
                 71 => Size::Last(value),
                 _ => panic!("The impossible occurred"),
             });
-            wrapper.size_data(req_id, size);
+            wrapper.size_data(req_id, size).await;
         }
         101 | 102 => {
             let ipo = match tick_type {
@@ -1969,7 +1968,7 @@ fn decode_generic_tick_msg<W: Wrapper>(
                 102 => Ipo::Final(value),
                 _ => panic!("The impossible occurred"),
             };
-            wrapper.ipo(req_id, ipo);
+            wrapper.ipo(req_id, ipo).await;
         }
         t => {
             return Err(anyhow::Error::msg(format!(

@@ -89,9 +89,9 @@ pub mod market_depth {
                 0 => Self::Insert(value.1),
                 1 => Self::Update(value.1),
                 2 => Self::Delete(value.1),
-                _ => Err(anyhow::Error::msg(
+                _ => return Err(anyhow::Error::msg(
                     "Invalid int encountered while parsing operation",
-                ))?,
+                )),
             })
         }
     }

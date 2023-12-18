@@ -31,12 +31,12 @@ pub mod contract;
 /// currencies available in the API.
 pub mod currency;
 #[allow(
-    dead_code,
     unused_variables,
     clippy::print_stdout,
     clippy::use_debug,
     clippy::too_many_lines,
-    clippy::unnecessary_wraps
+    clippy::unnecessary_wraps,
+    clippy::unused_async
 )]
 mod decode;
 /// Contains types related to security exchanges and trading venues available in the API.
