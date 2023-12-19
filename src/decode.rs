@@ -503,7 +503,7 @@ pub async fn portfolio_value_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut 
         unrealized_pnl,
         realized_pnl,
         account_number: account_name,
-    });
+    }).await;
     Ok(())
 }
 
@@ -1123,7 +1123,7 @@ pub async fn current_time_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) 
                 "Invalid datetime value encountered while parsing the UNIX timestamp!",
             )
         })?,
-    );
+    ).await;
     Ok(())
 }
 
@@ -1265,7 +1265,7 @@ pub async fn position_data_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W)
         position,
         average_cost,
         account_number,
-    });
+    }).await;
     Ok(())
 }
 
@@ -1510,7 +1510,7 @@ pub async fn head_timestamp_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W
     wrapper.head_timestamp(
         req_id,
         NaiveDateTime::parse_from_str(timestamp.as_str(), "%Y%m%d-%T")?,
-    );
+    ).await;
     Ok(())
 }
 
