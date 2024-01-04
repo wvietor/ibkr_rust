@@ -260,6 +260,15 @@ impl Builder {
 /// An active client, which can request information from IBKR trading systems.
 pub type ActiveClient = Client<indicators::Active>;
 
+type IntoActive<W> = (
+    Client<indicators::Active>,
+    W,
+    mpsc::Sender<ToClient>,
+    mpsc::Receiver<ToWrapper>,
+    Arc<SegQueue<Vec<String>>>,
+    CancellationToken,
+);
+
 pub(crate) mod indicators {
     use std::collections::HashSet;
 
@@ -709,14 +718,7 @@ impl<W: 'static + Wrapper> Client<indicators::Inactive<W>> {
 
     async fn start_api(&mut self) -> Result<(), anyhow::Error> {
         const VERSION: u8 = 2;
-        self.status
-            .client_tx
-            .send(ToWrapper::StartApiManagedAccts)
-            .await?;
-        self.status
-            .client_tx
-            .send(ToWrapper::StartApiNextValidId)
-            .await?;
+
         self.writer
             .add_body((Out::StartApi, VERSION, self.client_id, None::<()>))?;
         self.writer.send().await?;
@@ -724,38 +726,29 @@ impl<W: 'static + Wrapper> Client<indicators::Inactive<W>> {
     }
 
     #[allow(clippy::unwrap_used, clippy::missing_panics_doc)]
-    async fn into_active(
-        mut self,
-    ) -> (
-        Client<indicators::Active>,
-        W,
-        mpsc::Sender<ToClient>,
-        mpsc::Receiver<ToWrapper>,
-        Arc<SegQueue<Vec<String>>>,
-        CancellationToken,
-    ) {
+    fn into_active(
+        self,
+    ) -> IntoActive<W> {
         let (disconnect, queue, r_thread) = spawn_reader_thread(self.status.reader);
 
         let (mut managed_accounts, mut valid_id) = (None, None);
         while managed_accounts.is_none() || valid_id.is_none() {
             if let Some(fields) = queue.pop() {
-                decode_msg(
-                    fields,
-                    &mut self.status.wrapper,
-                    &mut self.status.wrapper_tx,
-                    &mut self.status.wrapper_rx,
-                )
-                .await;
-                match self.status.client_rx.recv().await {
-                    Some(ToClient::StartApiManagedAccts(accounts)) => {
-                        managed_accounts = Some(accounts);
-                    }
-                    Some(ToClient::StartApiNextValidId(id)) => valid_id = Some(id..),
-                    _ => (),
+                match fields.first().and_then(|t| t.parse().ok()) {
+                    Some(In::ManagedAccts) => {
+                        managed_accounts = Some(fields.into_iter().skip(2).filter(|v| v.as_str() != "").collect::<std::collections::HashSet<String>>());
+                    },
+                    Some(In::NextValidId) => {
+                        valid_id = decode::nth(&mut fields.into_iter(), 2).with_context(|| "Expected ID, found none")
+                            .ok()
+                            .and_then(|t| t.parse::<i64>().with_context(|| "Invalid value for ID").ok());
+                    },
+                    Some(_) => queue.push(fields),
+                    None => (),
                 }
             }
         }
-        let (managed_accounts, valid_id) = (managed_accounts.unwrap(), valid_id.unwrap());
+        let (managed_accounts, valid_id) = (managed_accounts.unwrap(), valid_id.unwrap()..);
 
         let c_loop_disconnect = disconnect.clone();
 
@@ -798,7 +791,7 @@ impl<W: 'static + Owned> Client<indicators::Inactive<W>> {
     pub async fn run_owned(self) -> Builder {
         let (port, address) = (self.get_port(), self.get_address());
         let (client, mut wrapper, mut tx, mut rx, queue, c_loop_disconnect) =
-            self.into_active().await;
+            self.into_active();
 
         wrapper.attach_client(client);
         wrapper.init().await;
@@ -828,7 +821,7 @@ impl<W: 'static + Borrowed> Client<indicators::Inactive<W>> {
     pub async fn run_borrowed(self) -> Builder {
         let (port, address) = (self.get_port(), self.get_address());
         let (mut client, mut wrapper, mut tx, mut rx, queue, c_loop_disconnect) =
-            self.into_active().await;
+            self.into_active();
 
         wrapper.init(&mut client).await;
 
@@ -1830,7 +1823,6 @@ impl Client<indicators::Active> {
             .ok_or_else(|| anyhow::Error::msg("Failed to receive contract object"))?
         {
             ToClient::NewContract(c) => Ok(c),
-            _ => Err(anyhow::Error::msg("No valid contract object received")),
         }
     }
 

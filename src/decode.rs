@@ -528,16 +528,7 @@ pub(crate) async fn next_valid_id_msg<W: Wrapper>(
     tx: &mut Tx,
     rx: &mut Rx,
 ) -> anyhow::Result<()> {
-    if rx.try_recv() == Ok(ToWrapper::StartApiNextValidId) {
-        tx.send(ToClient::StartApiNextValidId(
-            nth(fields, 2)
-                .with_context(|| "Expected ID, found none")?
-                .parse::<i64>()
-                .with_context(|| "Invalid value for ID")?,
-        ))
-        .await
-        .with_context(|| "Failure when sending ID")?;
-    }
+
     Ok(())
 }
 
@@ -816,13 +807,6 @@ pub(crate) async fn managed_accts_msg<W: Wrapper>(
     tx: &mut Tx,
     rx: &mut Rx,
 ) -> anyhow::Result<()> {
-    if rx.try_recv() == Ok(ToWrapper::StartApiManagedAccts) {
-        tx.send(ToClient::StartApiManagedAccts(
-            fields.skip(2).filter(|v| v.as_str() != "").collect(),
-        ))
-        .await
-        .with_context(|| "Failure when sending managed_accts")?;
-    }
     Ok(())
 }
 
@@ -1824,7 +1808,7 @@ pub async fn user_info_msg<W: Wrapper>(fields: &mut Fields, wrapper: &mut W) -> 
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct MissingInputData;
+pub(crate) struct MissingInputData;
 
 impl std::fmt::Display for MissingInputData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1850,7 +1834,7 @@ impl std::error::Error for MissingInputData {
 }
 
 #[inline]
-fn nth(fields: &mut Fields, n: usize) -> Result<String, MissingInputData> {
+pub(crate) fn nth(fields: &mut Fields, n: usize) -> Result<String, MissingInputData> {
     fields.nth(n).ok_or(MissingInputData)
 }
 

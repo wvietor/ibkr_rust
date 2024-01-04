@@ -1,4 +1,4 @@
-use std::{collections::HashSet, str::FromStr};
+use std::str::FromStr;
 
 use crate::contract::{Contract, ContractId};
 
@@ -371,15 +371,11 @@ pub enum Out {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ToWrapper {
-    StartApiManagedAccts,
-    StartApiNextValidId,
     ContractQuery((ContractId, i64)),
 }
 
 #[allow(clippy::redundant_pub_crate)]
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum ToClient {
-    StartApiManagedAccts(HashSet<String>),
-    StartApiNextValidId(i64),
     NewContract(Contract),
 }
