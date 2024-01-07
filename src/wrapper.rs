@@ -12,7 +12,7 @@ use ibapi_macros::debug_trait;
 
 #[debug_trait]
 /// Contains the "callback functions" that correspond to the requests made by a [`crate::client::Client`].
-pub trait Local<'c, I>: From<(I, &'c mut ActiveClient)> {
+pub trait Local<I>: for<'c> From<(I, &'c mut ActiveClient)> {
     /// The callback that corresponds to any error that encounters after an API request.
     ///
     /// Errors sent by the TWS are received here.
@@ -108,7 +108,7 @@ pub trait Local<'c, I>: From<(I, &'c mut ActiveClient)> {
     fn account_attribute(&mut self, attribute: Attribute, account_number: String) -> impl std::future::Future {}
     /// The callback message containing information about a single [`Position`] from [`crate::client::Client::req_positions`].
     fn position(&mut self, position: Position) -> impl std::future::Future {}
-    /// The callback message containing information about the time at which [`Wrapper::account_attribute`] data is valid.
+    /// The callback message containing information about the time at which [`Local::account_attribute`] data is valid.
     fn account_attribute_time(&mut self, time: NaiveTime) -> impl std::future::Future {}
     /// The callback message containing summary information about positions from [`crate::client::Client::req_positions`]
     fn position_summary(&mut self, summary: PositionSummary) -> impl std::future::Future {}
@@ -131,7 +131,6 @@ pub trait Local<'c, I>: From<(I, &'c mut ActiveClient)> {
     /// The callback message that contains live bar data from [`crate::client::Client::req_real_time_bars`].
     fn real_time_bar(&mut self, req_id: i64, bar: Bar) -> impl std::future::Future {}
 }
-// for<'c> Initializer<'c, T>
 
 #[debug_trait]
 /// Contains the "callback functions" that correspond to the requests made by a [`crate::client::Client`].
@@ -231,7 +230,7 @@ pub trait Remote: Send + Sync {
     fn account_attribute(&mut self, attribute: Attribute, account_number: String) -> impl std::future::Future + Send {}
     /// The callback message containing information about a single [`Position`] from [`crate::client::Client::req_positions`].
     fn position(&mut self, position: Position) -> impl std::future::Future + Send {}
-    /// The callback message containing information about the time at which [`Wrapper::account_attribute`] data is valid.
+    /// The callback message containing information about the time at which [`Remote::account_attribute`] data is valid.
     fn account_attribute_time(&mut self, time: NaiveTime) -> impl std::future::Future + Send {}
     /// The callback message containing summary information about positions from [`crate::client::Client::req_positions`]
     fn position_summary(&mut self, summary: PositionSummary) -> impl std::future::Future + Send {}
@@ -260,12 +259,12 @@ pub(crate) mod indicators {
 
     pub trait Wrapper {}
 
-    pub struct LocalMarker<'c, I, W> where W: Local<'c, I> {
+    pub struct LocalMarker<I, W> where W: Local<I> {
         pub(crate) wrapper: W,
-        pub(crate) _init_marker: &'c std::marker::PhantomData<I>
+        pub(crate) _init_marker: std::marker::PhantomData<I>
     }
 
-    impl<'c, I, W> Wrapper for LocalMarker<'c, I, W> where W: Local<'c, I> {
+    impl<I, W> Wrapper for LocalMarker<I, W> where W: Local<I> {
     }
 
 
