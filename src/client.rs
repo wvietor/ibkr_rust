@@ -1025,11 +1025,35 @@ impl Client<indicators::Inactive> {
             mut rx,
             queue,
         ) = self.into_active();
+
+        let temp = CancellationToken::new();
+        let temp_2 = temp.clone();
+        let con_fut = tokio::spawn(
+            async move {
+                loop {
+                    tokio::select! {
+                        () = temp.cancelled() => { break (queue, tx, rx); },
+                        () = async {
+                            let _ = if let Some(fields) = queue.pop() {
+                                match fields.first().and_then(|t| t.parse().ok()) {
+                                    Some(In::ContractData) => decode::decode_contract_no_wrapper(&mut fields.into_iter(), &mut tx, &mut rx).await.with_context(|| "contract data msg"),
+                                    Some(_) => { queue.push(fields); Ok(()) },
+                                    None => Ok(()),
+                                }
+                            } else { Ok(()) };
+                        } => ()
+                    }
+                }
+            }
+        );
+
         let break_loop = CancellationToken::new();
         let mut decoder = Decoder(LocalMarker {
             wrapper: Initializer::build(init, &mut client, break_loop.clone()).await,
             _init_marker: &std::marker::PhantomData
         });
+        temp_2.cancel();
+        let (queue, mut tx, mut rx) = con_fut.await?;
 
         loop {
             tokio::select! {
