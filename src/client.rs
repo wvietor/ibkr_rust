@@ -7,13 +7,26 @@ use tokio::task::JoinHandle;
 use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
 use tokio_util::sync::CancellationToken;
 
-use crate::market_data::{histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks, updating_historical_bar};
 use crate::contract::{ContractId, Security};
-use crate::message::{In, Out, ToClient, ToWrapper};
-use crate::{constants, decode, reader::Reader, account::Tag, comm::Writer, execution::Filter, order::{Executable, Order}, payload::ExchangeId};
 use crate::decode::Decoder;
-use crate::wrapper::{Local, Remote, indicators::{LocalMarker, RemoteMarker}, Initializer};
-
+use crate::market_data::{
+    histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks,
+    updating_historical_bar,
+};
+use crate::message::{In, Out, ToClient, ToWrapper};
+use crate::wrapper::{
+    indicators::{LocalMarker, RemoteMarker},
+    Initializer, Local, Remote,
+};
+use crate::{
+    account::Tag,
+    comm::Writer,
+    constants, decode,
+    execution::Filter,
+    order::{Executable, Order},
+    payload::ExchangeId,
+    reader::Reader,
+};
 
 // ======================================
 // === Types for Handling Config File ===
@@ -170,10 +183,7 @@ impl Builder {
     /// # Returns
     /// An inactive [`Client`] that will become active upon calling [`Client::local`] or
     /// [`Client::remote`].
-    pub async fn connect(
-        &self,
-        client_id: i64,
-    ) -> anyhow::Result<Client<indicators::Inactive>> {
+    pub async fn connect(&self, client_id: i64) -> anyhow::Result<Client<indicators::Inactive>> {
         let (mode, host, port, address) = match self.0 {
             Inner::ConfigFile { mode, host, config } => (
                 Some(mode),
@@ -264,7 +274,6 @@ type IntoActive = (
     Arc<SegQueue<Vec<String>>>,
 );
 
-
 #[inline]
 #[allow(clippy::too_many_lines)]
 async fn decode_msg_remote<W>(
@@ -272,257 +281,525 @@ async fn decode_msg_remote<W>(
     local: &mut Decoder<RemoteMarker<W>>,
     tx: &mut mpsc::Sender<ToClient>,
     rx: &mut mpsc::Receiver<ToWrapper>,
-) where W: Remote {
+) where
+    W: Remote,
+{
     let status = match fields.first() {
         None => Err(anyhow::Error::msg("Empty fields received from reader")),
         Some(s) => match s.parse() {
-            Ok(In::TickPrice) => Decoder::<RemoteMarker<W>>::tick_price_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "tick price msg"),
-            Ok(In::TickSize) => Decoder::<RemoteMarker<W>>::tick_size_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "tick size msg"),
-            Ok(In::OrderStatus) => Decoder::<RemoteMarker<W>>::order_status_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "order status msg"),
-            Ok(In::ErrMsg) => {
-                Decoder::<RemoteMarker<W>>::err_msg_msg(&mut fields.into_iter(), &mut local.0.wrapper).await.with_context(|| "err msg msg")
-            }
-            Ok(In::OpenOrder) => Decoder::<RemoteMarker<W>>::open_order_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "open order msg"),
-            Ok(In::AcctValue) => Decoder::<RemoteMarker<W>>::acct_value_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "acct value msg"),
-            Ok(In::PortfolioValue) => Decoder::<RemoteMarker<W>>::portfolio_value_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "portfolio value msg"),
-            Ok(In::AcctUpdateTime) => {
-                Decoder::<RemoteMarker<W>>::acct_update_time_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "acct update time msg")
-            }
-            Ok(In::NextValidId) => {
-                Decoder::<RemoteMarker<W>>::next_valid_id_msg(&mut fields.into_iter(), &mut local.0.wrapper, tx, rx).await
-                    .with_context(|| "next valid id msg")
-            }
-            Ok(In::ContractData) => {
-                Decoder::<RemoteMarker<W>>::contract_data_msg(&mut fields.into_iter(), &mut local.0.wrapper, tx, rx).await
-                    .with_context(|| "contract data msg")
-            }
-            Ok(In::ExecutionData) => Decoder::<RemoteMarker<W>>::execution_data_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "execution data msg"),
-            Ok(In::MarketDepth) => Decoder::<RemoteMarker<W>>::market_depth_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "market depth msg"),
-            Ok(In::MarketDepthL2) => Decoder::<RemoteMarker<W>>::market_depth_l2_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "market depth l2 msg"),
-            Ok(In::NewsBulletins) => Decoder::<RemoteMarker<W>>::news_bulletins_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "news bulletins msg"),
-            Ok(In::ManagedAccts) => {
-                Decoder::<RemoteMarker<W>>::managed_accts_msg(&mut fields.into_iter(), &mut local.0.wrapper, tx, rx).await
-                    .with_context(|| "managed accounts msg")
-            }
-            Ok(In::ReceiveFa) => Decoder::<RemoteMarker<W>>::receive_fa_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "receive fa msg"),
-            Ok(In::HistoricalData) => Decoder::<RemoteMarker<W>>::historical_data_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "historical data msg"),
-            Ok(In::BondContractData) => {
-                Decoder::<RemoteMarker<W>>::bond_contract_data_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "bond contract data msg")
-            }
-            Ok(In::ScannerParameters) => {
-                Decoder::<RemoteMarker<W>>::scanner_parameters_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "scanner parameters msg")
-            }
-            Ok(In::ScannerData) => Decoder::<RemoteMarker<W>>::scanner_data_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "scanner data msg"),
+            Ok(In::TickPrice) => Decoder::<RemoteMarker<W>>::tick_price_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "tick price msg"),
+            Ok(In::TickSize) => Decoder::<RemoteMarker<W>>::tick_size_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "tick size msg"),
+            Ok(In::OrderStatus) => Decoder::<RemoteMarker<W>>::order_status_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "order status msg"),
+            Ok(In::ErrMsg) => Decoder::<RemoteMarker<W>>::err_msg_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "err msg msg"),
+            Ok(In::OpenOrder) => Decoder::<RemoteMarker<W>>::open_order_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "open order msg"),
+            Ok(In::AcctValue) => Decoder::<RemoteMarker<W>>::acct_value_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "acct value msg"),
+            Ok(In::PortfolioValue) => Decoder::<RemoteMarker<W>>::portfolio_value_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "portfolio value msg"),
+            Ok(In::AcctUpdateTime) => Decoder::<RemoteMarker<W>>::acct_update_time_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "acct update time msg"),
+            Ok(In::NextValidId) => Decoder::<RemoteMarker<W>>::next_valid_id_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+                tx,
+                rx,
+            )
+            .await
+            .with_context(|| "next valid id msg"),
+            Ok(In::ContractData) => Decoder::<RemoteMarker<W>>::contract_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+                tx,
+                rx,
+            )
+            .await
+            .with_context(|| "contract data msg"),
+            Ok(In::ExecutionData) => Decoder::<RemoteMarker<W>>::execution_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "execution data msg"),
+            Ok(In::MarketDepth) => Decoder::<RemoteMarker<W>>::market_depth_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "market depth msg"),
+            Ok(In::MarketDepthL2) => Decoder::<RemoteMarker<W>>::market_depth_l2_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "market depth l2 msg"),
+            Ok(In::NewsBulletins) => Decoder::<RemoteMarker<W>>::news_bulletins_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "news bulletins msg"),
+            Ok(In::ManagedAccts) => Decoder::<RemoteMarker<W>>::managed_accts_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+                tx,
+                rx,
+            )
+            .await
+            .with_context(|| "managed accounts msg"),
+            Ok(In::ReceiveFa) => Decoder::<RemoteMarker<W>>::receive_fa_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "receive fa msg"),
+            Ok(In::HistoricalData) => Decoder::<RemoteMarker<W>>::historical_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "historical data msg"),
+            Ok(In::BondContractData) => Decoder::<RemoteMarker<W>>::bond_contract_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "bond contract data msg"),
+            Ok(In::ScannerParameters) => Decoder::<RemoteMarker<W>>::scanner_parameters_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "scanner parameters msg"),
+            Ok(In::ScannerData) => Decoder::<RemoteMarker<W>>::scanner_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "scanner data msg"),
             Ok(In::TickOptionComputation) => {
-                Decoder::<RemoteMarker<W>>::tick_option_computation_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "tick option computation msg")
+                Decoder::<RemoteMarker<W>>::tick_option_computation_msg(
+                    &mut fields.into_iter(),
+                    &mut local.0.wrapper,
+                )
+                .await
+                .with_context(|| "tick option computation msg")
             }
-            Ok(In::TickGeneric) => Decoder::<RemoteMarker<W>>::tick_generic_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "tick generic msg"),
-            Ok(In::TickString) => Decoder::<RemoteMarker<W>>::tick_string_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "tick string msg"),
-            Ok(In::TickEfp) => Decoder::<RemoteMarker<W>>::tick_efp_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "tick efp msg"),
-            Ok(In::CurrentTime) => Decoder::<RemoteMarker<W>>::current_time_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "current time msg"),
-            Ok(In::RealTimeBars) => Decoder::<RemoteMarker<W>>::real_time_bars_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "real time bars msg"),
-            Ok(In::FundamentalData) => {
-                Decoder::<RemoteMarker<W>>::fundamental_data_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "fundamental data msg")
-            }
-            Ok(In::ContractDataEnd) => {
-                Decoder::<RemoteMarker<W>>::contract_data_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "contract data end msg")
-            }
-            Ok(In::OpenOrderEnd) => Decoder::<RemoteMarker<W>>::open_order_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "open order end msg"),
-            Ok(In::AcctDownloadEnd) => {
-                Decoder::<RemoteMarker<W>>::acct_download_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "acct download end msg")
-            }
-            Ok(In::ExecutionDataEnd) => {
-                Decoder::<RemoteMarker<W>>::execution_data_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "execution data end msg")
-            }
+            Ok(In::TickGeneric) => Decoder::<RemoteMarker<W>>::tick_generic_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "tick generic msg"),
+            Ok(In::TickString) => Decoder::<RemoteMarker<W>>::tick_string_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "tick string msg"),
+            Ok(In::TickEfp) => Decoder::<RemoteMarker<W>>::tick_efp_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "tick efp msg"),
+            Ok(In::CurrentTime) => Decoder::<RemoteMarker<W>>::current_time_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "current time msg"),
+            Ok(In::RealTimeBars) => Decoder::<RemoteMarker<W>>::real_time_bars_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "real time bars msg"),
+            Ok(In::FundamentalData) => Decoder::<RemoteMarker<W>>::fundamental_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "fundamental data msg"),
+            Ok(In::ContractDataEnd) => Decoder::<RemoteMarker<W>>::contract_data_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "contract data end msg"),
+            Ok(In::OpenOrderEnd) => Decoder::<RemoteMarker<W>>::open_order_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "open order end msg"),
+            Ok(In::AcctDownloadEnd) => Decoder::<RemoteMarker<W>>::acct_download_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "acct download end msg"),
+            Ok(In::ExecutionDataEnd) => Decoder::<RemoteMarker<W>>::execution_data_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "execution data end msg"),
             Ok(In::DeltaNeutralValidation) => {
-                Decoder::<RemoteMarker<W>>::delta_neutral_validation_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "delta neutral validation msg")
+                Decoder::<RemoteMarker<W>>::delta_neutral_validation_msg(
+                    &mut fields.into_iter(),
+                    &mut local.0.wrapper,
+                )
+                .await
+                .with_context(|| "delta neutral validation msg")
             }
-            Ok(In::TickSnapshotEnd) => {
-                Decoder::<RemoteMarker<W>>::tick_snapshot_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "tick snapshot end msg")
-            }
-            Ok(In::MarketDataType) => {
-                Decoder::<RemoteMarker<W>>::market_data_type_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "market data type msg")
-            }
-            Ok(In::CommissionReport) => {
-                Decoder::<RemoteMarker<W>>::commission_report_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "commission report msg")
-            }
-            Ok(In::PositionData) => Decoder::<RemoteMarker<W>>::position_data_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "position data msg"),
-            Ok(In::PositionEnd) => Decoder::<RemoteMarker<W>>::position_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "position end msg"),
-            Ok(In::AccountSummary) => Decoder::<RemoteMarker<W>>::account_summary_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "account summary msg"),
-            Ok(In::AccountSummaryEnd) => {
-                Decoder::<RemoteMarker<W>>::account_summary_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "account summary end msg")
-            }
-            Ok(In::VerifyMessageApi) => {
-                Decoder::<RemoteMarker<W>>::verify_message_api_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "verify message api msg")
-            }
-            Ok(In::VerifyCompleted) => {
-                Decoder::<RemoteMarker<W>>::verify_completed_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "verify completed msg")
-            }
-            Ok(In::DisplayGroupList) => {
-                Decoder::<RemoteMarker<W>>::display_group_list_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "display group list msg")
-            }
-            Ok(In::DisplayGroupUpdated) => {
-                Decoder::<RemoteMarker<W>>::display_group_updated_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "display group updated msg")
-            }
+            Ok(In::TickSnapshotEnd) => Decoder::<RemoteMarker<W>>::tick_snapshot_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "tick snapshot end msg"),
+            Ok(In::MarketDataType) => Decoder::<RemoteMarker<W>>::market_data_type_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "market data type msg"),
+            Ok(In::CommissionReport) => Decoder::<RemoteMarker<W>>::commission_report_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "commission report msg"),
+            Ok(In::PositionData) => Decoder::<RemoteMarker<W>>::position_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "position data msg"),
+            Ok(In::PositionEnd) => Decoder::<RemoteMarker<W>>::position_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "position end msg"),
+            Ok(In::AccountSummary) => Decoder::<RemoteMarker<W>>::account_summary_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "account summary msg"),
+            Ok(In::AccountSummaryEnd) => Decoder::<RemoteMarker<W>>::account_summary_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "account summary end msg"),
+            Ok(In::VerifyMessageApi) => Decoder::<RemoteMarker<W>>::verify_message_api_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "verify message api msg"),
+            Ok(In::VerifyCompleted) => Decoder::<RemoteMarker<W>>::verify_completed_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "verify completed msg"),
+            Ok(In::DisplayGroupList) => Decoder::<RemoteMarker<W>>::display_group_list_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "display group list msg"),
+            Ok(In::DisplayGroupUpdated) => Decoder::<RemoteMarker<W>>::display_group_updated_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "display group updated msg"),
             Ok(In::VerifyAndAuthMessageApi) => {
-                Decoder::<RemoteMarker<W>>::verify_and_auth_message_api_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "verify and auth message api msg")
+                Decoder::<RemoteMarker<W>>::verify_and_auth_message_api_msg(
+                    &mut fields.into_iter(),
+                    &mut local.0.wrapper,
+                )
+                .await
+                .with_context(|| "verify and auth message api msg")
             }
             Ok(In::VerifyAndAuthCompleted) => {
-                Decoder::<RemoteMarker<W>>::verify_and_auth_completed_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "verify and auth completed msg")
+                Decoder::<RemoteMarker<W>>::verify_and_auth_completed_msg(
+                    &mut fields.into_iter(),
+                    &mut local.0.wrapper,
+                )
+                .await
+                .with_context(|| "verify and auth completed msg")
             }
-            Ok(In::PositionMulti) => Decoder::<RemoteMarker<W>>::position_multi_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "position multi msg"),
-            Ok(In::PositionMultiEnd) => {
-                Decoder::<RemoteMarker<W>>::position_multi_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "position multi end msg")
-            }
-            Ok(In::AccountUpdateMulti) => {
-                Decoder::<RemoteMarker<W>>::account_update_multi_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "account update multi msg")
-            }
+            Ok(In::PositionMulti) => Decoder::<RemoteMarker<W>>::position_multi_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "position multi msg"),
+            Ok(In::PositionMultiEnd) => Decoder::<RemoteMarker<W>>::position_multi_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "position multi end msg"),
+            Ok(In::AccountUpdateMulti) => Decoder::<RemoteMarker<W>>::account_update_multi_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "account update multi msg"),
             Ok(In::AccountUpdateMultiEnd) => {
-                Decoder::<RemoteMarker<W>>::account_update_multi_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "account update multi end msg")
+                Decoder::<RemoteMarker<W>>::account_update_multi_end_msg(
+                    &mut fields.into_iter(),
+                    &mut local.0.wrapper,
+                )
+                .await
+                .with_context(|| "account update multi end msg")
             }
             Ok(In::SecurityDefinitionOptionParameter) => {
-                Decoder::<RemoteMarker<W>>::security_definition_option_parameter_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "security definition option parameter msg")
+                Decoder::<RemoteMarker<W>>::security_definition_option_parameter_msg(
+                    &mut fields.into_iter(),
+                    &mut local.0.wrapper,
+                )
+                .await
+                .with_context(|| "security definition option parameter msg")
             }
             Ok(In::SecurityDefinitionOptionParameterEnd) => {
                 Decoder::<RemoteMarker<W>>::security_definition_option_parameter_end_msg(
                     &mut fields.into_iter(),
                     &mut local.0.wrapper,
-                ).await
-                    .with_context(|| "security definition option parameter end msg")
+                )
+                .await
+                .with_context(|| "security definition option parameter end msg")
             }
-            Ok(In::SoftDollarTiers) => {
-                Decoder::<RemoteMarker<W>>::soft_dollar_tiers_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "soft dollar tiers msg")
-            }
-            Ok(In::FamilyCodes) => Decoder::<RemoteMarker<W>>::family_codes_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "family codes msg"),
-            Ok(In::SymbolSamples) => Decoder::<RemoteMarker<W>>::symbol_samples_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "symbol samples msg"),
-            Ok(In::MktDepthExchanges) => {
-                Decoder::<RemoteMarker<W>>::mkt_depth_exchanges_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "mkt depth exchanges msg")
-            }
-            Ok(In::TickReqParams) => Decoder::<RemoteMarker<W>>::tick_req_params_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "tick req params msg"),
-            Ok(In::SmartComponents) => {
-                Decoder::<RemoteMarker<W>>::smart_components_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "smart components msg")
-            }
-            Ok(In::NewsArticle) => Decoder::<RemoteMarker<W>>::news_article_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "news article msg"),
-            Ok(In::TickNews) => Decoder::<RemoteMarker<W>>::tick_news_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "tick news msg"),
-            Ok(In::NewsProviders) => Decoder::<RemoteMarker<W>>::news_providers_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "news providers msg"),
-            Ok(In::HistoricalNews) => Decoder::<RemoteMarker<W>>::historical_news_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "historical news msg"),
-            Ok(In::HistoricalNewsEnd) => {
-                Decoder::<RemoteMarker<W>>::historical_news_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "historical news end msg")
-            }
-            Ok(In::HeadTimestamp) => Decoder::<RemoteMarker<W>>::head_timestamp_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "head timestamp msg"),
-            Ok(In::HistogramData) => Decoder::<RemoteMarker<W>>::histogram_data_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "histogram data msg"),
-            Ok(In::HistoricalDataUpdate) => {
-                Decoder::<RemoteMarker<W>>::historical_data_update_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "historical data update msg")
-            }
-            Ok(In::RerouteMktDataReq) => {
-                Decoder::<RemoteMarker<W>>::reroute_mkt_data_req_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "reroute mkt data req msg")
-            }
-            Ok(In::RerouteMktDepthReq) => {
-                Decoder::<RemoteMarker<W>>::reroute_mkt_depth_req_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "reroute mkt depth req msg")
-            }
-            Ok(In::MarketRule) => Decoder::<RemoteMarker<W>>::market_rule_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "market rule msg"),
+            Ok(In::SoftDollarTiers) => Decoder::<RemoteMarker<W>>::soft_dollar_tiers_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "soft dollar tiers msg"),
+            Ok(In::FamilyCodes) => Decoder::<RemoteMarker<W>>::family_codes_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "family codes msg"),
+            Ok(In::SymbolSamples) => Decoder::<RemoteMarker<W>>::symbol_samples_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "symbol samples msg"),
+            Ok(In::MktDepthExchanges) => Decoder::<RemoteMarker<W>>::mkt_depth_exchanges_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "mkt depth exchanges msg"),
+            Ok(In::TickReqParams) => Decoder::<RemoteMarker<W>>::tick_req_params_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "tick req params msg"),
+            Ok(In::SmartComponents) => Decoder::<RemoteMarker<W>>::smart_components_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "smart components msg"),
+            Ok(In::NewsArticle) => Decoder::<RemoteMarker<W>>::news_article_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "news article msg"),
+            Ok(In::TickNews) => Decoder::<RemoteMarker<W>>::tick_news_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "tick news msg"),
+            Ok(In::NewsProviders) => Decoder::<RemoteMarker<W>>::news_providers_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "news providers msg"),
+            Ok(In::HistoricalNews) => Decoder::<RemoteMarker<W>>::historical_news_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "historical news msg"),
+            Ok(In::HistoricalNewsEnd) => Decoder::<RemoteMarker<W>>::historical_news_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "historical news end msg"),
+            Ok(In::HeadTimestamp) => Decoder::<RemoteMarker<W>>::head_timestamp_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "head timestamp msg"),
+            Ok(In::HistogramData) => Decoder::<RemoteMarker<W>>::histogram_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "histogram data msg"),
+            Ok(In::HistoricalDataUpdate) => Decoder::<RemoteMarker<W>>::historical_data_update_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "historical data update msg"),
+            Ok(In::RerouteMktDataReq) => Decoder::<RemoteMarker<W>>::reroute_mkt_data_req_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "reroute mkt data req msg"),
+            Ok(In::RerouteMktDepthReq) => Decoder::<RemoteMarker<W>>::reroute_mkt_depth_req_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "reroute mkt depth req msg"),
+            Ok(In::MarketRule) => Decoder::<RemoteMarker<W>>::market_rule_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "market rule msg"),
             Ok(In::Pnl) => {
-                Decoder::<RemoteMarker<W>>::pnl_msg(&mut fields.into_iter(), &mut local.0.wrapper).await.with_context(|| "pnl msg")
+                Decoder::<RemoteMarker<W>>::pnl_msg(&mut fields.into_iter(), &mut local.0.wrapper)
+                    .await
+                    .with_context(|| "pnl msg")
             }
-            Ok(In::PnlSingle) => Decoder::<RemoteMarker<W>>::pnl_single_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "pnl single msg"),
-            Ok(In::HistoricalTicks) => {
-                Decoder::<RemoteMarker<W>>::historical_ticks_midpoint_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "historical ticks msg")
-            }
+            Ok(In::PnlSingle) => Decoder::<RemoteMarker<W>>::pnl_single_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "pnl single msg"),
+            Ok(In::HistoricalTicks) => Decoder::<RemoteMarker<W>>::historical_ticks_midpoint_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "historical ticks msg"),
             Ok(In::HistoricalTicksBidAsk) => {
-                Decoder::<RemoteMarker<W>>::historical_ticks_bid_ask_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "historical ticks bid ask msg")
+                Decoder::<RemoteMarker<W>>::historical_ticks_bid_ask_msg(
+                    &mut fields.into_iter(),
+                    &mut local.0.wrapper,
+                )
+                .await
+                .with_context(|| "historical ticks bid ask msg")
             }
-            Ok(In::HistoricalTicksLast) => {
-                Decoder::<RemoteMarker<W>>::historical_ticks_last_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "historical ticks last msg")
-            }
-            Ok(In::TickByTick) => Decoder::<RemoteMarker<W>>::tick_by_tick_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "tick by tick msg"),
-            Ok(In::OrderBound) => Decoder::<RemoteMarker<W>>::order_bound_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "order bound msg"),
-            Ok(In::CompletedOrder) => Decoder::<RemoteMarker<W>>::completed_order_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "completed order msg"),
-            Ok(In::CompletedOrdersEnd) => {
-                Decoder::<RemoteMarker<W>>::completed_orders_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "completed orders end msg")
-            }
-            Ok(In::ReplaceFaEnd) => Decoder::<RemoteMarker<W>>::replace_fa_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "replace fa end msg"),
-            Ok(In::WshMetaData) => Decoder::<RemoteMarker<W>>::wsh_meta_data_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "wsh meta data msg"),
-            Ok(In::WshEventData) => Decoder::<RemoteMarker<W>>::wsh_event_data_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "wsh event data msg"),
-            Ok(In::HistoricalSchedule) => {
-                Decoder::<RemoteMarker<W>>::historical_schedule_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "historical schedule msg")
-            }
-            Ok(In::UserInfo) => Decoder::<RemoteMarker<W>>::user_info_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "user info msg"),
+            Ok(In::HistoricalTicksLast) => Decoder::<RemoteMarker<W>>::historical_ticks_last_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "historical ticks last msg"),
+            Ok(In::TickByTick) => Decoder::<RemoteMarker<W>>::tick_by_tick_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "tick by tick msg"),
+            Ok(In::OrderBound) => Decoder::<RemoteMarker<W>>::order_bound_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "order bound msg"),
+            Ok(In::CompletedOrder) => Decoder::<RemoteMarker<W>>::completed_order_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "completed order msg"),
+            Ok(In::CompletedOrdersEnd) => Decoder::<RemoteMarker<W>>::completed_orders_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "completed orders end msg"),
+            Ok(In::ReplaceFaEnd) => Decoder::<RemoteMarker<W>>::replace_fa_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "replace fa end msg"),
+            Ok(In::WshMetaData) => Decoder::<RemoteMarker<W>>::wsh_meta_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "wsh meta data msg"),
+            Ok(In::WshEventData) => Decoder::<RemoteMarker<W>>::wsh_event_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "wsh event data msg"),
+            Ok(In::HistoricalSchedule) => Decoder::<RemoteMarker<W>>::historical_schedule_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "historical schedule msg"),
+            Ok(In::UserInfo) => Decoder::<RemoteMarker<W>>::user_info_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "user info msg"),
             Err(e) => Err(e.into()),
         },
     };
@@ -542,257 +819,534 @@ async fn decode_msg_local<'c, W>(
     local: &mut Decoder<LocalMarker<'c, W>>,
     tx: &mut mpsc::Sender<ToClient>,
     rx: &mut mpsc::Receiver<ToWrapper>,
-) where W: Local<'c> {
+) where
+    W: Local<'c>,
+{
     let status = match fields.first() {
         None => Err(anyhow::Error::msg("Empty fields received from reader")),
         Some(s) => match s.parse() {
-            Ok(In::TickPrice) => Decoder::<LocalMarker<'c, W>>::tick_price_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "tick price msg"),
-            Ok(In::TickSize) => Decoder::<LocalMarker<'c, W>>::tick_size_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "tick size msg"),
-            Ok(In::OrderStatus) => Decoder::<LocalMarker<'c, W>>::order_status_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "order status msg"),
-            Ok(In::ErrMsg) => {
-                Decoder::<LocalMarker<'c, W>>::err_msg_msg(&mut fields.into_iter(), &mut local.0.wrapper).await.with_context(|| "err msg msg")
-            }
-            Ok(In::OpenOrder) => Decoder::<LocalMarker<'c, W>>::open_order_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "open order msg"),
-            Ok(In::AcctValue) => Decoder::<LocalMarker<'c, W>>::acct_value_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "acct value msg"),
-            Ok(In::PortfolioValue) => Decoder::<LocalMarker<'c, W>>::portfolio_value_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "portfolio value msg"),
-            Ok(In::AcctUpdateTime) => {
-                Decoder::<LocalMarker<'c, W>>::acct_update_time_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "acct update time msg")
-            }
-            Ok(In::NextValidId) => {
-                Decoder::<LocalMarker<'c, W>>::next_valid_id_msg(&mut fields.into_iter(), &mut local.0.wrapper, tx, rx).await
-                    .with_context(|| "next valid id msg")
-            }
-            Ok(In::ContractData) => {
-                Decoder::<LocalMarker<'c, W>>::contract_data_msg(&mut fields.into_iter(), &mut local.0.wrapper, tx, rx).await
-                    .with_context(|| "contract data msg")
-            }
-            Ok(In::ExecutionData) => Decoder::<LocalMarker<'c, W>>::execution_data_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "execution data msg"),
-            Ok(In::MarketDepth) => Decoder::<LocalMarker<'c, W>>::market_depth_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "market depth msg"),
-            Ok(In::MarketDepthL2) => Decoder::<LocalMarker<'c, W>>::market_depth_l2_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "market depth l2 msg"),
-            Ok(In::NewsBulletins) => Decoder::<LocalMarker<'c, W>>::news_bulletins_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "news bulletins msg"),
-            Ok(In::ManagedAccts) => {
-                Decoder::<LocalMarker<'c, W>>::managed_accts_msg(&mut fields.into_iter(), &mut local.0.wrapper, tx, rx).await
-                    .with_context(|| "managed accounts msg")
-            }
-            Ok(In::ReceiveFa) => Decoder::<LocalMarker<'c, W>>::receive_fa_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "receive fa msg"),
-            Ok(In::HistoricalData) => Decoder::<LocalMarker<'c, W>>::historical_data_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "historical data msg"),
-            Ok(In::BondContractData) => {
-                Decoder::<LocalMarker<'c, W>>::bond_contract_data_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "bond contract data msg")
-            }
-            Ok(In::ScannerParameters) => {
-                Decoder::<LocalMarker<'c, W>>::scanner_parameters_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "scanner parameters msg")
-            }
-            Ok(In::ScannerData) => Decoder::<LocalMarker<'c, W>>::scanner_data_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "scanner data msg"),
+            Ok(In::TickPrice) => Decoder::<LocalMarker<'c, W>>::tick_price_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "tick price msg"),
+            Ok(In::TickSize) => Decoder::<LocalMarker<'c, W>>::tick_size_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "tick size msg"),
+            Ok(In::OrderStatus) => Decoder::<LocalMarker<'c, W>>::order_status_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "order status msg"),
+            Ok(In::ErrMsg) => Decoder::<LocalMarker<'c, W>>::err_msg_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "err msg msg"),
+            Ok(In::OpenOrder) => Decoder::<LocalMarker<'c, W>>::open_order_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "open order msg"),
+            Ok(In::AcctValue) => Decoder::<LocalMarker<'c, W>>::acct_value_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "acct value msg"),
+            Ok(In::PortfolioValue) => Decoder::<LocalMarker<'c, W>>::portfolio_value_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "portfolio value msg"),
+            Ok(In::AcctUpdateTime) => Decoder::<LocalMarker<'c, W>>::acct_update_time_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "acct update time msg"),
+            Ok(In::NextValidId) => Decoder::<LocalMarker<'c, W>>::next_valid_id_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+                tx,
+                rx,
+            )
+            .await
+            .with_context(|| "next valid id msg"),
+            Ok(In::ContractData) => Decoder::<LocalMarker<'c, W>>::contract_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+                tx,
+                rx,
+            )
+            .await
+            .with_context(|| "contract data msg"),
+            Ok(In::ExecutionData) => Decoder::<LocalMarker<'c, W>>::execution_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "execution data msg"),
+            Ok(In::MarketDepth) => Decoder::<LocalMarker<'c, W>>::market_depth_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "market depth msg"),
+            Ok(In::MarketDepthL2) => Decoder::<LocalMarker<'c, W>>::market_depth_l2_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "market depth l2 msg"),
+            Ok(In::NewsBulletins) => Decoder::<LocalMarker<'c, W>>::news_bulletins_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "news bulletins msg"),
+            Ok(In::ManagedAccts) => Decoder::<LocalMarker<'c, W>>::managed_accts_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+                tx,
+                rx,
+            )
+            .await
+            .with_context(|| "managed accounts msg"),
+            Ok(In::ReceiveFa) => Decoder::<LocalMarker<'c, W>>::receive_fa_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "receive fa msg"),
+            Ok(In::HistoricalData) => Decoder::<LocalMarker<'c, W>>::historical_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "historical data msg"),
+            Ok(In::BondContractData) => Decoder::<LocalMarker<'c, W>>::bond_contract_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "bond contract data msg"),
+            Ok(In::ScannerParameters) => Decoder::<LocalMarker<'c, W>>::scanner_parameters_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "scanner parameters msg"),
+            Ok(In::ScannerData) => Decoder::<LocalMarker<'c, W>>::scanner_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "scanner data msg"),
             Ok(In::TickOptionComputation) => {
-                Decoder::<LocalMarker<'c, W>>::tick_option_computation_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "tick option computation msg")
+                Decoder::<LocalMarker<'c, W>>::tick_option_computation_msg(
+                    &mut fields.into_iter(),
+                    &mut local.0.wrapper,
+                )
+                .await
+                .with_context(|| "tick option computation msg")
             }
-            Ok(In::TickGeneric) => Decoder::<LocalMarker<'c, W>>::tick_generic_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "tick generic msg"),
-            Ok(In::TickString) => Decoder::<LocalMarker<'c, W>>::tick_string_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "tick string msg"),
-            Ok(In::TickEfp) => Decoder::<LocalMarker<'c, W>>::tick_efp_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "tick efp msg"),
-            Ok(In::CurrentTime) => Decoder::<LocalMarker<'c, W>>::current_time_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "current time msg"),
-            Ok(In::RealTimeBars) => Decoder::<LocalMarker<'c, W>>::real_time_bars_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "real time bars msg"),
-            Ok(In::FundamentalData) => {
-                Decoder::<LocalMarker<'c, W>>::fundamental_data_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "fundamental data msg")
-            }
-            Ok(In::ContractDataEnd) => {
-                Decoder::<LocalMarker<'c, W>>::contract_data_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "contract data end msg")
-            }
-            Ok(In::OpenOrderEnd) => Decoder::<LocalMarker<'c, W>>::open_order_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "open order end msg"),
-            Ok(In::AcctDownloadEnd) => {
-                Decoder::<LocalMarker<'c, W>>::acct_download_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "acct download end msg")
-            }
-            Ok(In::ExecutionDataEnd) => {
-                Decoder::<LocalMarker<'c, W>>::execution_data_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "execution data end msg")
-            }
+            Ok(In::TickGeneric) => Decoder::<LocalMarker<'c, W>>::tick_generic_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "tick generic msg"),
+            Ok(In::TickString) => Decoder::<LocalMarker<'c, W>>::tick_string_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "tick string msg"),
+            Ok(In::TickEfp) => Decoder::<LocalMarker<'c, W>>::tick_efp_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "tick efp msg"),
+            Ok(In::CurrentTime) => Decoder::<LocalMarker<'c, W>>::current_time_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "current time msg"),
+            Ok(In::RealTimeBars) => Decoder::<LocalMarker<'c, W>>::real_time_bars_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "real time bars msg"),
+            Ok(In::FundamentalData) => Decoder::<LocalMarker<'c, W>>::fundamental_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "fundamental data msg"),
+            Ok(In::ContractDataEnd) => Decoder::<LocalMarker<'c, W>>::contract_data_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "contract data end msg"),
+            Ok(In::OpenOrderEnd) => Decoder::<LocalMarker<'c, W>>::open_order_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "open order end msg"),
+            Ok(In::AcctDownloadEnd) => Decoder::<LocalMarker<'c, W>>::acct_download_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "acct download end msg"),
+            Ok(In::ExecutionDataEnd) => Decoder::<LocalMarker<'c, W>>::execution_data_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "execution data end msg"),
             Ok(In::DeltaNeutralValidation) => {
-                Decoder::<LocalMarker<'c, W>>::delta_neutral_validation_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "delta neutral validation msg")
+                Decoder::<LocalMarker<'c, W>>::delta_neutral_validation_msg(
+                    &mut fields.into_iter(),
+                    &mut local.0.wrapper,
+                )
+                .await
+                .with_context(|| "delta neutral validation msg")
             }
-            Ok(In::TickSnapshotEnd) => {
-                Decoder::<LocalMarker<'c, W>>::tick_snapshot_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "tick snapshot end msg")
-            }
-            Ok(In::MarketDataType) => {
-                Decoder::<LocalMarker<'c, W>>::market_data_type_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "market data type msg")
-            }
-            Ok(In::CommissionReport) => {
-                Decoder::<LocalMarker<'c, W>>::commission_report_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "commission report msg")
-            }
-            Ok(In::PositionData) => Decoder::<LocalMarker<'c, W>>::position_data_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "position data msg"),
-            Ok(In::PositionEnd) => Decoder::<LocalMarker<'c, W>>::position_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "position end msg"),
-            Ok(In::AccountSummary) => Decoder::<LocalMarker<'c, W>>::account_summary_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "account summary msg"),
-            Ok(In::AccountSummaryEnd) => {
-                Decoder::<LocalMarker<'c, W>>::account_summary_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "account summary end msg")
-            }
-            Ok(In::VerifyMessageApi) => {
-                Decoder::<LocalMarker<'c, W>>::verify_message_api_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "verify message api msg")
-            }
-            Ok(In::VerifyCompleted) => {
-                Decoder::<LocalMarker<'c, W>>::verify_completed_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "verify completed msg")
-            }
-            Ok(In::DisplayGroupList) => {
-                Decoder::<LocalMarker<'c, W>>::display_group_list_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "display group list msg")
-            }
+            Ok(In::TickSnapshotEnd) => Decoder::<LocalMarker<'c, W>>::tick_snapshot_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "tick snapshot end msg"),
+            Ok(In::MarketDataType) => Decoder::<LocalMarker<'c, W>>::market_data_type_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "market data type msg"),
+            Ok(In::CommissionReport) => Decoder::<LocalMarker<'c, W>>::commission_report_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "commission report msg"),
+            Ok(In::PositionData) => Decoder::<LocalMarker<'c, W>>::position_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "position data msg"),
+            Ok(In::PositionEnd) => Decoder::<LocalMarker<'c, W>>::position_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "position end msg"),
+            Ok(In::AccountSummary) => Decoder::<LocalMarker<'c, W>>::account_summary_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "account summary msg"),
+            Ok(In::AccountSummaryEnd) => Decoder::<LocalMarker<'c, W>>::account_summary_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "account summary end msg"),
+            Ok(In::VerifyMessageApi) => Decoder::<LocalMarker<'c, W>>::verify_message_api_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "verify message api msg"),
+            Ok(In::VerifyCompleted) => Decoder::<LocalMarker<'c, W>>::verify_completed_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "verify completed msg"),
+            Ok(In::DisplayGroupList) => Decoder::<LocalMarker<'c, W>>::display_group_list_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "display group list msg"),
             Ok(In::DisplayGroupUpdated) => {
-                Decoder::<LocalMarker<'c, W>>::display_group_updated_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "display group updated msg")
+                Decoder::<LocalMarker<'c, W>>::display_group_updated_msg(
+                    &mut fields.into_iter(),
+                    &mut local.0.wrapper,
+                )
+                .await
+                .with_context(|| "display group updated msg")
             }
             Ok(In::VerifyAndAuthMessageApi) => {
-                Decoder::<LocalMarker<'c, W>>::verify_and_auth_message_api_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "verify and auth message api msg")
+                Decoder::<LocalMarker<'c, W>>::verify_and_auth_message_api_msg(
+                    &mut fields.into_iter(),
+                    &mut local.0.wrapper,
+                )
+                .await
+                .with_context(|| "verify and auth message api msg")
             }
             Ok(In::VerifyAndAuthCompleted) => {
-                Decoder::<LocalMarker<'c, W>>::verify_and_auth_completed_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "verify and auth completed msg")
+                Decoder::<LocalMarker<'c, W>>::verify_and_auth_completed_msg(
+                    &mut fields.into_iter(),
+                    &mut local.0.wrapper,
+                )
+                .await
+                .with_context(|| "verify and auth completed msg")
             }
-            Ok(In::PositionMulti) => Decoder::<LocalMarker<'c, W>>::position_multi_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "position multi msg"),
-            Ok(In::PositionMultiEnd) => {
-                Decoder::<LocalMarker<'c, W>>::position_multi_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "position multi end msg")
-            }
-            Ok(In::AccountUpdateMulti) => {
-                Decoder::<LocalMarker<'c, W>>::account_update_multi_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "account update multi msg")
-            }
+            Ok(In::PositionMulti) => Decoder::<LocalMarker<'c, W>>::position_multi_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "position multi msg"),
+            Ok(In::PositionMultiEnd) => Decoder::<LocalMarker<'c, W>>::position_multi_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "position multi end msg"),
+            Ok(In::AccountUpdateMulti) => Decoder::<LocalMarker<'c, W>>::account_update_multi_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "account update multi msg"),
             Ok(In::AccountUpdateMultiEnd) => {
-                Decoder::<LocalMarker<'c, W>>::account_update_multi_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "account update multi end msg")
+                Decoder::<LocalMarker<'c, W>>::account_update_multi_end_msg(
+                    &mut fields.into_iter(),
+                    &mut local.0.wrapper,
+                )
+                .await
+                .with_context(|| "account update multi end msg")
             }
             Ok(In::SecurityDefinitionOptionParameter) => {
-                Decoder::<LocalMarker<'c, W>>::security_definition_option_parameter_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "security definition option parameter msg")
+                Decoder::<LocalMarker<'c, W>>::security_definition_option_parameter_msg(
+                    &mut fields.into_iter(),
+                    &mut local.0.wrapper,
+                )
+                .await
+                .with_context(|| "security definition option parameter msg")
             }
             Ok(In::SecurityDefinitionOptionParameterEnd) => {
                 Decoder::<LocalMarker<'c, W>>::security_definition_option_parameter_end_msg(
                     &mut fields.into_iter(),
                     &mut local.0.wrapper,
-                ).await
-                    .with_context(|| "security definition option parameter end msg")
+                )
+                .await
+                .with_context(|| "security definition option parameter end msg")
             }
-            Ok(In::SoftDollarTiers) => {
-                Decoder::<LocalMarker<'c, W>>::soft_dollar_tiers_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "soft dollar tiers msg")
-            }
-            Ok(In::FamilyCodes) => Decoder::<LocalMarker<'c, W>>::family_codes_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "family codes msg"),
-            Ok(In::SymbolSamples) => Decoder::<LocalMarker<'c, W>>::symbol_samples_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "symbol samples msg"),
-            Ok(In::MktDepthExchanges) => {
-                Decoder::<LocalMarker<'c, W>>::mkt_depth_exchanges_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "mkt depth exchanges msg")
-            }
-            Ok(In::TickReqParams) => Decoder::<LocalMarker<'c, W>>::tick_req_params_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "tick req params msg"),
-            Ok(In::SmartComponents) => {
-                Decoder::<LocalMarker<'c, W>>::smart_components_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "smart components msg")
-            }
-            Ok(In::NewsArticle) => Decoder::<LocalMarker<'c, W>>::news_article_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "news article msg"),
-            Ok(In::TickNews) => Decoder::<LocalMarker<'c, W>>::tick_news_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "tick news msg"),
-            Ok(In::NewsProviders) => Decoder::<LocalMarker<'c, W>>::news_providers_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "news providers msg"),
-            Ok(In::HistoricalNews) => Decoder::<LocalMarker<'c, W>>::historical_news_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "historical news msg"),
-            Ok(In::HistoricalNewsEnd) => {
-                Decoder::<LocalMarker<'c, W>>::historical_news_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "historical news end msg")
-            }
-            Ok(In::HeadTimestamp) => Decoder::<LocalMarker<'c, W>>::head_timestamp_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "head timestamp msg"),
-            Ok(In::HistogramData) => Decoder::<LocalMarker<'c, W>>::histogram_data_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "histogram data msg"),
+            Ok(In::SoftDollarTiers) => Decoder::<LocalMarker<'c, W>>::soft_dollar_tiers_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "soft dollar tiers msg"),
+            Ok(In::FamilyCodes) => Decoder::<LocalMarker<'c, W>>::family_codes_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "family codes msg"),
+            Ok(In::SymbolSamples) => Decoder::<LocalMarker<'c, W>>::symbol_samples_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "symbol samples msg"),
+            Ok(In::MktDepthExchanges) => Decoder::<LocalMarker<'c, W>>::mkt_depth_exchanges_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "mkt depth exchanges msg"),
+            Ok(In::TickReqParams) => Decoder::<LocalMarker<'c, W>>::tick_req_params_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "tick req params msg"),
+            Ok(In::SmartComponents) => Decoder::<LocalMarker<'c, W>>::smart_components_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "smart components msg"),
+            Ok(In::NewsArticle) => Decoder::<LocalMarker<'c, W>>::news_article_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "news article msg"),
+            Ok(In::TickNews) => Decoder::<LocalMarker<'c, W>>::tick_news_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "tick news msg"),
+            Ok(In::NewsProviders) => Decoder::<LocalMarker<'c, W>>::news_providers_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "news providers msg"),
+            Ok(In::HistoricalNews) => Decoder::<LocalMarker<'c, W>>::historical_news_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "historical news msg"),
+            Ok(In::HistoricalNewsEnd) => Decoder::<LocalMarker<'c, W>>::historical_news_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "historical news end msg"),
+            Ok(In::HeadTimestamp) => Decoder::<LocalMarker<'c, W>>::head_timestamp_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "head timestamp msg"),
+            Ok(In::HistogramData) => Decoder::<LocalMarker<'c, W>>::histogram_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "histogram data msg"),
             Ok(In::HistoricalDataUpdate) => {
-                Decoder::<LocalMarker<'c, W>>::historical_data_update_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "historical data update msg")
+                Decoder::<LocalMarker<'c, W>>::historical_data_update_msg(
+                    &mut fields.into_iter(),
+                    &mut local.0.wrapper,
+                )
+                .await
+                .with_context(|| "historical data update msg")
             }
-            Ok(In::RerouteMktDataReq) => {
-                Decoder::<LocalMarker<'c, W>>::reroute_mkt_data_req_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "reroute mkt data req msg")
-            }
-            Ok(In::RerouteMktDepthReq) => {
-                Decoder::<LocalMarker<'c, W>>::reroute_mkt_depth_req_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "reroute mkt depth req msg")
-            }
-            Ok(In::MarketRule) => Decoder::<LocalMarker<'c, W>>::market_rule_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "market rule msg"),
-            Ok(In::Pnl) => {
-                Decoder::<LocalMarker<'c, W>>::pnl_msg(&mut fields.into_iter(), &mut local.0.wrapper).await.with_context(|| "pnl msg")
-            }
-            Ok(In::PnlSingle) => Decoder::<LocalMarker<'c, W>>::pnl_single_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "pnl single msg"),
+            Ok(In::RerouteMktDataReq) => Decoder::<LocalMarker<'c, W>>::reroute_mkt_data_req_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "reroute mkt data req msg"),
+            Ok(In::RerouteMktDepthReq) => Decoder::<LocalMarker<'c, W>>::reroute_mkt_depth_req_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "reroute mkt depth req msg"),
+            Ok(In::MarketRule) => Decoder::<LocalMarker<'c, W>>::market_rule_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "market rule msg"),
+            Ok(In::Pnl) => Decoder::<LocalMarker<'c, W>>::pnl_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "pnl msg"),
+            Ok(In::PnlSingle) => Decoder::<LocalMarker<'c, W>>::pnl_single_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "pnl single msg"),
             Ok(In::HistoricalTicks) => {
-                Decoder::<LocalMarker<'c, W>>::historical_ticks_midpoint_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "historical ticks msg")
+                Decoder::<LocalMarker<'c, W>>::historical_ticks_midpoint_msg(
+                    &mut fields.into_iter(),
+                    &mut local.0.wrapper,
+                )
+                .await
+                .with_context(|| "historical ticks msg")
             }
             Ok(In::HistoricalTicksBidAsk) => {
-                Decoder::<LocalMarker<'c, W>>::historical_ticks_bid_ask_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "historical ticks bid ask msg")
+                Decoder::<LocalMarker<'c, W>>::historical_ticks_bid_ask_msg(
+                    &mut fields.into_iter(),
+                    &mut local.0.wrapper,
+                )
+                .await
+                .with_context(|| "historical ticks bid ask msg")
             }
             Ok(In::HistoricalTicksLast) => {
-                Decoder::<LocalMarker<'c, W>>::historical_ticks_last_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "historical ticks last msg")
+                Decoder::<LocalMarker<'c, W>>::historical_ticks_last_msg(
+                    &mut fields.into_iter(),
+                    &mut local.0.wrapper,
+                )
+                .await
+                .with_context(|| "historical ticks last msg")
             }
-            Ok(In::TickByTick) => Decoder::<LocalMarker<'c, W>>::tick_by_tick_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "tick by tick msg"),
-            Ok(In::OrderBound) => Decoder::<LocalMarker<'c, W>>::order_bound_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "order bound msg"),
-            Ok(In::CompletedOrder) => Decoder::<LocalMarker<'c, W>>::completed_order_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "completed order msg"),
-            Ok(In::CompletedOrdersEnd) => {
-                Decoder::<LocalMarker<'c, W>>::completed_orders_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "completed orders end msg")
-            }
-            Ok(In::ReplaceFaEnd) => Decoder::<LocalMarker<'c, W>>::replace_fa_end_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "replace fa end msg"),
-            Ok(In::WshMetaData) => Decoder::<LocalMarker<'c, W>>::wsh_meta_data_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "wsh meta data msg"),
-            Ok(In::WshEventData) => Decoder::<LocalMarker<'c, W>>::wsh_event_data_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "wsh event data msg"),
-            Ok(In::HistoricalSchedule) => {
-                Decoder::<LocalMarker<'c, W>>::historical_schedule_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                    .with_context(|| "historical schedule msg")
-            }
-            Ok(In::UserInfo) => Decoder::<LocalMarker<'c, W>>::user_info_msg(&mut fields.into_iter(), &mut local.0.wrapper).await
-                .with_context(|| "user info msg"),
+            Ok(In::TickByTick) => Decoder::<LocalMarker<'c, W>>::tick_by_tick_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "tick by tick msg"),
+            Ok(In::OrderBound) => Decoder::<LocalMarker<'c, W>>::order_bound_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "order bound msg"),
+            Ok(In::CompletedOrder) => Decoder::<LocalMarker<'c, W>>::completed_order_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "completed order msg"),
+            Ok(In::CompletedOrdersEnd) => Decoder::<LocalMarker<'c, W>>::completed_orders_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "completed orders end msg"),
+            Ok(In::ReplaceFaEnd) => Decoder::<LocalMarker<'c, W>>::replace_fa_end_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "replace fa end msg"),
+            Ok(In::WshMetaData) => Decoder::<LocalMarker<'c, W>>::wsh_meta_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "wsh meta data msg"),
+            Ok(In::WshEventData) => Decoder::<LocalMarker<'c, W>>::wsh_event_data_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "wsh event data msg"),
+            Ok(In::HistoricalSchedule) => Decoder::<LocalMarker<'c, W>>::historical_schedule_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "historical schedule msg"),
+            Ok(In::UserInfo) => Decoder::<LocalMarker<'c, W>>::user_info_msg(
+                &mut fields.into_iter(),
+                &mut local.0.wrapper,
+            )
+            .await
+            .with_context(|| "user info msg"),
             Err(e) => Err(e.into()),
         },
     };
@@ -805,14 +1359,11 @@ async fn decode_msg_local<'c, W>(
     }
 }
 
-
 pub(crate) mod indicators {
+    use super::Reader;
+    use crate::message::{ToClient, ToWrapper};
     use std::collections::HashSet;
     use tokio::{net::tcp::OwnedReadHalf, sync::mpsc, task::JoinHandle};
-    use crate::{
-        message::{ToClient, ToWrapper},
-    };
-    use super::Reader;
 
     pub trait Status {}
 
@@ -960,9 +1511,7 @@ impl Client<indicators::Inactive> {
     }
 
     #[allow(clippy::unwrap_used, clippy::missing_panics_doc)]
-    fn into_active(
-        self,
-    ) -> IntoActive {
+    fn into_active(self) -> IntoActive {
         let (disconnect, queue, r_thread) = spawn_reader_thread(self.status.reader);
 
         let (mut managed_accounts, mut valid_id) = (None, None);
@@ -970,13 +1519,24 @@ impl Client<indicators::Inactive> {
             if let Some(fields) = queue.pop() {
                 match fields.first().and_then(|t| t.parse().ok()) {
                     Some(In::ManagedAccts) => {
-                        managed_accounts = Some(fields.into_iter().skip(2).filter(|v| v.as_str() != "").collect::<std::collections::HashSet<String>>());
-                    },
+                        managed_accounts = Some(
+                            fields
+                                .into_iter()
+                                .skip(2)
+                                .filter(|v| v.as_str() != "")
+                                .collect::<std::collections::HashSet<String>>(),
+                        );
+                    }
                     Some(In::NextValidId) => {
-                        valid_id = decode::nth(&mut fields.into_iter(), 2).with_context(|| "Expected ID, found none")
+                        valid_id = decode::nth(&mut fields.into_iter(), 2)
+                            .with_context(|| "Expected ID, found none")
                             .ok()
-                            .and_then(|t| t.parse::<i64>().with_context(|| "Invalid value for ID").ok());
-                    },
+                            .and_then(|t| {
+                                t.parse::<i64>()
+                                    .with_context(|| "Invalid value for ID")
+                                    .ok()
+                            });
+                    }
                     Some(_) => queue.push(fields),
                     None => (),
                 }
@@ -1018,39 +1578,35 @@ impl Client<indicators::Inactive> {
     ///
     /// # Errors
     /// Any error that occurs in the [`Client<Active>::disconnect`] process
-    pub async fn local<I: for<'c> Initializer<'c>>(self, init: I) -> Result<Builder, std::io::Error>{
-        let (
-            mut client,
-            mut tx,
-            mut rx,
-            queue,
-        ) = self.into_active();
+    pub async fn local<I: for<'c> Initializer<'c>>(
+        self,
+        init: I,
+    ) -> Result<Builder, std::io::Error> {
+        let (mut client, mut tx, mut rx, queue) = self.into_active();
 
         let temp = CancellationToken::new();
         let temp_2 = temp.clone();
-        let con_fut = tokio::spawn(
-            async move {
-                loop {
-                    tokio::select! {
-                        () = temp.cancelled() => { break (queue, tx, rx); },
-                        () = async {
-                            let _ = if let Some(fields) = queue.pop() {
-                                match fields.first().and_then(|t| t.parse().ok()) {
-                                    Some(In::ContractData) => decode::decode_contract_no_wrapper(&mut fields.into_iter(), &mut tx, &mut rx).await.with_context(|| "contract data msg"),
-                                    Some(_) => { queue.push(fields); Ok(()) },
-                                    None => Ok(()),
-                                }
-                            } else { Ok(()) };
-                        } => ()
-                    }
+        let con_fut = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    () = temp.cancelled() => { break (queue, tx, rx); },
+                    () = async {
+                        let _ = if let Some(fields) = queue.pop() {
+                            match fields.first().and_then(|t| t.parse().ok()) {
+                                Some(In::ContractData) => decode::decode_contract_no_wrapper(&mut fields.into_iter(), &mut tx, &mut rx).await.with_context(|| "contract data msg"),
+                                Some(_) => { queue.push(fields); Ok(()) },
+                                None => Ok(()),
+                            }
+                        } else { Ok(()) };
+                    } => ()
                 }
             }
-        );
+        });
 
         let break_loop = CancellationToken::new();
         let mut decoder = Decoder(LocalMarker {
             wrapper: Initializer::build(init, &mut client, break_loop.clone()).await,
-            _init_marker: &std::marker::PhantomData
+            _init_marker: &std::marker::PhantomData,
         });
         temp_2.cancel();
         let (queue, mut tx, mut rx) = con_fut.await?;
@@ -1077,12 +1633,7 @@ impl Client<indicators::Inactive> {
     /// # Returns
     /// An active [`Client`] that can be used to make API requests.
     pub fn remote<W: Remote + Send + 'static>(self, wrapper: W) -> Client<indicators::Active> {
-        let (
-            client,
-            mut tx,
-            mut rx,
-            queue,
-        ) = self.into_active();
+        let (client, mut tx, mut rx, queue) = self.into_active();
         let c_loop_disconnect = client.status.disconnect.clone();
         let mut decoder = Decoder(RemoteMarker { wrapper });
 

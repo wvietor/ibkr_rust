@@ -2,6 +2,10 @@ use anyhow::Context;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
 use crate::account::{self, Tag, TagValue};
+use crate::contract::{
+    Commodity, Contract, ContractId, Crypto, Forex, Index, SecFuture, SecOption, SecOptionInner,
+    SecurityId, Stock,
+};
 use crate::payload::{
     market_depth::{CompleteEntry, Entry, Operation},
     Bar, BarCore, ExchangeId, HistogramEntry, MarketDataClass, Pnl, Position, PositionSummary,
@@ -13,16 +17,15 @@ use crate::tick::{
     RealTimeVolumeBase, SecOptionCalculationResults, SecOptionCalculationSource,
     SecOptionCalculations, SecOptionVolume, Size, SummaryVolume, TimeStamp, Volatility, Yield,
 };
-use crate::contract::{
-        Commodity, Contract, ContractId, Crypto, Forex, Index, SecFuture, SecOption,
-        SecOptionInner, SecurityId, Stock,
-};
 use crate::{
     currency::Currency,
     exchange::Routing,
     message::{ToClient, ToWrapper},
     order::TimeInForce,
-    wrapper::{Local, Remote, indicators::{LocalMarker, Wrapper, RemoteMarker}},
+    wrapper::{
+        indicators::{LocalMarker, RemoteMarker, Wrapper},
+        Local, Remote,
+    },
 };
 
 type Tx = tokio::sync::mpsc::Sender<ToClient>;
@@ -88,7 +91,10 @@ macro_rules! impl_seg_variants {
 
 pub struct Decoder<W: Wrapper>(pub W);
 
-impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
+impl<'c, W> Decoder<LocalMarker<'c, W>>
+where
+    W: Local<'c>,
+{
     #[inline]
     pub async fn tick_price_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
@@ -98,7 +104,7 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
             price @ 0: f64,
             size @ 0: String,
             attr_mask @ 0: u8
-    );
+        );
 
         let size = if size.is_empty() {
             None
@@ -166,7 +172,9 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
                 wrapper.yield_data(req_id, yld).await;
             }
             57 => {
-                wrapper.price_data(req_id, Class::Live(Price::LastRthTrade(price))).await;
+                wrapper
+                    .price_data(req_id, Class::Live(Price::LastRthTrade(price)))
+                    .await;
             }
             66..=68 | 72 | 73 | 75 | 76 => {
                 let (price, size) = match (tick_type, size) {
@@ -210,15 +218,14 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
         Ok(())
     }
 
-
     #[inline]
     pub async fn tick_size_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            tick_type @ 0: u16,
-            value @ 0: f64
-    );
+            fields =>
+                req_id @ 2: i64,
+                tick_type @ 0: u16,
+                value @ 0: f64
+        );
         Self::decode_generic_tick_msg(req_id, tick_type, value, wrapper).await
     }
 
@@ -229,44 +236,46 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     }
 
     #[inline]
-// todo: Implement a proper Error Enum
+    // todo: Implement a proper Error Enum
     pub async fn err_msg_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            error_code @ 0: i64,
-            error_string @ 0: String,
-            advanced_order_reject_json @ 0: String
-    );
-        wrapper.error(req_id, error_code, error_string, advanced_order_reject_json).await;
+            fields =>
+                req_id @ 2: i64,
+                error_code @ 0: i64,
+                error_string @ 0: String,
+                advanced_order_reject_json @ 0: String
+        );
+        wrapper
+            .error(req_id, error_code, error_string, advanced_order_reject_json)
+            .await;
         Ok(())
     }
 
     #[inline]
     pub async fn open_order_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            order_id @ 1: i64,
-            contract_id @ 0: ContractId,
-            action @ 10: String,
-            quantity @ 0: f64,
-            order_type @ 0: String,
-            price @ 0: String,
-            aux_price @ 0: String,
-            time_in_force @ 0: TimeInForce
-    );
+            fields =>
+                order_id @ 1: i64,
+                contract_id @ 0: ContractId,
+                action @ 10: String,
+                quantity @ 0: f64,
+                order_type @ 0: String,
+                price @ 0: String,
+                aux_price @ 0: String,
+                time_in_force @ 0: TimeInForce
+        );
         Ok(())
     }
 
     #[inline]
     pub async fn acct_value_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            name @ 2: String,
-            value @ 0: String,
-            currency @ 0: String,
-            account_number @ 0: String
-    );
+            fields =>
+                name @ 2: String,
+                value @ 0: String,
+                currency @ 0: String,
+                account_number @ 0: String
+        );
         let attribute = match name.as_str() {
             "AccountCode" => account::Attribute::AccountCode(value),
             "AccountOrGroup" => match value.as_str() {
@@ -302,7 +311,9 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
             "CorporateBondValue" => {
                 account::Attribute::CorporateBondValue(value.parse()?, currency.parse()?)
             }
-            "Cryptocurrency" => account::Attribute::Cryptocurrency(value.parse()?, currency.parse()?),
+            "Cryptocurrency" => {
+                account::Attribute::Cryptocurrency(value.parse()?, currency.parse()?)
+            }
             "Currency" => account::Attribute::Currency(value.parse()?),
             "Cushion" => account::Attribute::Cushion(value.parse()?),
             "DayTradesRemaining" => account::Attribute::DayTradesRemaining(value.parse()?),
@@ -332,10 +343,12 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
                 impl_seg_variants!("FullInitMarginReq", name, value),
                 currency.parse()?,
             ),
-            expand_seg_variants!("FullMaintMarginReq") => account::Attribute::FullMaintenanceMarginReq(
-                impl_seg_variants!("FullMaintMarginReq", name, value),
-                currency.parse()?,
-            ),
+            expand_seg_variants!("FullMaintMarginReq") => {
+                account::Attribute::FullMaintenanceMarginReq(
+                    impl_seg_variants!("FullMaintMarginReq", name, value),
+                    currency.parse()?,
+                )
+            }
             "FundValue" => account::Attribute::FundValue(value.parse()?, currency.parse()?),
             "FutureOptionValue" => {
                 account::Attribute::FutureOptionValue(value.parse()?, currency.parse()?)
@@ -396,7 +409,9 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
             "MoneyMarketFundValue" => {
                 account::Attribute::MoneyMarketFundValue(value.parse()?, currency.parse()?)
             }
-            "MutualFundValue" => account::Attribute::MutualFundValue(value.parse()?, currency.parse()?),
+            "MutualFundValue" => {
+                account::Attribute::MutualFundValue(value.parse()?, currency.parse()?)
+            }
             "NLVAndMarginInReview" => account::Attribute::NlvAndMarginInReview(value.parse()?),
             "NetDividend" => account::Attribute::NetDividend(value.parse()?, currency.parse()?),
             expand_seg_variants!("NetLiquidation") => account::Attribute::NetLiquidation(
@@ -422,17 +437,22 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
                     currency.parse()?,
                 )
             }
-            expand_seg_variants!("PostExpirationExcess") => account::Attribute::PostExpirationExcess(
-                impl_seg_variants!("PostExpirationExcess", name, value),
-                currency.parse()?,
-            ),
-            expand_seg_variants!("PostExpirationMargin") => account::Attribute::PostExpirationMargin(
-                impl_seg_variants!("PostExpirationMargin", name, value),
-                currency.parse()?,
-            ),
-            "PreviousDayEquityWithLoanValue" => {
-                account::Attribute::PreviousDayEquityWithLoanValue(value.parse()?, currency.parse()?)
+            expand_seg_variants!("PostExpirationExcess") => {
+                account::Attribute::PostExpirationExcess(
+                    impl_seg_variants!("PostExpirationExcess", name, value),
+                    currency.parse()?,
+                )
             }
+            expand_seg_variants!("PostExpirationMargin") => {
+                account::Attribute::PostExpirationMargin(
+                    impl_seg_variants!("PostExpirationMargin", name, value),
+                    currency.parse()?,
+                )
+            }
+            "PreviousDayEquityWithLoanValue" => account::Attribute::PreviousDayEquityWithLoanValue(
+                value.parse()?,
+                currency.parse()?,
+            ),
             "PreviousDayEquityWithLoanValue-S" => {
                 account::Attribute::PreviousDayEquityWithLoanValueSecurity(
                     value.parse()?,
@@ -442,9 +462,13 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
             "RealCurrency" => account::Attribute::RealCurrency(currency.parse()?),
             "RealizedPnL" => account::Attribute::RealizedPnL(value.parse()?, currency.parse()?),
             "RegTEquity" => account::Attribute::RegTEquity(value.parse()?, currency.parse()?),
-            "RegTEquity-S" => account::Attribute::RegTEquitySecurity(value.parse()?, currency.parse()?),
+            "RegTEquity-S" => {
+                account::Attribute::RegTEquitySecurity(value.parse()?, currency.parse()?)
+            }
             "RegTMargin" => account::Attribute::RegTMargin(value.parse()?, currency.parse()?),
-            "RegTMargin-S" => account::Attribute::RegTMarginSecurity(value.parse()?, currency.parse()?),
+            "RegTMargin-S" => {
+                account::Attribute::RegTMarginSecurity(value.parse()?, currency.parse()?)
+            }
             "SMA" => account::Attribute::Sma(value.parse()?, currency.parse()?),
             "SMA-S" => account::Attribute::SmaSecurity(value.parse()?, currency.parse()?),
             "StockMarketValue" => {
@@ -488,39 +512,40 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     #[inline]
     pub async fn portfolio_value_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            contract_id @ 2: ContractId,
-            position @ 10: f64,
-            market_price @ 0: f64,
-            market_value @ 0: f64,
-            average_cost @ 0: f64,
-            unrealized_pnl @ 0: f64,
-            realized_pnl @ 0: f64,
-            account_name @ 0: String
-    );
-        wrapper.position(Position {
-            contract_id,
-            position,
-            market_price,
-            market_value,
-            average_cost,
-            unrealized_pnl,
-            realized_pnl,
-            account_number: account_name,
-        }).await;
+            fields =>
+                contract_id @ 2: ContractId,
+                position @ 10: f64,
+                market_price @ 0: f64,
+                market_value @ 0: f64,
+                average_cost @ 0: f64,
+                unrealized_pnl @ 0: f64,
+                realized_pnl @ 0: f64,
+                account_name @ 0: String
+        );
+        wrapper
+            .position(Position {
+                contract_id,
+                position,
+                market_price,
+                market_value,
+                average_cost,
+                unrealized_pnl,
+                realized_pnl,
+                account_number: account_name,
+            })
+            .await;
         Ok(())
     }
 
     #[inline]
-    pub async fn acct_update_time_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn acct_update_time_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            timestamp @ 2: String
-    );
-        wrapper.account_attribute_time(NaiveTime::parse_from_str(timestamp.as_str(), "%H:%M")?).await;
+            fields =>
+                timestamp @ 2: String
+        );
+        wrapper
+            .account_attribute_time(NaiveTime::parse_from_str(timestamp.as_str(), "%H:%M")?)
+            .await;
         Ok(())
     }
 
@@ -532,7 +557,6 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
         tx: &mut Tx,
         rx: &mut Rx,
     ) -> anyhow::Result<()> {
-
         Ok(())
     }
 
@@ -545,28 +569,28 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
         rx: &mut Rx,
     ) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            symbol @ 0: String,
-            sec_type @ 0: String,
-            expiration_date @ 0: String,
-            strike @ 0: f64,
-            class @ 0: String,
-            exchange @ 0: Routing,
-            currency @ 0: Currency,
-            local_symbol @ 0: String,
-            trading_class @ 1: String,
-            contract_id @ 0: ContractId,
-            min_tick @ 0: f64,
-            multiplier @ 0: String,
-            order_types @ 0: String,
-            valid_exchanges @ 0: String,
-            underlying_contract_id @ 1: ContractId,
-            long_name @ 0: String,
-            primary_exchange @ 0: String,
-            sector @ 1: String,
-            security_id_count @ 7: usize
-    );
+            fields =>
+                req_id @ 1: i64,
+                symbol @ 0: String,
+                sec_type @ 0: String,
+                expiration_date @ 0: String,
+                strike @ 0: f64,
+                class @ 0: String,
+                exchange @ 0: Routing,
+                currency @ 0: Currency,
+                local_symbol @ 0: String,
+                trading_class @ 1: String,
+                contract_id @ 0: ContractId,
+                min_tick @ 0: f64,
+                multiplier @ 0: String,
+                order_types @ 0: String,
+                valid_exchanges @ 0: String,
+                underlying_contract_id @ 1: ContractId,
+                long_name @ 0: String,
+                primary_exchange @ 0: String,
+                sector @ 1: String,
+                security_id_count @ 7: usize
+        );
 
         let order_types = order_types
             .split(',')
@@ -627,7 +651,8 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
                     order_types,
                     valid_exchanges,
                     security_ids,
-                    stock_type: nth(fields, 5).with_context(|| "Expected stock_type but none found")?,
+                    stock_type: nth(fields, 5)
+                        .with_context(|| "Expected stock_type but none found")?,
                 })),
                 "OPT" => {
                     let inner = SecOptionInner {
@@ -643,8 +668,8 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
                             expiration_date.as_str(),
                             "%Y%m%d",
                         )
-                            .with_context(|| "Invalid date string in OPT expiration_date")?
-                            .0,
+                        .with_context(|| "Invalid date string in OPT expiration_date")?
+                        .0,
                         underlying_contract_id,
                         sector,
                         trading_class,
@@ -702,9 +727,12 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
                     multiplier: multiplier
                         .parse()
                         .with_context(|| "Invalid multiplier in FUT multiplier")?,
-                    expiration_date: NaiveDate::parse_and_remainder(expiration_date.as_str(), "%Y%m%d")
-                        .with_context(|| "Invalid date string in OPT expiration_date")?
-                        .0,
+                    expiration_date: NaiveDate::parse_and_remainder(
+                        expiration_date.as_str(),
+                        "%Y%m%d",
+                    )
+                    .with_context(|| "Invalid date string in OPT expiration_date")?
+                    .0,
                     trading_class,
                     underlying_contract_id,
                     currency,
@@ -731,8 +759,8 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
             tx.send(ToClient::NewContract(
                 contract.ok_or_else(|| anyhow::Error::msg("No contract was created"))?,
             ))
-                .await
-                .with_context(|| "Failure when sending contract")?;
+            .await
+            .with_context(|| "Failure when sending contract")?;
         }
         Ok(())
     }
@@ -746,14 +774,14 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     #[inline]
     pub async fn market_depth_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            position @ 0: u64,
-            operation @ 0: i64,
-            side @ 0: u32,
-            price @ 0: f64,
-            size @ 0: f64
-    );
+            fields =>
+                req_id @ 1: i64,
+                position @ 0: u64,
+                operation @ 0: i64,
+                side @ 0: u32,
+                price @ 0: f64,
+                size @ 0: f64
+        );
 
         let entry = CompleteEntry::Ordinary(Entry::try_from((side, position, price, size))?);
         let operation = Operation::try_from((operation, entry))?;
@@ -765,16 +793,16 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     #[inline]
     pub async fn market_depth_l2_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            position  @ 0: u64,
-            market_maker @ 0: String,
-            operation @ 0: i64,
-            side @ 0: u32,
-            price @ 0: f64,
-            size @ 0: f64,
-            is_smart @ 0: i32
-    );
+            fields =>
+                req_id @ 2: i64,
+                position  @ 0: u64,
+                market_maker @ 0: String,
+                operation @ 0: i64,
+                side @ 0: u32,
+                price @ 0: f64,
+                size @ 0: f64,
+                is_smart @ 0: i32
+        );
         let entry = Entry::try_from((side, position, price, size))?;
         let entry = match is_smart {
             0 => CompleteEntry::MarketMaker {
@@ -823,12 +851,12 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     #[inline]
     pub async fn historical_data_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            start_date_str @ 0: String,
-            end_date_str @ 0: String,
-            count @ 0: usize
-    );
+            fields =>
+                req_id @ 1: i64,
+                start_date_str @ 0: String,
+                end_date_str @ 0: String,
+                count @ 0: usize
+        );
         let mut bars = Vec::with_capacity(count);
         for chunk in fields.collect::<Vec<String>>().chunks(8) {
             if let [date, open, high, low, close, volume, wap, trade_count] = chunk {
@@ -888,19 +916,19 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
         wrapper: &mut W,
     ) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            tick_type @ 0: u16,
-            base @ 0: u8,
-            implied_volatility @ 0: CalculationResult,
-            delta @ 0: CalculationResult,
-            price @ 0: CalculationResult,
-            pv_dividend @ 0: CalculationResult,
-            gamma @ 0: CalculationResult,
-            vega @ 0: CalculationResult,
-            theta @ 0: CalculationResult,
-            underlying_price @ 0: CalculationResult
-    );
+            fields =>
+                req_id @ 1: i64,
+                tick_type @ 0: u16,
+                base @ 0: u8,
+                implied_volatility @ 0: CalculationResult,
+                delta @ 0: CalculationResult,
+                price @ 0: CalculationResult,
+                pv_dividend @ 0: CalculationResult,
+                gamma @ 0: CalculationResult,
+                vega @ 0: CalculationResult,
+                theta @ 0: CalculationResult,
+                underlying_price @ 0: CalculationResult
+        );
         let calc = SecOptionCalculationResults {
             implied_volatility,
             delta,
@@ -946,22 +974,22 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     #[inline]
     pub async fn tick_generic_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            tick_type @ 0: u16,
-            value @ 0: f64
-    );
+            fields =>
+                req_id @ 2: i64,
+                tick_type @ 0: u16,
+                value @ 0: f64
+        );
         Self::decode_generic_tick_msg(req_id, tick_type, value, wrapper).await
     }
 
     #[inline]
     pub async fn tick_string_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            tick_type @ 0: u16,
-            value @ 0: String
-    );
+            fields =>
+                req_id @ 2: i64,
+                tick_type @ 0: u16,
+                value @ 0: String
+        );
         match tick_type {
             32 | 33 | 84 => {
                 let quoting_exchanges = match tick_type {
@@ -984,7 +1012,9 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
                     85 => NaiveDateTime::from_timestamp_millis(value),
                     _ => panic!("The impossible occurred"),
                 }
-                    .ok_or_else(|| anyhow::Error::msg("Invalid timestamp encountered in string message"))?;
+                .ok_or_else(|| {
+                    anyhow::Error::msg("Invalid timestamp encountered in string message")
+                })?;
                 let timestamp = match tick_type {
                     45 => Class::Live(TimeStamp::Last(timestamp)),
                     85 => Class::Live(TimeStamp::Regulatory(timestamp)),
@@ -1016,9 +1046,11 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
                             .with_context(|| "Invalid value in RealTimeVolume last_time decode")?,
                         0,
                     )
-                        .ok_or_else(|| {
-                            anyhow::Error::msg("Invalid Unix timestamp found in real time volume message")
-                        })?,
+                    .ok_or_else(|| {
+                        anyhow::Error::msg(
+                            "Invalid Unix timestamp found in real time volume message",
+                        )
+                    })?,
                     day_volume: vols
                         .next()
                         .ok_or(MissingInputData)
@@ -1069,13 +1101,17 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
                                 .with_context(|| "No next dividend date in dividend message")?,
                             "%Y%m%d",
                         )
-                            .with_context(|| "Invalid value in Dividends next_dividend decode datetime")?
-                            .0,
+                        .with_context(|| {
+                            "Invalid value in Dividends next_dividend decode datetime"
+                        })?
+                        .0,
                         divs.next()
                             .ok_or(MissingInputData)
                             .with_context(|| "No next price in dividend message")?
                             .parse()
-                            .with_context(|| "Invalid value in Dividends next_dividend decode value")?,
+                            .with_context(|| {
+                                "Invalid value in Dividends next_dividend decode value"
+                            })?,
                     ),
                 };
                 wrapper.dividends(req_id, dividends).await;
@@ -1100,35 +1136,37 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     #[inline]
     pub async fn current_time_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            datetime @ 0: i64
-    );
+            fields =>
+                req_id @ 1: i64,
+                datetime @ 0: i64
+        );
 
-        wrapper.current_time(
-            NaiveDateTime::from_timestamp_opt(datetime, 0).ok_or_else(|| {
-                anyhow::Error::msg(
-                    "Invalid datetime value encountered while parsing the UNIX timestamp!",
-                )
-            })?,
-        ).await;
+        wrapper
+            .current_time(
+                NaiveDateTime::from_timestamp_opt(datetime, 0).ok_or_else(|| {
+                    anyhow::Error::msg(
+                        "Invalid datetime value encountered while parsing the UNIX timestamp!",
+                    )
+                })?,
+            )
+            .await;
         Ok(())
     }
 
     #[inline]
     pub async fn real_time_bars_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            date_time @ 0: i64,
-            open @ 0: f64,
-            high @ 0: f64,
-            low @ 0: f64,
-            close @ 0: f64,
-            volume @ 0: f64,
-            wap @ 0: f64,
-            trade_count @ 0: i64
-    );
+            fields =>
+                req_id @ 2: i64,
+                date_time @ 0: i64,
+                open @ 0: f64,
+                high @ 0: f64,
+                low @ 0: f64,
+                close @ 0: f64,
+                volume @ 0: f64,
+                wap @ 0: f64,
+                trade_count @ 0: i64
+        );
         let core = BarCore {
             datetime: NaiveDateTime::from_timestamp_opt(date_time, 0)
                 .ok_or(anyhow::Error::msg("Invalid timestamp"))?,
@@ -1152,19 +1190,13 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     }
 
     #[inline]
-    pub async fn fundamental_data_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn fundamental_data_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         println!("{:?}", &fields);
         Ok(())
     }
 
     #[inline]
-    pub async fn contract_data_end_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn contract_data_end_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(fields => req_id @ 2: i64);
         wrapper.contract_data_end(req_id).await;
         Ok(())
@@ -1177,13 +1209,10 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     }
 
     #[inline]
-    pub async fn acct_download_end_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn acct_download_end_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields => account_number @ 2: String
-    );
+            fields => account_number @ 2: String
+        );
         wrapper.account_download_end(account_number).await;
         Ok(())
     }
@@ -1208,33 +1237,24 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     }
 
     #[inline]
-    pub async fn tick_snapshot_end_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn tick_snapshot_end_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         println!("{:?}", &fields);
         Ok(())
     }
 
     #[inline]
-    pub async fn market_data_type_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn market_data_type_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            class @ 0: MarketDataClass
-    );
+            fields =>
+                req_id @ 2: i64,
+                class @ 0: MarketDataClass
+        );
         wrapper.market_data_class(req_id, class).await;
         Ok(())
     }
 
     #[inline]
-    pub async fn commission_report_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn commission_report_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         println!("{:?}", &fields);
         Ok(())
     }
@@ -1242,18 +1262,20 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     #[inline]
     pub async fn position_data_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            account_number @ 2: String,
-            contract_id @ 0: ContractId,
-            position @ 10: f64,
-            average_cost @ 0: f64
-    );
-        wrapper.position_summary(PositionSummary {
-            contract_id,
-            position,
-            average_cost,
-            account_number,
-        }).await;
+            fields =>
+                account_number @ 2: String,
+                contract_id @ 0: ContractId,
+                position @ 10: f64,
+                average_cost @ 0: f64
+        );
+        wrapper
+            .position_summary(PositionSummary {
+                contract_id,
+                position,
+                average_cost,
+                account_number,
+            })
+            .await;
         Ok(())
     }
 
@@ -1266,13 +1288,13 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     #[inline]
     pub async fn account_summary_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            account_number @ 0: String,
-            tag @ 0: Tag,
-            value @ 0: String,
-            currency @ 0: String
-    );
+            fields =>
+                req_id @ 2: i64,
+                account_number @ 0: String,
+                tag @ 0: Tag,
+                value @ 0: String,
+                currency @ 0: String
+        );
         let summary = match tag {
             Tag::AccountType => TagValue::String(Tag::AccountType, value),
             Tag::Cushion => TagValue::Float(Tag::Cushion, value.parse()?),
@@ -1282,7 +1304,9 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
             Tag::Leverage => TagValue::Float(Tag::Leverage, value.parse()?),
             t => TagValue::Currency(t, value.parse()?, currency.parse()?),
         };
-        wrapper.account_summary(req_id, account_number, summary).await;
+        wrapper
+            .account_summary(req_id, account_number, summary)
+            .await;
         Ok(())
     }
 
@@ -1292,8 +1316,8 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
         wrapper: &mut W,
     ) -> anyhow::Result<()> {
         decode_fields!(
-        fields => req_id @ 2: i64
-    );
+            fields => req_id @ 2: i64
+        );
         wrapper.account_summary_end(req_id).await;
         Ok(())
     }
@@ -1308,10 +1332,7 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     }
 
     #[inline]
-    pub async fn verify_completed_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn verify_completed_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         println!("{:?}", &fields);
         Ok(())
     }
@@ -1404,10 +1425,7 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     }
 
     #[inline]
-    pub async fn soft_dollar_tiers_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn soft_dollar_tiers_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         println!("{:?}", &fields);
         Ok(())
     }
@@ -1436,21 +1454,20 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     #[inline]
     pub async fn tick_req_params_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            min_tick @ 0: f64,
-            exchange_id @ 0: ExchangeId,
-            snapshot_permissions @ 0: u32
-    );
-        wrapper.tick_params(req_id, min_tick, exchange_id, snapshot_permissions).await;
+            fields =>
+                req_id @ 1: i64,
+                min_tick @ 0: f64,
+                exchange_id @ 0: ExchangeId,
+                snapshot_permissions @ 0: u32
+        );
+        wrapper
+            .tick_params(req_id, min_tick, exchange_id, snapshot_permissions)
+            .await;
         Ok(())
     }
 
     #[inline]
-    pub async fn smart_components_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn smart_components_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         println!("{:?}", &fields);
         Ok(())
     }
@@ -1491,24 +1508,26 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     #[inline]
     pub async fn head_timestamp_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            timestamp @ 0: String
-    );
-        wrapper.head_timestamp(
-            req_id,
-            NaiveDateTime::parse_from_str(timestamp.as_str(), "%Y%m%d-%T")?,
-        ).await;
+            fields =>
+                req_id @ 1: i64,
+                timestamp @ 0: String
+        );
+        wrapper
+            .head_timestamp(
+                req_id,
+                NaiveDateTime::parse_from_str(timestamp.as_str(), "%Y%m%d-%T")?,
+            )
+            .await;
         Ok(())
     }
 
     #[inline]
     pub async fn histogram_data_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            num_points @ 0: usize
-    );
+            fields =>
+                req_id @ 1: i64,
+                num_points @ 0: usize
+        );
         let mut hist = std::collections::HashMap::with_capacity(num_points);
         for (bin, chunk) in fields
             .take(num_points * 2)
@@ -1531,17 +1550,17 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
         wrapper: &mut W,
     ) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            trade_count @ 0: i64,
-            datetime_str @ 0: String,
-            open @ 0: f64,
-            high @ 0: f64,
-            low @ 0: f64,
-            close @ 0: f64,
-            wap @ 0: f64,
-            volume @ 0: f64
-    );
+            fields =>
+                req_id @ 1: i64,
+                trade_count @ 0: i64,
+                datetime_str @ 0: String,
+                open @ 0: f64,
+                high @ 0: f64,
+                low @ 0: f64,
+                close @ 0: f64,
+                wap @ 0: f64,
+                volume @ 0: f64
+        );
         let core = BarCore {
             datetime: NaiveDateTime::parse_and_remainder(datetime_str.as_str(), "%Y%m%d %T")?.0,
             open,
@@ -1590,12 +1609,12 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     #[inline]
     pub async fn pnl_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            daily_pnl @ 0: f64,
-            unrealized_pnl @ 0: f64,
-            realized_pnl @ 0: f64
-    );
+            fields =>
+                req_id @ 1: i64,
+                daily_pnl @ 0: f64,
+                unrealized_pnl @ 0: f64,
+                realized_pnl @ 0: f64
+        );
         let pnl = Pnl {
             daily: daily_pnl,
             unrealized: unrealized_pnl,
@@ -1608,14 +1627,14 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     #[inline]
     pub async fn pnl_single_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            position @ 0: f64,
-            daily_pnl @ 0: f64,
-            unrealized_pnl @ 0: f64,
-            realized_pnl @ 0: f64,
-            market_value @ 0: f64
-    );
+            fields =>
+                req_id @ 1: i64,
+                position @ 0: f64,
+                daily_pnl @ 0: f64,
+                unrealized_pnl @ 0: f64,
+                realized_pnl @ 0: f64,
+                market_value @ 0: f64
+        );
         let pnl = Pnl {
             daily: daily_pnl,
             unrealized: unrealized_pnl,
@@ -1631,10 +1650,10 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
         wrapper: &mut W,
     ) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            tick_count @ 0: usize
-    );
+            fields =>
+                req_id @ 1: i64,
+                tick_count @ 0: usize
+        );
         let mut ticks = Vec::with_capacity(tick_count);
         for chunk in fields
             .take(tick_count * 4)
@@ -1659,10 +1678,10 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
         wrapper: &mut W,
     ) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            tick_count @ 0: usize
-    );
+            fields =>
+                req_id @ 1: i64,
+                tick_count @ 0: usize
+        );
         let mut ticks = Vec::with_capacity(tick_count);
         for chunk in fields
             .take(tick_count * 6)
@@ -1690,10 +1709,10 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
         wrapper: &mut W,
     ) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            tick_count @ 0: usize
-    );
+            fields =>
+                req_id @ 1: i64,
+                tick_count @ 0: usize
+        );
         let mut ticks = Vec::with_capacity(tick_count);
         for chunk in fields
             .take(tick_count * 6)
@@ -1717,11 +1736,11 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     #[inline]
     pub async fn tick_by_tick_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            tick_type @ 0: u8,
-            timestamp @ 0: i64
-    );
+            fields =>
+                req_id @ 1: i64,
+                tick_type @ 0: u8,
+                timestamp @ 0: i64
+        );
         let datetime = NaiveDateTime::from_timestamp_opt(timestamp, 0)
             .ok_or_else(|| anyhow::Error::msg("Invalid timestamp"))?;
         let tick = match tick_type {
@@ -1733,12 +1752,12 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
             },
             3 => {
                 decode_fields!(
-                fields =>
-                    bid_price @ 0: f64,
-                    ask_price @ 0: f64,
-                    bid_size @ 0: f64,
-                    ask_size @ 0: f64
-            );
+                    fields =>
+                        bid_price @ 0: f64,
+                        ask_price @ 0: f64,
+                        bid_size @ 0: f64,
+                        ask_size @ 0: f64
+                );
                 Tick::BidAsk {
                     datetime,
                     bid_price,
@@ -1938,17 +1957,20 @@ impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     }
 }
 
-impl<W> Decoder<RemoteMarker<W>> where W: Remote {
+impl<W> Decoder<RemoteMarker<W>>
+where
+    W: Remote,
+{
     #[inline]
     pub async fn tick_price_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            tick_type @ 0: u16,
-            price @ 0: f64,
-            size @ 0: String,
-            attr_mask @ 0: u8
-    );
+            fields =>
+                req_id @ 2: i64,
+                tick_type @ 0: u16,
+                price @ 0: f64,
+                size @ 0: String,
+                attr_mask @ 0: u8
+        );
 
         let size = if size.is_empty() {
             None
@@ -2016,7 +2038,9 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
                 wrapper.yield_data(req_id, yld).await;
             }
             57 => {
-                wrapper.price_data(req_id, Class::Live(Price::LastRthTrade(price))).await;
+                wrapper
+                    .price_data(req_id, Class::Live(Price::LastRthTrade(price)))
+                    .await;
             }
             66..=68 | 72 | 73 | 75 | 76 => {
                 let (price, size) = match (tick_type, size) {
@@ -2060,15 +2084,14 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
         Ok(())
     }
 
-
     #[inline]
     pub async fn tick_size_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            tick_type @ 0: u16,
-            value @ 0: f64
-    );
+            fields =>
+                req_id @ 2: i64,
+                tick_type @ 0: u16,
+                value @ 0: f64
+        );
         Self::decode_generic_tick_msg(req_id, tick_type, value, wrapper).await
     }
 
@@ -2079,44 +2102,46 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     }
 
     #[inline]
-// todo: Implement a proper Error Enum
+    // todo: Implement a proper Error Enum
     pub async fn err_msg_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            error_code @ 0: i64,
-            error_string @ 0: String,
-            advanced_order_reject_json @ 0: String
-    );
-        wrapper.error(req_id, error_code, error_string, advanced_order_reject_json).await;
+            fields =>
+                req_id @ 2: i64,
+                error_code @ 0: i64,
+                error_string @ 0: String,
+                advanced_order_reject_json @ 0: String
+        );
+        wrapper
+            .error(req_id, error_code, error_string, advanced_order_reject_json)
+            .await;
         Ok(())
     }
 
     #[inline]
     pub async fn open_order_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            order_id @ 1: i64,
-            contract_id @ 0: ContractId,
-            action @ 10: String,
-            quantity @ 0: f64,
-            order_type @ 0: String,
-            price @ 0: String,
-            aux_price @ 0: String,
-            time_in_force @ 0: TimeInForce
-    );
+            fields =>
+                order_id @ 1: i64,
+                contract_id @ 0: ContractId,
+                action @ 10: String,
+                quantity @ 0: f64,
+                order_type @ 0: String,
+                price @ 0: String,
+                aux_price @ 0: String,
+                time_in_force @ 0: TimeInForce
+        );
         Ok(())
     }
 
     #[inline]
     pub async fn acct_value_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            name @ 2: String,
-            value @ 0: String,
-            currency @ 0: String,
-            account_number @ 0: String
-    );
+            fields =>
+                name @ 2: String,
+                value @ 0: String,
+                currency @ 0: String,
+                account_number @ 0: String
+        );
         let attribute = match name.as_str() {
             "AccountCode" => account::Attribute::AccountCode(value),
             "AccountOrGroup" => match value.as_str() {
@@ -2152,7 +2177,9 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
             "CorporateBondValue" => {
                 account::Attribute::CorporateBondValue(value.parse()?, currency.parse()?)
             }
-            "Cryptocurrency" => account::Attribute::Cryptocurrency(value.parse()?, currency.parse()?),
+            "Cryptocurrency" => {
+                account::Attribute::Cryptocurrency(value.parse()?, currency.parse()?)
+            }
             "Currency" => account::Attribute::Currency(value.parse()?),
             "Cushion" => account::Attribute::Cushion(value.parse()?),
             "DayTradesRemaining" => account::Attribute::DayTradesRemaining(value.parse()?),
@@ -2182,10 +2209,12 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
                 impl_seg_variants!("FullInitMarginReq", name, value),
                 currency.parse()?,
             ),
-            expand_seg_variants!("FullMaintMarginReq") => account::Attribute::FullMaintenanceMarginReq(
-                impl_seg_variants!("FullMaintMarginReq", name, value),
-                currency.parse()?,
-            ),
+            expand_seg_variants!("FullMaintMarginReq") => {
+                account::Attribute::FullMaintenanceMarginReq(
+                    impl_seg_variants!("FullMaintMarginReq", name, value),
+                    currency.parse()?,
+                )
+            }
             "FundValue" => account::Attribute::FundValue(value.parse()?, currency.parse()?),
             "FutureOptionValue" => {
                 account::Attribute::FutureOptionValue(value.parse()?, currency.parse()?)
@@ -2246,7 +2275,9 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
             "MoneyMarketFundValue" => {
                 account::Attribute::MoneyMarketFundValue(value.parse()?, currency.parse()?)
             }
-            "MutualFundValue" => account::Attribute::MutualFundValue(value.parse()?, currency.parse()?),
+            "MutualFundValue" => {
+                account::Attribute::MutualFundValue(value.parse()?, currency.parse()?)
+            }
             "NLVAndMarginInReview" => account::Attribute::NlvAndMarginInReview(value.parse()?),
             "NetDividend" => account::Attribute::NetDividend(value.parse()?, currency.parse()?),
             expand_seg_variants!("NetLiquidation") => account::Attribute::NetLiquidation(
@@ -2272,17 +2303,22 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
                     currency.parse()?,
                 )
             }
-            expand_seg_variants!("PostExpirationExcess") => account::Attribute::PostExpirationExcess(
-                impl_seg_variants!("PostExpirationExcess", name, value),
-                currency.parse()?,
-            ),
-            expand_seg_variants!("PostExpirationMargin") => account::Attribute::PostExpirationMargin(
-                impl_seg_variants!("PostExpirationMargin", name, value),
-                currency.parse()?,
-            ),
-            "PreviousDayEquityWithLoanValue" => {
-                account::Attribute::PreviousDayEquityWithLoanValue(value.parse()?, currency.parse()?)
+            expand_seg_variants!("PostExpirationExcess") => {
+                account::Attribute::PostExpirationExcess(
+                    impl_seg_variants!("PostExpirationExcess", name, value),
+                    currency.parse()?,
+                )
             }
+            expand_seg_variants!("PostExpirationMargin") => {
+                account::Attribute::PostExpirationMargin(
+                    impl_seg_variants!("PostExpirationMargin", name, value),
+                    currency.parse()?,
+                )
+            }
+            "PreviousDayEquityWithLoanValue" => account::Attribute::PreviousDayEquityWithLoanValue(
+                value.parse()?,
+                currency.parse()?,
+            ),
             "PreviousDayEquityWithLoanValue-S" => {
                 account::Attribute::PreviousDayEquityWithLoanValueSecurity(
                     value.parse()?,
@@ -2292,9 +2328,13 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
             "RealCurrency" => account::Attribute::RealCurrency(currency.parse()?),
             "RealizedPnL" => account::Attribute::RealizedPnL(value.parse()?, currency.parse()?),
             "RegTEquity" => account::Attribute::RegTEquity(value.parse()?, currency.parse()?),
-            "RegTEquity-S" => account::Attribute::RegTEquitySecurity(value.parse()?, currency.parse()?),
+            "RegTEquity-S" => {
+                account::Attribute::RegTEquitySecurity(value.parse()?, currency.parse()?)
+            }
             "RegTMargin" => account::Attribute::RegTMargin(value.parse()?, currency.parse()?),
-            "RegTMargin-S" => account::Attribute::RegTMarginSecurity(value.parse()?, currency.parse()?),
+            "RegTMargin-S" => {
+                account::Attribute::RegTMarginSecurity(value.parse()?, currency.parse()?)
+            }
             "SMA" => account::Attribute::Sma(value.parse()?, currency.parse()?),
             "SMA-S" => account::Attribute::SmaSecurity(value.parse()?, currency.parse()?),
             "StockMarketValue" => {
@@ -2338,39 +2378,40 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     #[inline]
     pub async fn portfolio_value_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            contract_id @ 2: ContractId,
-            position @ 10: f64,
-            market_price @ 0: f64,
-            market_value @ 0: f64,
-            average_cost @ 0: f64,
-            unrealized_pnl @ 0: f64,
-            realized_pnl @ 0: f64,
-            account_name @ 0: String
-    );
-        wrapper.position(Position {
-            contract_id,
-            position,
-            market_price,
-            market_value,
-            average_cost,
-            unrealized_pnl,
-            realized_pnl,
-            account_number: account_name,
-        }).await;
+            fields =>
+                contract_id @ 2: ContractId,
+                position @ 10: f64,
+                market_price @ 0: f64,
+                market_value @ 0: f64,
+                average_cost @ 0: f64,
+                unrealized_pnl @ 0: f64,
+                realized_pnl @ 0: f64,
+                account_name @ 0: String
+        );
+        wrapper
+            .position(Position {
+                contract_id,
+                position,
+                market_price,
+                market_value,
+                average_cost,
+                unrealized_pnl,
+                realized_pnl,
+                account_number: account_name,
+            })
+            .await;
         Ok(())
     }
 
     #[inline]
-    pub async fn acct_update_time_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn acct_update_time_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            timestamp @ 2: String
-    );
-        wrapper.account_attribute_time(NaiveTime::parse_from_str(timestamp.as_str(), "%H:%M")?).await;
+            fields =>
+                timestamp @ 2: String
+        );
+        wrapper
+            .account_attribute_time(NaiveTime::parse_from_str(timestamp.as_str(), "%H:%M")?)
+            .await;
         Ok(())
     }
 
@@ -2382,7 +2423,6 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
         tx: &mut Tx,
         rx: &mut Rx,
     ) -> anyhow::Result<()> {
-
         Ok(())
     }
 
@@ -2395,28 +2435,28 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
         rx: &mut Rx,
     ) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            symbol @ 0: String,
-            sec_type @ 0: String,
-            expiration_date @ 0: String,
-            strike @ 0: f64,
-            class @ 0: String,
-            exchange @ 0: Routing,
-            currency @ 0: Currency,
-            local_symbol @ 0: String,
-            trading_class @ 1: String,
-            contract_id @ 0: ContractId,
-            min_tick @ 0: f64,
-            multiplier @ 0: String,
-            order_types @ 0: String,
-            valid_exchanges @ 0: String,
-            underlying_contract_id @ 1: ContractId,
-            long_name @ 0: String,
-            primary_exchange @ 0: String,
-            sector @ 1: String,
-            security_id_count @ 7: usize
-    );
+            fields =>
+                req_id @ 1: i64,
+                symbol @ 0: String,
+                sec_type @ 0: String,
+                expiration_date @ 0: String,
+                strike @ 0: f64,
+                class @ 0: String,
+                exchange @ 0: Routing,
+                currency @ 0: Currency,
+                local_symbol @ 0: String,
+                trading_class @ 1: String,
+                contract_id @ 0: ContractId,
+                min_tick @ 0: f64,
+                multiplier @ 0: String,
+                order_types @ 0: String,
+                valid_exchanges @ 0: String,
+                underlying_contract_id @ 1: ContractId,
+                long_name @ 0: String,
+                primary_exchange @ 0: String,
+                sector @ 1: String,
+                security_id_count @ 7: usize
+        );
 
         let order_types = order_types
             .split(',')
@@ -2477,7 +2517,8 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
                     order_types,
                     valid_exchanges,
                     security_ids,
-                    stock_type: nth(fields, 5).with_context(|| "Expected stock_type but none found")?,
+                    stock_type: nth(fields, 5)
+                        .with_context(|| "Expected stock_type but none found")?,
                 })),
                 "OPT" => {
                     let inner = SecOptionInner {
@@ -2493,8 +2534,8 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
                             expiration_date.as_str(),
                             "%Y%m%d",
                         )
-                            .with_context(|| "Invalid date string in OPT expiration_date")?
-                            .0,
+                        .with_context(|| "Invalid date string in OPT expiration_date")?
+                        .0,
                         underlying_contract_id,
                         sector,
                         trading_class,
@@ -2552,9 +2593,12 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
                     multiplier: multiplier
                         .parse()
                         .with_context(|| "Invalid multiplier in FUT multiplier")?,
-                    expiration_date: NaiveDate::parse_and_remainder(expiration_date.as_str(), "%Y%m%d")
-                        .with_context(|| "Invalid date string in OPT expiration_date")?
-                        .0,
+                    expiration_date: NaiveDate::parse_and_remainder(
+                        expiration_date.as_str(),
+                        "%Y%m%d",
+                    )
+                    .with_context(|| "Invalid date string in OPT expiration_date")?
+                    .0,
                     trading_class,
                     underlying_contract_id,
                     currency,
@@ -2581,8 +2625,8 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
             tx.send(ToClient::NewContract(
                 contract.ok_or_else(|| anyhow::Error::msg("No contract was created"))?,
             ))
-                .await
-                .with_context(|| "Failure when sending contract")?;
+            .await
+            .with_context(|| "Failure when sending contract")?;
         }
         Ok(())
     }
@@ -2596,14 +2640,14 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     #[inline]
     pub async fn market_depth_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            position @ 0: u64,
-            operation @ 0: i64,
-            side @ 0: u32,
-            price @ 0: f64,
-            size @ 0: f64
-    );
+            fields =>
+                req_id @ 1: i64,
+                position @ 0: u64,
+                operation @ 0: i64,
+                side @ 0: u32,
+                price @ 0: f64,
+                size @ 0: f64
+        );
 
         let entry = CompleteEntry::Ordinary(Entry::try_from((side, position, price, size))?);
         let operation = Operation::try_from((operation, entry))?;
@@ -2615,16 +2659,16 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     #[inline]
     pub async fn market_depth_l2_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            position  @ 0: u64,
-            market_maker @ 0: String,
-            operation @ 0: i64,
-            side @ 0: u32,
-            price @ 0: f64,
-            size @ 0: f64,
-            is_smart @ 0: i32
-    );
+            fields =>
+                req_id @ 2: i64,
+                position  @ 0: u64,
+                market_maker @ 0: String,
+                operation @ 0: i64,
+                side @ 0: u32,
+                price @ 0: f64,
+                size @ 0: f64,
+                is_smart @ 0: i32
+        );
         let entry = Entry::try_from((side, position, price, size))?;
         let entry = match is_smart {
             0 => CompleteEntry::MarketMaker {
@@ -2673,12 +2717,12 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     #[inline]
     pub async fn historical_data_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            start_date_str @ 0: String,
-            end_date_str @ 0: String,
-            count @ 0: usize
-    );
+            fields =>
+                req_id @ 1: i64,
+                start_date_str @ 0: String,
+                end_date_str @ 0: String,
+                count @ 0: usize
+        );
         let mut bars = Vec::with_capacity(count);
         for chunk in fields.collect::<Vec<String>>().chunks(8) {
             if let [date, open, high, low, close, volume, wap, trade_count] = chunk {
@@ -2738,19 +2782,19 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
         wrapper: &mut W,
     ) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            tick_type @ 0: u16,
-            base @ 0: u8,
-            implied_volatility @ 0: CalculationResult,
-            delta @ 0: CalculationResult,
-            price @ 0: CalculationResult,
-            pv_dividend @ 0: CalculationResult,
-            gamma @ 0: CalculationResult,
-            vega @ 0: CalculationResult,
-            theta @ 0: CalculationResult,
-            underlying_price @ 0: CalculationResult
-    );
+            fields =>
+                req_id @ 1: i64,
+                tick_type @ 0: u16,
+                base @ 0: u8,
+                implied_volatility @ 0: CalculationResult,
+                delta @ 0: CalculationResult,
+                price @ 0: CalculationResult,
+                pv_dividend @ 0: CalculationResult,
+                gamma @ 0: CalculationResult,
+                vega @ 0: CalculationResult,
+                theta @ 0: CalculationResult,
+                underlying_price @ 0: CalculationResult
+        );
         let calc = SecOptionCalculationResults {
             implied_volatility,
             delta,
@@ -2796,22 +2840,22 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     #[inline]
     pub async fn tick_generic_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            tick_type @ 0: u16,
-            value @ 0: f64
-    );
+            fields =>
+                req_id @ 2: i64,
+                tick_type @ 0: u16,
+                value @ 0: f64
+        );
         Self::decode_generic_tick_msg(req_id, tick_type, value, wrapper).await
     }
 
     #[inline]
     pub async fn tick_string_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            tick_type @ 0: u16,
-            value @ 0: String
-    );
+            fields =>
+                req_id @ 2: i64,
+                tick_type @ 0: u16,
+                value @ 0: String
+        );
         match tick_type {
             32 | 33 | 84 => {
                 let quoting_exchanges = match tick_type {
@@ -2834,7 +2878,9 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
                     85 => NaiveDateTime::from_timestamp_millis(value),
                     _ => panic!("The impossible occurred"),
                 }
-                    .ok_or_else(|| anyhow::Error::msg("Invalid timestamp encountered in string message"))?;
+                .ok_or_else(|| {
+                    anyhow::Error::msg("Invalid timestamp encountered in string message")
+                })?;
                 let timestamp = match tick_type {
                     45 => Class::Live(TimeStamp::Last(timestamp)),
                     85 => Class::Live(TimeStamp::Regulatory(timestamp)),
@@ -2866,9 +2912,11 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
                             .with_context(|| "Invalid value in RealTimeVolume last_time decode")?,
                         0,
                     )
-                        .ok_or_else(|| {
-                            anyhow::Error::msg("Invalid Unix timestamp found in real time volume message")
-                        })?,
+                    .ok_or_else(|| {
+                        anyhow::Error::msg(
+                            "Invalid Unix timestamp found in real time volume message",
+                        )
+                    })?,
                     day_volume: vols
                         .next()
                         .ok_or(MissingInputData)
@@ -2919,13 +2967,17 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
                                 .with_context(|| "No next dividend date in dividend message")?,
                             "%Y%m%d",
                         )
-                            .with_context(|| "Invalid value in Dividends next_dividend decode datetime")?
-                            .0,
+                        .with_context(|| {
+                            "Invalid value in Dividends next_dividend decode datetime"
+                        })?
+                        .0,
                         divs.next()
                             .ok_or(MissingInputData)
                             .with_context(|| "No next price in dividend message")?
                             .parse()
-                            .with_context(|| "Invalid value in Dividends next_dividend decode value")?,
+                            .with_context(|| {
+                                "Invalid value in Dividends next_dividend decode value"
+                            })?,
                     ),
                 };
                 wrapper.dividends(req_id, dividends).await;
@@ -2950,35 +3002,37 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     #[inline]
     pub async fn current_time_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            datetime @ 0: i64
-    );
+            fields =>
+                req_id @ 1: i64,
+                datetime @ 0: i64
+        );
 
-        wrapper.current_time(
-            NaiveDateTime::from_timestamp_opt(datetime, 0).ok_or_else(|| {
-                anyhow::Error::msg(
-                    "Invalid datetime value encountered while parsing the UNIX timestamp!",
-                )
-            })?,
-        ).await;
+        wrapper
+            .current_time(
+                NaiveDateTime::from_timestamp_opt(datetime, 0).ok_or_else(|| {
+                    anyhow::Error::msg(
+                        "Invalid datetime value encountered while parsing the UNIX timestamp!",
+                    )
+                })?,
+            )
+            .await;
         Ok(())
     }
 
     #[inline]
     pub async fn real_time_bars_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            date_time @ 0: i64,
-            open @ 0: f64,
-            high @ 0: f64,
-            low @ 0: f64,
-            close @ 0: f64,
-            volume @ 0: f64,
-            wap @ 0: f64,
-            trade_count @ 0: i64
-    );
+            fields =>
+                req_id @ 2: i64,
+                date_time @ 0: i64,
+                open @ 0: f64,
+                high @ 0: f64,
+                low @ 0: f64,
+                close @ 0: f64,
+                volume @ 0: f64,
+                wap @ 0: f64,
+                trade_count @ 0: i64
+        );
         let core = BarCore {
             datetime: NaiveDateTime::from_timestamp_opt(date_time, 0)
                 .ok_or(anyhow::Error::msg("Invalid timestamp"))?,
@@ -3002,19 +3056,13 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     }
 
     #[inline]
-    pub async fn fundamental_data_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn fundamental_data_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         println!("{:?}", &fields);
         Ok(())
     }
 
     #[inline]
-    pub async fn contract_data_end_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn contract_data_end_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(fields => req_id @ 2: i64);
         wrapper.contract_data_end(req_id).await;
         Ok(())
@@ -3027,13 +3075,10 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     }
 
     #[inline]
-    pub async fn acct_download_end_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn acct_download_end_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields => account_number @ 2: String
-    );
+            fields => account_number @ 2: String
+        );
         wrapper.account_download_end(account_number).await;
         Ok(())
     }
@@ -3058,33 +3103,24 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     }
 
     #[inline]
-    pub async fn tick_snapshot_end_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn tick_snapshot_end_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         println!("{:?}", &fields);
         Ok(())
     }
 
     #[inline]
-    pub async fn market_data_type_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn market_data_type_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            class @ 0: MarketDataClass
-    );
+            fields =>
+                req_id @ 2: i64,
+                class @ 0: MarketDataClass
+        );
         wrapper.market_data_class(req_id, class).await;
         Ok(())
     }
 
     #[inline]
-    pub async fn commission_report_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn commission_report_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         println!("{:?}", &fields);
         Ok(())
     }
@@ -3092,18 +3128,20 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     #[inline]
     pub async fn position_data_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            account_number @ 2: String,
-            contract_id @ 0: ContractId,
-            position @ 10: f64,
-            average_cost @ 0: f64
-    );
-        wrapper.position_summary(PositionSummary {
-            contract_id,
-            position,
-            average_cost,
-            account_number,
-        }).await;
+            fields =>
+                account_number @ 2: String,
+                contract_id @ 0: ContractId,
+                position @ 10: f64,
+                average_cost @ 0: f64
+        );
+        wrapper
+            .position_summary(PositionSummary {
+                contract_id,
+                position,
+                average_cost,
+                account_number,
+            })
+            .await;
         Ok(())
     }
 
@@ -3116,13 +3154,13 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     #[inline]
     pub async fn account_summary_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            account_number @ 0: String,
-            tag @ 0: Tag,
-            value @ 0: String,
-            currency @ 0: String
-    );
+            fields =>
+                req_id @ 2: i64,
+                account_number @ 0: String,
+                tag @ 0: Tag,
+                value @ 0: String,
+                currency @ 0: String
+        );
         let summary = match tag {
             Tag::AccountType => TagValue::String(Tag::AccountType, value),
             Tag::Cushion => TagValue::Float(Tag::Cushion, value.parse()?),
@@ -3132,7 +3170,9 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
             Tag::Leverage => TagValue::Float(Tag::Leverage, value.parse()?),
             t => TagValue::Currency(t, value.parse()?, currency.parse()?),
         };
-        wrapper.account_summary(req_id, account_number, summary).await;
+        wrapper
+            .account_summary(req_id, account_number, summary)
+            .await;
         Ok(())
     }
 
@@ -3142,8 +3182,8 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
         wrapper: &mut W,
     ) -> anyhow::Result<()> {
         decode_fields!(
-        fields => req_id @ 2: i64
-    );
+            fields => req_id @ 2: i64
+        );
         wrapper.account_summary_end(req_id).await;
         Ok(())
     }
@@ -3158,10 +3198,7 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     }
 
     #[inline]
-    pub async fn verify_completed_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn verify_completed_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         println!("{:?}", &fields);
         Ok(())
     }
@@ -3254,10 +3291,7 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     }
 
     #[inline]
-    pub async fn soft_dollar_tiers_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn soft_dollar_tiers_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         println!("{:?}", &fields);
         Ok(())
     }
@@ -3286,21 +3320,20 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     #[inline]
     pub async fn tick_req_params_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            min_tick @ 0: f64,
-            exchange_id @ 0: ExchangeId,
-            snapshot_permissions @ 0: u32
-    );
-        wrapper.tick_params(req_id, min_tick, exchange_id, snapshot_permissions).await;
+            fields =>
+                req_id @ 1: i64,
+                min_tick @ 0: f64,
+                exchange_id @ 0: ExchangeId,
+                snapshot_permissions @ 0: u32
+        );
+        wrapper
+            .tick_params(req_id, min_tick, exchange_id, snapshot_permissions)
+            .await;
         Ok(())
     }
 
     #[inline]
-    pub async fn smart_components_msg(
-        fields: &mut Fields,
-        wrapper: &mut W,
-    ) -> anyhow::Result<()> {
+    pub async fn smart_components_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         println!("{:?}", &fields);
         Ok(())
     }
@@ -3341,24 +3374,26 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     #[inline]
     pub async fn head_timestamp_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            timestamp @ 0: String
-    );
-        wrapper.head_timestamp(
-            req_id,
-            NaiveDateTime::parse_from_str(timestamp.as_str(), "%Y%m%d-%T")?,
-        ).await;
+            fields =>
+                req_id @ 1: i64,
+                timestamp @ 0: String
+        );
+        wrapper
+            .head_timestamp(
+                req_id,
+                NaiveDateTime::parse_from_str(timestamp.as_str(), "%Y%m%d-%T")?,
+            )
+            .await;
         Ok(())
     }
 
     #[inline]
     pub async fn histogram_data_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            num_points @ 0: usize
-    );
+            fields =>
+                req_id @ 1: i64,
+                num_points @ 0: usize
+        );
         let mut hist = std::collections::HashMap::with_capacity(num_points);
         for (bin, chunk) in fields
             .take(num_points * 2)
@@ -3381,17 +3416,17 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
         wrapper: &mut W,
     ) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            trade_count @ 0: i64,
-            datetime_str @ 0: String,
-            open @ 0: f64,
-            high @ 0: f64,
-            low @ 0: f64,
-            close @ 0: f64,
-            wap @ 0: f64,
-            volume @ 0: f64
-    );
+            fields =>
+                req_id @ 1: i64,
+                trade_count @ 0: i64,
+                datetime_str @ 0: String,
+                open @ 0: f64,
+                high @ 0: f64,
+                low @ 0: f64,
+                close @ 0: f64,
+                wap @ 0: f64,
+                volume @ 0: f64
+        );
         let core = BarCore {
             datetime: NaiveDateTime::parse_and_remainder(datetime_str.as_str(), "%Y%m%d %T")?.0,
             open,
@@ -3440,12 +3475,12 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     #[inline]
     pub async fn pnl_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            daily_pnl @ 0: f64,
-            unrealized_pnl @ 0: f64,
-            realized_pnl @ 0: f64
-    );
+            fields =>
+                req_id @ 1: i64,
+                daily_pnl @ 0: f64,
+                unrealized_pnl @ 0: f64,
+                realized_pnl @ 0: f64
+        );
         let pnl = Pnl {
             daily: daily_pnl,
             unrealized: unrealized_pnl,
@@ -3458,14 +3493,14 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     #[inline]
     pub async fn pnl_single_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            position @ 0: f64,
-            daily_pnl @ 0: f64,
-            unrealized_pnl @ 0: f64,
-            realized_pnl @ 0: f64,
-            market_value @ 0: f64
-    );
+            fields =>
+                req_id @ 1: i64,
+                position @ 0: f64,
+                daily_pnl @ 0: f64,
+                unrealized_pnl @ 0: f64,
+                realized_pnl @ 0: f64,
+                market_value @ 0: f64
+        );
         let pnl = Pnl {
             daily: daily_pnl,
             unrealized: unrealized_pnl,
@@ -3481,10 +3516,10 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
         wrapper: &mut W,
     ) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            tick_count @ 0: usize
-    );
+            fields =>
+                req_id @ 1: i64,
+                tick_count @ 0: usize
+        );
         let mut ticks = Vec::with_capacity(tick_count);
         for chunk in fields
             .take(tick_count * 4)
@@ -3509,10 +3544,10 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
         wrapper: &mut W,
     ) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            tick_count @ 0: usize
-    );
+            fields =>
+                req_id @ 1: i64,
+                tick_count @ 0: usize
+        );
         let mut ticks = Vec::with_capacity(tick_count);
         for chunk in fields
             .take(tick_count * 6)
@@ -3540,10 +3575,10 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
         wrapper: &mut W,
     ) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            tick_count @ 0: usize
-    );
+            fields =>
+                req_id @ 1: i64,
+                tick_count @ 0: usize
+        );
         let mut ticks = Vec::with_capacity(tick_count);
         for chunk in fields
             .take(tick_count * 6)
@@ -3567,11 +3602,11 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
     #[inline]
     pub async fn tick_by_tick_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            tick_type @ 0: u8,
-            timestamp @ 0: i64
-    );
+            fields =>
+                req_id @ 1: i64,
+                tick_type @ 0: u8,
+                timestamp @ 0: i64
+        );
         let datetime = NaiveDateTime::from_timestamp_opt(timestamp, 0)
             .ok_or_else(|| anyhow::Error::msg("Invalid timestamp"))?;
         let tick = match tick_type {
@@ -3583,12 +3618,12 @@ impl<W> Decoder<RemoteMarker<W>> where W: Remote {
             },
             3 => {
                 decode_fields!(
-                fields =>
-                    bid_price @ 0: f64,
-                    ask_price @ 0: f64,
-                    bid_size @ 0: f64,
-                    ask_size @ 0: f64
-            );
+                    fields =>
+                        bid_price @ 0: f64,
+                        ask_price @ 0: f64,
+                        bid_size @ 0: f64,
+                        ask_size @ 0: f64
+                );
                 Tick::BidAsk {
                     datetime,
                     bid_price,
@@ -3820,7 +3855,11 @@ pub(crate) fn nth(fields: &mut Fields, n: usize) -> Result<String, MissingInputD
 }
 
 #[inline]
-pub(crate) async fn decode_contract_no_wrapper(fields: &mut Fields, tx: &mut Tx, rx: &mut Rx) -> anyhow::Result<()> {
+pub(crate) async fn decode_contract_no_wrapper(
+    fields: &mut Fields,
+    tx: &mut Tx,
+    rx: &mut Rx,
+) -> anyhow::Result<()> {
     decode_fields!(
         fields =>
             req_id @ 1: i64,
@@ -3920,8 +3959,8 @@ pub(crate) async fn decode_contract_no_wrapper(fields: &mut Fields, tx: &mut Tx,
                         expiration_date.as_str(),
                         "%Y%m%d",
                     )
-                        .with_context(|| "Invalid date string in OPT expiration_date")?
-                        .0,
+                    .with_context(|| "Invalid date string in OPT expiration_date")?
+                    .0,
                     underlying_contract_id,
                     sector,
                     trading_class,
@@ -4008,8 +4047,8 @@ pub(crate) async fn decode_contract_no_wrapper(fields: &mut Fields, tx: &mut Tx,
         tx.send(ToClient::NewContract(
             contract.ok_or_else(|| anyhow::Error::msg("No contract was created"))?,
         ))
-            .await
-            .with_context(|| "Failure when sending contract")?;
+        .await
+        .with_context(|| "Failure when sending contract")?;
     }
     Ok(())
 }
