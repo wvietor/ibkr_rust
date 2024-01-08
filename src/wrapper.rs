@@ -12,7 +12,7 @@ use ibapi_macros::debug_trait;
 
 #[debug_trait]
 /// Contains the "callback functions" that correspond to the requests made by a [`crate::client::Client`].
-pub trait Local<I>: for<'c> From<(I, &'c mut ActiveClient)> {
+pub trait Local<'c, I>: From<(I, &'c mut ActiveClient)> {
     /// The callback that corresponds to any error that encounters after an API request.
     ///
     /// Errors sent by the TWS are received here.
@@ -131,6 +131,13 @@ pub trait Local<I>: for<'c> From<(I, &'c mut ActiveClient)> {
     /// The callback message that contains live bar data from [`crate::client::Client::req_real_time_bars`].
     fn real_time_bar(&mut self, req_id: i64, bar: Bar) -> impl std::future::Future {}
 }
+
+// pub trait Build<'c> {
+//     type Wrap: Local<'c>;
+//
+//     fn build(self, &'c mut ActiveClient) -> Self::Wrap;
+// }
+
 
 #[debug_trait]
 /// Contains the "callback functions" that correspond to the requests made by a [`crate::client::Client`].
@@ -254,18 +261,17 @@ pub trait Remote: Send + Sync {
     fn real_time_bar(&mut self, req_id: i64, bar: Bar) -> impl std::future::Future + Send {}
 }
 
-pub(crate) mod indicators {
+pub mod indicators {
     use super::{Local, Remote};
 
     pub trait Wrapper {}
 
-    pub struct LocalMarker<I, W> where W: Local<I> {
+    pub struct LocalMarker<'c, I, W> where W: Local<'c, I> {
         pub(crate) wrapper: W,
-        pub(crate) _init_marker: std::marker::PhantomData<I>
+        pub(crate) _init_marker: &'c std::marker::PhantomData<I>
     }
 
-    impl<I, W> Wrapper for LocalMarker<I, W> where W: Local<I> {
-    }
+    impl<'c, I, W> Wrapper for LocalMarker<'c, I, W> where W: Local<'c, I> {}
 
 
     pub struct RemoteMarker<W> where W: Remote {
