@@ -88,7 +88,7 @@ macro_rules! impl_seg_variants {
 
 pub struct Decoder<W: Wrapper>(pub W);
 
-impl<'c, I: 'c, W> Decoder<LocalMarker<'c, I, W>> where W: Local<'c, I> {
+impl<'c, W> Decoder<LocalMarker<'c, W>> where W: Local<'c> {
     #[inline]
     pub async fn tick_price_msg(fields: &mut Fields, wrapper: &mut W) -> anyhow::Result<()> {
         decode_fields!(

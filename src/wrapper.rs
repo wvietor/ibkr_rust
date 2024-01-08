@@ -1,4 +1,3 @@
-#![allow(async_fn_in_trait)]
 use crate::account::{Attribute, TagValue};
 use crate::payload::{self, Bar, ExchangeId, HistogramEntry, Tick, Pnl, Position, PositionSummary};
 use crate::tick::{self, Accessibility, AuctionData, Class, Dividends, ExtremeValue, Ipo, MarkPrice, News,
@@ -12,7 +11,7 @@ use ibapi_macros::debug_trait;
 
 #[debug_trait]
 /// Contains the "callback functions" that correspond to the requests made by a [`crate::client::Client`].
-pub trait Local<'c, I>: From<(I, &'c mut ActiveClient)> {
+pub trait Local<'c> {
     /// The callback that corresponds to any error that encounters after an API request.
     ///
     /// Errors sent by the TWS are received here.
@@ -132,11 +131,13 @@ pub trait Local<'c, I>: From<(I, &'c mut ActiveClient)> {
     fn real_time_bar(&mut self, req_id: i64, bar: Bar) -> impl std::future::Future {}
 }
 
-// pub trait Build<'c> {
-//     type Wrap: Local<'c>;
-//
-//     fn build(self, &'c mut ActiveClient) -> Self::Wrap;
-// }
+/// An initializer for a new [`Local`] wrapper.
+pub trait Initializer<'c> {
+    /// The Wrapper
+    type Wrap: Local<'c>;
+    /// The method to build the wrapper
+    fn build(self, client: &'c mut ActiveClient) -> impl std::future::Future<Output = Self::Wrap>;
+}
 
 
 #[debug_trait]
@@ -261,17 +262,17 @@ pub trait Remote: Send + Sync {
     fn real_time_bar(&mut self, req_id: i64, bar: Bar) -> impl std::future::Future + Send {}
 }
 
-pub mod indicators {
+pub(crate) mod indicators {
     use super::{Local, Remote};
 
     pub trait Wrapper {}
 
-    pub struct LocalMarker<'c, I, W> where W: Local<'c, I> {
+    pub struct LocalMarker<'c, W> where W: Local<'c> {
         pub(crate) wrapper: W,
-        pub(crate) _init_marker: &'c std::marker::PhantomData<I>
+        pub(crate) _init_marker: &'c std::marker::PhantomData<()>
     }
 
-    impl<'c, I, W> Wrapper for LocalMarker<'c, I, W> where W: Local<'c, I> {}
+    impl<'c, W> Wrapper for LocalMarker<'c, W> where W: Local<'c> {}
 
 
     pub struct RemoteMarker<W> where W: Remote {
