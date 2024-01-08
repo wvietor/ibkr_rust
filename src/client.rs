@@ -262,7 +262,6 @@ type IntoActive = (
     mpsc::Sender<ToClient>,
     mpsc::Receiver<ToWrapper>,
     Arc<SegQueue<Vec<String>>>,
-    CancellationToken,
 );
 
 
@@ -985,8 +984,6 @@ impl Client<indicators::Inactive> {
         }
         let (managed_accounts, valid_id) = (managed_accounts.unwrap(), valid_id.unwrap()..);
 
-        let c_loop_disconnect = disconnect.clone();
-
         let client = Client {
             mode: self.mode,
             host: self.host,
@@ -1011,27 +1008,35 @@ impl Client<indicators::Inactive> {
             self.status.wrapper_tx,
             self.status.wrapper_rx,
             queue,
-            c_loop_disconnect,
         )
     }
 
     /// Initiates the main message loop and spawns all helper threads to manage the application.
-    pub async fn local<I: for<'c> Initializer<'c>>(self, init: I) {
+    ///
+    /// # Returns
+    /// A [`Builder`] that can be used to reconnect to the IBKR TWS API.
+    ///
+    /// # Errors
+    /// Any error that occurs in the [`Client<Active>::disconnect`] process
+    pub async fn local<I: for<'c> Initializer<'c>>(self, init: I) -> Result<Builder, std::io::Error>{
         let (
             mut client,
             mut tx,
             mut rx,
             queue,
-            c_loop_disconnect
         ) = self.into_active();
+        let break_loop = CancellationToken::new();
         let mut decoder = Decoder(LocalMarker {
-            wrapper: Initializer::build(init, &mut client).await,
+            wrapper: Initializer::build(init, &mut client, break_loop.clone()).await,
             _init_marker: &std::marker::PhantomData
         });
 
         loop {
             tokio::select! {
-                () = c_loop_disconnect.cancelled() => {println!("Client loop: disconnecting"); break},
+                () = break_loop.cancelled() => {
+                    println!("Client loop: disconnecting");
+                    break
+                },
                 () = async {
                     if let Some(fields) = queue.pop() {
                         decode_msg_local(fields, &mut decoder, &mut tx, &mut rx).await;
@@ -1039,6 +1044,8 @@ impl Client<indicators::Inactive> {
                 } => (),
             }
         }
+        drop(decoder);
+        client.disconnect().await
     }
 
     /// Initiates the main message loop and spawns all helper threads to manage the application.
@@ -1051,8 +1058,8 @@ impl Client<indicators::Inactive> {
             mut tx,
             mut rx,
             queue,
-            c_loop_disconnect
         ) = self.into_active();
+        let c_loop_disconnect = client.status.disconnect.clone();
         let mut decoder = Decoder(RemoteMarker { wrapper });
 
         tokio::spawn(async move {
