@@ -8,7 +8,9 @@ use crate::tick::{self, Accessibility, AuctionData, Class, Dividends, ExtremeVal
 use crate::client::ActiveClient;
 use chrono::{NaiveDateTime, NaiveTime};
 use ibapi_macros::debug_trait;
-use tokio_util::sync::CancellationToken;
+
+/// Re-export of [`tokio_util::sync::CancellationToken`]
+pub type CancelToken = tokio_util::sync::CancellationToken;
 
 #[debug_trait]
 /// Contains the "callback functions" that correspond to the requests made by a [`crate::client::Client`].
@@ -137,7 +139,7 @@ pub trait Initializer<'c> {
     /// The Wrapper
     type Wrap: Local<'c>;
     /// The method to build the wrapper
-    fn build(self, client: &'c mut ActiveClient, cancel_loop: CancellationToken) -> impl std::future::Future<Output = Self::Wrap>;
+    fn build(self, client: &'c mut ActiveClient, cancel_loop: CancelToken) -> impl std::future::Future<Output = Self::Wrap>;
 }
 
 
