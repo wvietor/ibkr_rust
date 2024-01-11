@@ -23,7 +23,7 @@ use crate::{
     exchange::Routing,
     message::{ToClient, ToWrapper},
     order::TimeInForce,
-    wrapper
+    wrapper,
 };
 
 type Tx = tokio::sync::mpsc::Sender<ToClient>;
@@ -90,458 +90,527 @@ macro_rules! impl_seg_variants {
 #[ibapi_macros::make_send(Remote(Send): wrapper::Remote)]
 pub trait Local<'c>: wrapper::Local<'c> {
     #[inline]
-    fn tick_price_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> { async move {
-        decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            tick_type @ 0: u16,
-            price @ 0: f64,
-            size @ 0: String,
-            attr_mask @ 0: u8
-        );
-
-        let size = if size.is_empty() {
-            None
-        } else {
-            Some(
-                size.as_str()
-                    .parse()
-                    .with_context(|| "Invalid value for size")?,
-            )
-        };
-        if (price + 1.0).abs() < f64::EPSILON || (price == 0.0 && size == Some(0.0)) {
-            return Ok(());
-        }
-
-        match tick_type {
-            1 | 2 | 4 | 6 | 7 | 9 | 14 => {
-                let (price, size) = match (tick_type, size) {
-                    (1, Some(sz)) => (Price::Bid(price), Some(Size::Bid(sz))),
-                    (1, None) => (Price::Bid(price), None),
-                    (2, Some(sz)) => (Price::Ask(price), Some(Size::Ask(sz))),
-                    (2, None) => (Price::Ask(price), None),
-                    (4, Some(sz)) => (Price::Last(price), Some(Size::Last(sz))),
-                    (4, None) => (Price::Last(price), None),
-                    (6, _) => (Price::High(price), None),
-                    (7, _) => (Price::Low(price), None),
-                    (9, _) => (Price::Close(price), None),
-                    (14, _) => (Price::Open(price), None),
-                    _ => panic!("The impossible occurred"),
-                };
-                wrapper.price_data(req_id, Class::Live(price)).await;
-                if let Some(sz) = size {
-                    wrapper.size_data(req_id, Class::Live(sz)).await;
-                }
-            }
-            15..=20 => {
-                let value = match tick_type {
-                    15 => ExtremeValue::Low(Period::ThirteenWeek(price)),
-                    16 => ExtremeValue::High(Period::ThirteenWeek(price)),
-                    17 => ExtremeValue::Low(Period::TwentySixWeek(price)),
-                    18 => ExtremeValue::High(Period::TwentySixWeek(price)),
-                    19 => ExtremeValue::Low(Period::FiftyTwoWeek(price)),
-                    20 => ExtremeValue::High(Period::FiftyTwoWeek(price)),
-                    _ => panic!("The impossible occurred"),
-                };
-                wrapper.extreme_data(req_id, value).await;
-            }
-            35 => {
-                wrapper.auction(req_id, AuctionData::Price(price)).await;
-            }
-            37 | 79 => {
-                let mark = match tick_type {
-                    37 => MarkPrice::Standard(price),
-                    79 => MarkPrice::Slow(price),
-                    _ => panic!("The impossible occurred"),
-                };
-                wrapper.mark_price(req_id, mark).await;
-            }
-            50..=52 => {
-                let yld = match tick_type {
-                    50 => Yield::Bid(price),
-                    51 => Yield::Ask(price),
-                    52 => Yield::Last(price),
-                    _ => panic!("The impossible occurred"),
-                };
-                wrapper.yield_data(req_id, yld).await;
-            }
-            57 => {
-                wrapper
-                    .price_data(req_id, Class::Live(Price::LastRthTrade(price)))
-                    .await;
-            }
-            66..=68 | 72 | 73 | 75 | 76 => {
-                let (price, size) = match (tick_type, size) {
-                    (66, Some(sz)) => (Price::Bid(price), Some(Size::Bid(sz))),
-                    (66, None) => (Price::Bid(price), None),
-                    (67, Some(sz)) => (Price::Ask(price), Some(Size::Ask(sz))),
-                    (67, None) => (Price::Ask(price), None),
-                    (68, Some(sz)) => (Price::Last(price), Some(Size::Last(sz))),
-                    (68, None) => (Price::Last(price), None),
-                    (72, _) => (Price::High(price), None),
-                    (73, _) => (Price::Low(price), None),
-                    (75, _) => (Price::Close(price), None),
-                    (76, _) => (Price::Open(price), None),
-                    _ => panic!("The impossible occurred"),
-                };
-                wrapper.price_data(req_id, Class::Delayed(price)).await;
-                if let Some(sz) = size {
-                    wrapper.size_data(req_id, Class::Delayed(sz)).await;
-                }
-            }
-            92..=99 => {
-                let nav = match tick_type {
-                    92 => EtfNav::Close(price),
-                    93 => EtfNav::PriorClose(price),
-                    94 => EtfNav::Bid(price),
-                    95 => EtfNav::Ask(price),
-                    96 => EtfNav::Last(price),
-                    97 => EtfNav::FrozenLast(price),
-                    98 => EtfNav::High(price),
-                    99 => EtfNav::Low(price),
-                    _ => panic!("The impossible occurred"),
-                };
-                wrapper.etf_nav(req_id, nav).await;
-            }
-            t => {
-                return Err(anyhow::Error::msg(format!(
-                    "Unexpected price market data request: {t}"
-                )))
-            }
-        };
-        Ok(())
-    }}
-
-    #[inline]
-    fn tick_size_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> { async move {
-        decode_fields!(
+    fn tick_price_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
+        async move {
+            decode_fields!(
             fields =>
                 req_id @ 2: i64,
                 tick_type @ 0: u16,
-                value @ 0: f64
-        );
-        Self::decode_generic_tick_msg(req_id, tick_type, value, wrapper).await
-    }}
+                price @ 0: f64,
+                size @ 0: String,
+                attr_mask @ 0: u8
+            );
+
+            let size = if size.is_empty() {
+                None
+            } else {
+                Some(
+                    size.as_str()
+                        .parse()
+                        .with_context(|| "Invalid value for size")?,
+                )
+            };
+            if (price + 1.0).abs() < f64::EPSILON || (price == 0.0 && size == Some(0.0)) {
+                return Ok(());
+            }
+
+            match tick_type {
+                1 | 2 | 4 | 6 | 7 | 9 | 14 => {
+                    let (price, size) = match (tick_type, size) {
+                        (1, Some(sz)) => (Price::Bid(price), Some(Size::Bid(sz))),
+                        (1, None) => (Price::Bid(price), None),
+                        (2, Some(sz)) => (Price::Ask(price), Some(Size::Ask(sz))),
+                        (2, None) => (Price::Ask(price), None),
+                        (4, Some(sz)) => (Price::Last(price), Some(Size::Last(sz))),
+                        (4, None) => (Price::Last(price), None),
+                        (6, _) => (Price::High(price), None),
+                        (7, _) => (Price::Low(price), None),
+                        (9, _) => (Price::Close(price), None),
+                        (14, _) => (Price::Open(price), None),
+                        _ => panic!("The impossible occurred"),
+                    };
+                    wrapper.price_data(req_id, Class::Live(price)).await;
+                    if let Some(sz) = size {
+                        wrapper.size_data(req_id, Class::Live(sz)).await;
+                    }
+                }
+                15..=20 => {
+                    let value = match tick_type {
+                        15 => ExtremeValue::Low(Period::ThirteenWeek(price)),
+                        16 => ExtremeValue::High(Period::ThirteenWeek(price)),
+                        17 => ExtremeValue::Low(Period::TwentySixWeek(price)),
+                        18 => ExtremeValue::High(Period::TwentySixWeek(price)),
+                        19 => ExtremeValue::Low(Period::FiftyTwoWeek(price)),
+                        20 => ExtremeValue::High(Period::FiftyTwoWeek(price)),
+                        _ => panic!("The impossible occurred"),
+                    };
+                    wrapper.extreme_data(req_id, value).await;
+                }
+                35 => {
+                    wrapper.auction(req_id, AuctionData::Price(price)).await;
+                }
+                37 | 79 => {
+                    let mark = match tick_type {
+                        37 => MarkPrice::Standard(price),
+                        79 => MarkPrice::Slow(price),
+                        _ => panic!("The impossible occurred"),
+                    };
+                    wrapper.mark_price(req_id, mark).await;
+                }
+                50..=52 => {
+                    let yld = match tick_type {
+                        50 => Yield::Bid(price),
+                        51 => Yield::Ask(price),
+                        52 => Yield::Last(price),
+                        _ => panic!("The impossible occurred"),
+                    };
+                    wrapper.yield_data(req_id, yld).await;
+                }
+                57 => {
+                    wrapper
+                        .price_data(req_id, Class::Live(Price::LastRthTrade(price)))
+                        .await;
+                }
+                66..=68 | 72 | 73 | 75 | 76 => {
+                    let (price, size) = match (tick_type, size) {
+                        (66, Some(sz)) => (Price::Bid(price), Some(Size::Bid(sz))),
+                        (66, None) => (Price::Bid(price), None),
+                        (67, Some(sz)) => (Price::Ask(price), Some(Size::Ask(sz))),
+                        (67, None) => (Price::Ask(price), None),
+                        (68, Some(sz)) => (Price::Last(price), Some(Size::Last(sz))),
+                        (68, None) => (Price::Last(price), None),
+                        (72, _) => (Price::High(price), None),
+                        (73, _) => (Price::Low(price), None),
+                        (75, _) => (Price::Close(price), None),
+                        (76, _) => (Price::Open(price), None),
+                        _ => panic!("The impossible occurred"),
+                    };
+                    wrapper.price_data(req_id, Class::Delayed(price)).await;
+                    if let Some(sz) = size {
+                        wrapper.size_data(req_id, Class::Delayed(sz)).await;
+                    }
+                }
+                92..=99 => {
+                    let nav = match tick_type {
+                        92 => EtfNav::Close(price),
+                        93 => EtfNav::PriorClose(price),
+                        94 => EtfNav::Bid(price),
+                        95 => EtfNav::Ask(price),
+                        96 => EtfNav::Last(price),
+                        97 => EtfNav::FrozenLast(price),
+                        98 => EtfNav::High(price),
+                        99 => EtfNav::Low(price),
+                        _ => panic!("The impossible occurred"),
+                    };
+                    wrapper.etf_nav(req_id, nav).await;
+                }
+                t => {
+                    return Err(anyhow::Error::msg(format!(
+                        "Unexpected price market data request: {t}"
+                    )))
+                }
+            };
+            Ok(())
+        }
+    }
 
     #[inline]
-    fn order_status_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> { async move {
-        println!("{:?}", &fields);
-        Ok(())
-    } }
+    fn tick_size_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
+        async move {
+            decode_fields!(
+                fields =>
+                    req_id @ 2: i64,
+                    tick_type @ 0: u16,
+                    value @ 0: f64
+            );
+            Self::decode_generic_tick_msg(req_id, tick_type, value, wrapper).await
+        }
+    }
+
+    #[inline]
+    fn order_status_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
+        async move {
+            println!("{:?}", &fields);
+            Ok(())
+        }
+    }
 
     #[inline]
     // todo: Implement a proper Error Enum
-    fn err_msg_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> { async move {
-        decode_fields!(
-            fields =>
-                req_id @ 2: i64,
-                error_code @ 0: i64,
-                error_string @ 0: String,
-                advanced_order_reject_json @ 0: String
-        );
-        wrapper
-            .error(req_id, error_code, error_string, advanced_order_reject_json)
-            .await;
-        Ok(())
-    }}
+    fn err_msg_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
+        async move {
+            decode_fields!(
+                fields =>
+                    req_id @ 2: i64,
+                    error_code @ 0: i64,
+                    error_string @ 0: String,
+                    advanced_order_reject_json @ 0: String
+            );
+            wrapper
+                .error(req_id, error_code, error_string, advanced_order_reject_json)
+                .await;
+            Ok(())
+        }
+    }
 
     #[inline]
-    fn open_order_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> { async move {
-        decode_fields!(
-            fields =>
-                order_id @ 1: i64,
-                contract_id @ 0: ContractId,
-                action @ 10: String,
-                quantity @ 0: f64,
-                order_type @ 0: String,
-                price @ 0: String,
-                aux_price @ 0: String,
-                time_in_force @ 0: TimeInForce
-        );
-        Ok(())
-    }}
+    fn open_order_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
+        async move {
+            decode_fields!(
+                fields =>
+                    order_id @ 1: i64,
+                    contract_id @ 0: ContractId,
+                    action @ 10: String,
+                    quantity @ 0: f64,
+                    order_type @ 0: String,
+                    price @ 0: String,
+                    aux_price @ 0: String,
+                    time_in_force @ 0: TimeInForce
+            );
+            Ok(())
+        }
+    }
 
     #[inline]
-    fn acct_value_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> { async move {
-        decode_fields!(
-            fields =>
-                name @ 2: String,
-                value @ 0: String,
-                currency @ 0: String,
-                account_number @ 0: String
-        );
-        let attribute = match name.as_str() {
-            "AccountCode" => account::Attribute::AccountCode(value),
-            "AccountOrGroup" => match value.as_str() {
-                "All" => account::Attribute::AccountOrGroup(account::Group::All, currency.parse()?),
-                name => account::Attribute::AccountOrGroup(
-                    account::Group::Name(name.to_owned()),
+    fn acct_value_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
+        async move {
+            decode_fields!(
+                fields =>
+                    name @ 2: String,
+                    value @ 0: String,
+                    currency @ 0: String,
+                    account_number @ 0: String
+            );
+            let attribute = match name.as_str() {
+                "AccountCode" => account::Attribute::AccountCode(value),
+                "AccountOrGroup" => match value.as_str() {
+                    "All" => {
+                        account::Attribute::AccountOrGroup(account::Group::All, currency.parse()?)
+                    }
+                    name => account::Attribute::AccountOrGroup(
+                        account::Group::Name(name.to_owned()),
+                        currency.parse()?,
+                    ),
+                },
+                "AccountReady" => account::Attribute::AccountReady(value.parse()?),
+                "AccountType" => account::Attribute::AccountType(value),
+                expand_seg_variants!("AccruedCash") => account::Attribute::AccruedCash(
+                    impl_seg_variants!("AccruedCash", name, value),
                     currency.parse()?,
                 ),
-            },
-            "AccountReady" => account::Attribute::AccountReady(value.parse()?),
-            "AccountType" => account::Attribute::AccountType(value),
-            expand_seg_variants!("AccruedCash") => account::Attribute::AccruedCash(
-                impl_seg_variants!("AccruedCash", name, value),
-                currency.parse()?,
-            ),
-            expand_seg_variants!("AccruedDividend") => account::Attribute::AccruedDividend(
-                impl_seg_variants!("AccruedDividend", name, value),
-                currency.parse()?,
-            ),
-            expand_seg_variants!("AvailableFunds") => account::Attribute::AvailableFunds(
-                impl_seg_variants!("AvailableFunds", name, value),
-                currency.parse()?,
-            ),
-            expand_seg_variants!("Billable") => account::Attribute::Billable(
-                impl_seg_variants!("Billable", name, value),
-                currency.parse()?,
-            ),
-            "BuyingPower" => account::Attribute::BuyingPower(value.parse()?, currency.parse()?),
-            "CashBalance" => account::Attribute::CashBalance(value.parse()?, currency.parse()?),
-            expand_seg_variants!("ColumnPrio") => {
-                account::Attribute::ColumnPrio(impl_seg_variants!("ColumnPrio", name, value))
-            }
-            "CorporateBondValue" => {
-                account::Attribute::CorporateBondValue(value.parse()?, currency.parse()?)
-            }
-            "Cryptocurrency" => {
-                account::Attribute::Cryptocurrency(value.parse()?, currency.parse()?)
-            }
-            "Currency" => account::Attribute::Currency(value.parse()?),
-            "Cushion" => account::Attribute::Cushion(value.parse()?),
-            "DayTradesRemaining" => account::Attribute::DayTradesRemaining(value.parse()?),
-            "DayTradesRemainingT+1" => account::Attribute::DayTradesRemainingTPlus1(value.parse()?),
-            "DayTradesRemainingT+2" => account::Attribute::DayTradesRemainingTPlus2(value.parse()?),
-            "DayTradesRemainingT+3" => account::Attribute::DayTradesRemainingTPlus3(value.parse()?),
-            "DayTradesRemainingT+4" => account::Attribute::DayTradesRemainingTPlus4(value.parse()?),
-            "DayTradingStatus-S" => account::Attribute::DayTradingStatus(value),
-            expand_seg_variants!("EquityWithLoanValue") => account::Attribute::EquityWithLoanValue(
-                impl_seg_variants!("EquityWithLoanValue", name, value),
-                currency.parse()?,
-            ),
-            expand_seg_variants!("ExcessLiquidity") => account::Attribute::ExcessLiquidity(
-                impl_seg_variants!("ExcessLiquidity", name, value),
-                currency.parse()?,
-            ),
-            "ExchangeRate" => account::Attribute::ExchangeRate(value.parse()?, currency.parse()?),
-            expand_seg_variants!("FullAvailableFunds") => account::Attribute::FullAvailableFunds(
-                impl_seg_variants!("FullAvailableFunds", name, value),
-                currency.parse()?,
-            ),
-            expand_seg_variants!("FullExcessLiquidity") => account::Attribute::FullExcessLiquidity(
-                impl_seg_variants!("FullExcessLiquidity", name, value),
-                currency.parse()?,
-            ),
-            expand_seg_variants!("FullInitMarginReq") => account::Attribute::FullInitMarginReq(
-                impl_seg_variants!("FullInitMarginReq", name, value),
-                currency.parse()?,
-            ),
-            expand_seg_variants!("FullMaintMarginReq") => {
-                account::Attribute::FullMaintenanceMarginReq(
-                    impl_seg_variants!("FullMaintMarginReq", name, value),
+                expand_seg_variants!("AccruedDividend") => account::Attribute::AccruedDividend(
+                    impl_seg_variants!("AccruedDividend", name, value),
                     currency.parse()?,
-                )
-            }
-            "FundValue" => account::Attribute::FundValue(value.parse()?, currency.parse()?),
-            "FutureOptionValue" => {
-                account::Attribute::FutureOptionValue(value.parse()?, currency.parse()?)
-            }
-            "FuturesPNL" => account::Attribute::FuturesPnl(value.parse()?, currency.parse()?),
-            "FxCashBalance" => account::Attribute::FxCashBalance(value.parse()?, currency.parse()?),
-            "GrossPositionValue" => {
-                account::Attribute::GrossPositionValue(value.parse()?, currency.parse()?)
-            }
-            "GrossPositionValue-S" => {
-                account::Attribute::GrossPositionValueSecurity(value.parse()?, currency.parse()?)
-            }
-            expand_seg_variants!("Guarantee") => account::Attribute::Guarantee(
-                impl_seg_variants!("Guarantee", name, value),
-                currency.parse()?,
-            ),
-            expand_seg_variants!("IndianStockHaircut") => account::Attribute::IndianStockHaircut(
-                impl_seg_variants!("IndianStockHaircut", name, value),
-                currency.parse()?,
-            ),
-            expand_seg_variants!("InitMarginReq") => account::Attribute::InitMarginReq(
-                impl_seg_variants!("InitMarginReq", name, value),
-                currency.parse()?,
-            ),
-            "IssuerOptionValue" => {
-                account::Attribute::IssuerOptionValue(value.parse()?, currency.parse()?)
-            }
-            "Leverage-S" => account::Attribute::LeverageSecurity(value.parse()?),
-            expand_seg_variants!("LookAheadAvailableFunds") => {
-                account::Attribute::LookAheadAvailableFunds(
-                    impl_seg_variants!("LookAheadAvailableFunds", name, value),
+                ),
+                expand_seg_variants!("AvailableFunds") => account::Attribute::AvailableFunds(
+                    impl_seg_variants!("AvailableFunds", name, value),
                     currency.parse()?,
-                )
-            }
-            expand_seg_variants!("LookAheadExcessLiquidity") => {
-                account::Attribute::LookAheadExcessLiquidity(
-                    impl_seg_variants!("LookAheadExcessLiquidity", name, value),
+                ),
+                expand_seg_variants!("Billable") => account::Attribute::Billable(
+                    impl_seg_variants!("Billable", name, value),
                     currency.parse()?,
-                )
-            }
-            expand_seg_variants!("LookAheadInitMarginReq") => {
-                account::Attribute::LookAheadInitMarginReq(
-                    impl_seg_variants!("LookAheadInitMarginReq", name, value),
+                ),
+                "BuyingPower" => account::Attribute::BuyingPower(value.parse()?, currency.parse()?),
+                "CashBalance" => account::Attribute::CashBalance(value.parse()?, currency.parse()?),
+                expand_seg_variants!("ColumnPrio") => {
+                    account::Attribute::ColumnPrio(impl_seg_variants!("ColumnPrio", name, value))
+                }
+                "CorporateBondValue" => {
+                    account::Attribute::CorporateBondValue(value.parse()?, currency.parse()?)
+                }
+                "Cryptocurrency" => {
+                    account::Attribute::Cryptocurrency(value.parse()?, currency.parse()?)
+                }
+                "Currency" => account::Attribute::Currency(value.parse()?),
+                "Cushion" => account::Attribute::Cushion(value.parse()?),
+                "DayTradesRemaining" => account::Attribute::DayTradesRemaining(value.parse()?),
+                "DayTradesRemainingT+1" => {
+                    account::Attribute::DayTradesRemainingTPlus1(value.parse()?)
+                }
+                "DayTradesRemainingT+2" => {
+                    account::Attribute::DayTradesRemainingTPlus2(value.parse()?)
+                }
+                "DayTradesRemainingT+3" => {
+                    account::Attribute::DayTradesRemainingTPlus3(value.parse()?)
+                }
+                "DayTradesRemainingT+4" => {
+                    account::Attribute::DayTradesRemainingTPlus4(value.parse()?)
+                }
+                "DayTradingStatus-S" => account::Attribute::DayTradingStatus(value),
+                expand_seg_variants!("EquityWithLoanValue") => {
+                    account::Attribute::EquityWithLoanValue(
+                        impl_seg_variants!("EquityWithLoanValue", name, value),
+                        currency.parse()?,
+                    )
+                }
+                expand_seg_variants!("ExcessLiquidity") => account::Attribute::ExcessLiquidity(
+                    impl_seg_variants!("ExcessLiquidity", name, value),
                     currency.parse()?,
-                )
-            }
-            expand_seg_variants!("LookAheadMaintMarginReq") => {
-                account::Attribute::LookAheadMaintenanceMarginReq(
-                    impl_seg_variants!("LookAheadMaintMarginReq", name, value),
+                ),
+                "ExchangeRate" => {
+                    account::Attribute::ExchangeRate(value.parse()?, currency.parse()?)
+                }
+                expand_seg_variants!("FullAvailableFunds") => {
+                    account::Attribute::FullAvailableFunds(
+                        impl_seg_variants!("FullAvailableFunds", name, value),
+                        currency.parse()?,
+                    )
+                }
+                expand_seg_variants!("FullExcessLiquidity") => {
+                    account::Attribute::FullExcessLiquidity(
+                        impl_seg_variants!("FullExcessLiquidity", name, value),
+                        currency.parse()?,
+                    )
+                }
+                expand_seg_variants!("FullInitMarginReq") => account::Attribute::FullInitMarginReq(
+                    impl_seg_variants!("FullInitMarginReq", name, value),
                     currency.parse()?,
-                )
-            }
-            "LookAheadNextChange" => account::Attribute::LookAheadNextChange(value.parse()?),
-            expand_seg_variants!("MaintMarginReq") => account::Attribute::MaintenanceMarginReq(
-                impl_seg_variants!("MaintMarginReq", name, value),
-                currency.parse()?,
-            ),
-            "MoneyMarketFundValue" => {
-                account::Attribute::MoneyMarketFundValue(value.parse()?, currency.parse()?)
-            }
-            "MutualFundValue" => {
-                account::Attribute::MutualFundValue(value.parse()?, currency.parse()?)
-            }
-            "NLVAndMarginInReview" => account::Attribute::NlvAndMarginInReview(value.parse()?),
-            "NetDividend" => account::Attribute::NetDividend(value.parse()?, currency.parse()?),
-            expand_seg_variants!("NetLiquidation") => account::Attribute::NetLiquidation(
-                impl_seg_variants!("NetLiquidation", name, value),
-                currency.parse()?,
-            ),
-            "NetLiquidationByCurrency" => {
-                account::Attribute::NetLiquidationByCurrency(value.parse()?, currency.parse()?)
-            }
-            "NetLiquidationUncertainty" => {
-                account::Attribute::NetLiquidationUncertainty(value.parse()?, currency.parse()?)
-            }
-            "OptionMarketValue" => {
-                account::Attribute::OptionMarketValue(value.parse()?, currency.parse()?)
-            }
-            expand_seg_variants!("PASharesValue") => account::Attribute::PaSharesValue(
-                impl_seg_variants!("PASharesValue", name, value),
-                currency.parse()?,
-            ),
-            expand_seg_variants!("PhysicalCertificateValue") => {
-                account::Attribute::PhysicalCertificateValue(
-                    impl_seg_variants!("PhysicalCertificateValue", name, value),
-                    currency.parse()?,
-                )
-            }
-            expand_seg_variants!("PostExpirationExcess") => {
-                account::Attribute::PostExpirationExcess(
-                    impl_seg_variants!("PostExpirationExcess", name, value),
-                    currency.parse()?,
-                )
-            }
-            expand_seg_variants!("PostExpirationMargin") => {
-                account::Attribute::PostExpirationMargin(
-                    impl_seg_variants!("PostExpirationMargin", name, value),
-                    currency.parse()?,
-                )
-            }
-            "PreviousDayEquityWithLoanValue" => account::Attribute::PreviousDayEquityWithLoanValue(
-                value.parse()?,
-                currency.parse()?,
-            ),
-            "PreviousDayEquityWithLoanValue-S" => {
-                account::Attribute::PreviousDayEquityWithLoanValueSecurity(
+                ),
+                expand_seg_variants!("FullMaintMarginReq") => {
+                    account::Attribute::FullMaintenanceMarginReq(
+                        impl_seg_variants!("FullMaintMarginReq", name, value),
+                        currency.parse()?,
+                    )
+                }
+                "FundValue" => account::Attribute::FundValue(value.parse()?, currency.parse()?),
+                "FutureOptionValue" => {
+                    account::Attribute::FutureOptionValue(value.parse()?, currency.parse()?)
+                }
+                "FuturesPNL" => account::Attribute::FuturesPnl(value.parse()?, currency.parse()?),
+                "FxCashBalance" => {
+                    account::Attribute::FxCashBalance(value.parse()?, currency.parse()?)
+                }
+                "GrossPositionValue" => {
+                    account::Attribute::GrossPositionValue(value.parse()?, currency.parse()?)
+                }
+                "GrossPositionValue-S" => account::Attribute::GrossPositionValueSecurity(
                     value.parse()?,
                     currency.parse()?,
-                )
-            }
-            "RealCurrency" => account::Attribute::RealCurrency(currency.parse()?),
-            "RealizedPnL" => account::Attribute::RealizedPnL(value.parse()?, currency.parse()?),
-            "RegTEquity" => account::Attribute::RegTEquity(value.parse()?, currency.parse()?),
-            "RegTEquity-S" => {
-                account::Attribute::RegTEquitySecurity(value.parse()?, currency.parse()?)
-            }
-            "RegTMargin" => account::Attribute::RegTMargin(value.parse()?, currency.parse()?),
-            "RegTMargin-S" => {
-                account::Attribute::RegTMarginSecurity(value.parse()?, currency.parse()?)
-            }
-            "SMA" => account::Attribute::Sma(value.parse()?, currency.parse()?),
-            "SMA-S" => account::Attribute::SmaSecurity(value.parse()?, currency.parse()?),
-            "StockMarketValue" => {
-                account::Attribute::StockMarketValue(value.parse()?, currency.parse()?)
-            }
-            "TBillValue" => account::Attribute::TBillValue(value.parse()?, currency.parse()?),
-            "TBondValue" => account::Attribute::TBondValue(value.parse()?, currency.parse()?),
-            "TotalCashBalance" => {
-                account::Attribute::TotalCashBalance(value.parse()?, currency.parse()?)
-            }
-            expand_seg_variants!("TotalCashValue") => account::Attribute::TotalCashValue(
-                impl_seg_variants!("TotalCashValue", name, value),
-                currency.parse()?,
-            ),
-            expand_seg_variants!("TotalDebitCardPendingCharges") => {
-                account::Attribute::TotalDebitCardPendingCharges(
-                    impl_seg_variants!("TotalDebitCardPendingCharges", name, value),
+                ),
+                expand_seg_variants!("Guarantee") => account::Attribute::Guarantee(
+                    impl_seg_variants!("Guarantee", name, value),
                     currency.parse()?,
-                )
-            }
-            "TradingType-S" => account::Attribute::TradingTypeSecurity(value),
-            "UnrealizedPnL" => account::Attribute::UnrealizedPnL(value.parse()?, currency.parse()?),
-            "WarrantValue" => account::Attribute::WarrantValue(value.parse()?, currency.parse()?),
-            "WhatIfPMEnabled" => account::Attribute::WhatIfPMEnabled(value.parse()?),
-            expand_seg_variants!("SegmentTitle") => {
-                if name.ends_with('C') || name.ends_with('P') || name.ends_with('S') {
-                    return Ok(());
+                ),
+                expand_seg_variants!("IndianStockHaircut") => {
+                    account::Attribute::IndianStockHaircut(
+                        impl_seg_variants!("IndianStockHaircut", name, value),
+                        currency.parse()?,
+                    )
                 }
-                return Err(anyhow::Error::msg("Unexpected segment title encountered.  This may mandate an API update: currently-supported values are C, P, and S as outlined in the account::Segment type."));
-            }
-            _ => {
-                return Err(anyhow::Error::msg(format!(
-                    "Invalid account attribute encountered: {name}"
-                )))
-            }
-        };
-        wrapper.account_attribute(attribute, account_number).await;
-        Ok(())
-    }}
+                expand_seg_variants!("InitMarginReq") => account::Attribute::InitMarginReq(
+                    impl_seg_variants!("InitMarginReq", name, value),
+                    currency.parse()?,
+                ),
+                "IssuerOptionValue" => {
+                    account::Attribute::IssuerOptionValue(value.parse()?, currency.parse()?)
+                }
+                "Leverage-S" => account::Attribute::LeverageSecurity(value.parse()?),
+                expand_seg_variants!("LookAheadAvailableFunds") => {
+                    account::Attribute::LookAheadAvailableFunds(
+                        impl_seg_variants!("LookAheadAvailableFunds", name, value),
+                        currency.parse()?,
+                    )
+                }
+                expand_seg_variants!("LookAheadExcessLiquidity") => {
+                    account::Attribute::LookAheadExcessLiquidity(
+                        impl_seg_variants!("LookAheadExcessLiquidity", name, value),
+                        currency.parse()?,
+                    )
+                }
+                expand_seg_variants!("LookAheadInitMarginReq") => {
+                    account::Attribute::LookAheadInitMarginReq(
+                        impl_seg_variants!("LookAheadInitMarginReq", name, value),
+                        currency.parse()?,
+                    )
+                }
+                expand_seg_variants!("LookAheadMaintMarginReq") => {
+                    account::Attribute::LookAheadMaintenanceMarginReq(
+                        impl_seg_variants!("LookAheadMaintMarginReq", name, value),
+                        currency.parse()?,
+                    )
+                }
+                "LookAheadNextChange" => account::Attribute::LookAheadNextChange(value.parse()?),
+                expand_seg_variants!("MaintMarginReq") => account::Attribute::MaintenanceMarginReq(
+                    impl_seg_variants!("MaintMarginReq", name, value),
+                    currency.parse()?,
+                ),
+                "MoneyMarketFundValue" => {
+                    account::Attribute::MoneyMarketFundValue(value.parse()?, currency.parse()?)
+                }
+                "MutualFundValue" => {
+                    account::Attribute::MutualFundValue(value.parse()?, currency.parse()?)
+                }
+                "NLVAndMarginInReview" => account::Attribute::NlvAndMarginInReview(value.parse()?),
+                "NetDividend" => account::Attribute::NetDividend(value.parse()?, currency.parse()?),
+                expand_seg_variants!("NetLiquidation") => account::Attribute::NetLiquidation(
+                    impl_seg_variants!("NetLiquidation", name, value),
+                    currency.parse()?,
+                ),
+                "NetLiquidationByCurrency" => {
+                    account::Attribute::NetLiquidationByCurrency(value.parse()?, currency.parse()?)
+                }
+                "NetLiquidationUncertainty" => {
+                    account::Attribute::NetLiquidationUncertainty(value.parse()?, currency.parse()?)
+                }
+                "OptionMarketValue" => {
+                    account::Attribute::OptionMarketValue(value.parse()?, currency.parse()?)
+                }
+                expand_seg_variants!("PASharesValue") => account::Attribute::PaSharesValue(
+                    impl_seg_variants!("PASharesValue", name, value),
+                    currency.parse()?,
+                ),
+                expand_seg_variants!("PhysicalCertificateValue") => {
+                    account::Attribute::PhysicalCertificateValue(
+                        impl_seg_variants!("PhysicalCertificateValue", name, value),
+                        currency.parse()?,
+                    )
+                }
+                expand_seg_variants!("PostExpirationExcess") => {
+                    account::Attribute::PostExpirationExcess(
+                        impl_seg_variants!("PostExpirationExcess", name, value),
+                        currency.parse()?,
+                    )
+                }
+                expand_seg_variants!("PostExpirationMargin") => {
+                    account::Attribute::PostExpirationMargin(
+                        impl_seg_variants!("PostExpirationMargin", name, value),
+                        currency.parse()?,
+                    )
+                }
+                "PreviousDayEquityWithLoanValue" => {
+                    account::Attribute::PreviousDayEquityWithLoanValue(
+                        value.parse()?,
+                        currency.parse()?,
+                    )
+                }
+                "PreviousDayEquityWithLoanValue-S" => {
+                    account::Attribute::PreviousDayEquityWithLoanValueSecurity(
+                        value.parse()?,
+                        currency.parse()?,
+                    )
+                }
+                "RealCurrency" => account::Attribute::RealCurrency(currency.parse()?),
+                "RealizedPnL" => account::Attribute::RealizedPnL(value.parse()?, currency.parse()?),
+                "RegTEquity" => account::Attribute::RegTEquity(value.parse()?, currency.parse()?),
+                "RegTEquity-S" => {
+                    account::Attribute::RegTEquitySecurity(value.parse()?, currency.parse()?)
+                }
+                "RegTMargin" => account::Attribute::RegTMargin(value.parse()?, currency.parse()?),
+                "RegTMargin-S" => {
+                    account::Attribute::RegTMarginSecurity(value.parse()?, currency.parse()?)
+                }
+                "SMA" => account::Attribute::Sma(value.parse()?, currency.parse()?),
+                "SMA-S" => account::Attribute::SmaSecurity(value.parse()?, currency.parse()?),
+                "StockMarketValue" => {
+                    account::Attribute::StockMarketValue(value.parse()?, currency.parse()?)
+                }
+                "TBillValue" => account::Attribute::TBillValue(value.parse()?, currency.parse()?),
+                "TBondValue" => account::Attribute::TBondValue(value.parse()?, currency.parse()?),
+                "TotalCashBalance" => {
+                    account::Attribute::TotalCashBalance(value.parse()?, currency.parse()?)
+                }
+                expand_seg_variants!("TotalCashValue") => account::Attribute::TotalCashValue(
+                    impl_seg_variants!("TotalCashValue", name, value),
+                    currency.parse()?,
+                ),
+                expand_seg_variants!("TotalDebitCardPendingCharges") => {
+                    account::Attribute::TotalDebitCardPendingCharges(
+                        impl_seg_variants!("TotalDebitCardPendingCharges", name, value),
+                        currency.parse()?,
+                    )
+                }
+                "TradingType-S" => account::Attribute::TradingTypeSecurity(value),
+                "UnrealizedPnL" => {
+                    account::Attribute::UnrealizedPnL(value.parse()?, currency.parse()?)
+                }
+                "WarrantValue" => {
+                    account::Attribute::WarrantValue(value.parse()?, currency.parse()?)
+                }
+                "WhatIfPMEnabled" => account::Attribute::WhatIfPMEnabled(value.parse()?),
+                expand_seg_variants!("SegmentTitle") => {
+                    if name.ends_with('C') || name.ends_with('P') || name.ends_with('S') {
+                        return Ok(());
+                    }
+                    return Err(anyhow::Error::msg("Unexpected segment title encountered.  This may mandate an API update: currently-supported values are C, P, and S as outlined in the account::Segment type."));
+                }
+                _ => {
+                    return Err(anyhow::Error::msg(format!(
+                        "Invalid account attribute encountered: {name}"
+                    )))
+                }
+            };
+            wrapper.account_attribute(attribute, account_number).await;
+            Ok(())
+        }
+    }
 
     #[inline]
-    fn portfolio_value_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> { async move {
-        decode_fields!(
-            fields =>
-                contract_id @ 2: ContractId,
-                position @ 10: f64,
-                market_price @ 0: f64,
-                market_value @ 0: f64,
-                average_cost @ 0: f64,
-                unrealized_pnl @ 0: f64,
-                realized_pnl @ 0: f64,
-                account_name @ 0: String
-        );
-        wrapper
-            .position(Position {
-                contract_id,
-                position,
-                market_price,
-                market_value,
-                average_cost,
-                unrealized_pnl,
-                realized_pnl,
-                account_number: account_name,
-            })
-            .await;
-        Ok(())
-    }}
+    fn portfolio_value_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
+        async move {
+            decode_fields!(
+                fields =>
+                    contract_id @ 2: ContractId,
+                    position @ 10: f64,
+                    market_price @ 0: f64,
+                    market_value @ 0: f64,
+                    average_cost @ 0: f64,
+                    unrealized_pnl @ 0: f64,
+                    realized_pnl @ 0: f64,
+                    account_name @ 0: String
+            );
+            wrapper
+                .position(Position {
+                    contract_id,
+                    position,
+                    market_price,
+                    market_value,
+                    average_cost,
+                    unrealized_pnl,
+                    realized_pnl,
+                    account_number: account_name,
+                })
+                .await;
+            Ok(())
+        }
+    }
 
     #[inline]
-    fn acct_update_time_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> { async move {
-        decode_fields!(
-            fields =>
-                timestamp @ 2: String
-        );
-        wrapper
-            .account_attribute_time(NaiveTime::parse_from_str(timestamp.as_str(), "%H:%M")?)
-            .await;
-        Ok(())
-    } }
+    fn acct_update_time_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
+        async move {
+            decode_fields!(
+                fields =>
+                    timestamp @ 2: String
+            );
+            wrapper
+                .account_attribute_time(NaiveTime::parse_from_str(timestamp.as_str(), "%H:%M")?)
+                .await;
+            Ok(())
+        }
+    }
 
     #[inline]
     fn next_valid_id_msg(
@@ -549,9 +618,9 @@ pub trait Local<'c>: wrapper::Local<'c> {
         wrapper: &mut Self,
         tx: &mut Tx,
         rx: &mut Rx,
-    ) -> impl Future<Output=anyhow::Result<()>> { async move {
-        Ok(())
-    } }
+    ) -> impl Future<Output = anyhow::Result<()>> {
+        async move { Ok(()) }
+    }
 
     #[inline]
     fn contract_data_msg(
@@ -559,266 +628,286 @@ pub trait Local<'c>: wrapper::Local<'c> {
         wrapper: &mut Self,
         tx: &mut Tx,
         rx: &mut Rx,
-    ) -> impl Future<Output=anyhow::Result<()>> { async move {
-        decode_fields!(
-            fields =>
-                req_id @ 1: i64,
-                symbol @ 0: String,
-                sec_type @ 0: String,
-                expiration_date @ 0: String,
-                strike @ 0: f64,
-                class @ 0: String,
-                exchange @ 0: Routing,
-                currency @ 0: Currency,
-                local_symbol @ 0: String,
-                trading_class @ 1: String,
-                contract_id @ 0: ContractId,
-                min_tick @ 0: f64,
-                multiplier @ 0: String,
-                order_types @ 0: String,
-                valid_exchanges @ 0: String,
-                underlying_contract_id @ 1: ContractId,
-                long_name @ 0: String,
-                primary_exchange @ 0: String,
-                sector @ 1: String,
-                security_id_count @ 7: usize
-        );
+    ) -> impl Future<Output = anyhow::Result<()>> {
+        async move {
+            decode_fields!(
+                fields =>
+                    req_id @ 1: i64,
+                    symbol @ 0: String,
+                    sec_type @ 0: String,
+                    expiration_date @ 0: String,
+                    strike @ 0: f64,
+                    class @ 0: String,
+                    exchange @ 0: Routing,
+                    currency @ 0: Currency,
+                    local_symbol @ 0: String,
+                    trading_class @ 1: String,
+                    contract_id @ 0: ContractId,
+                    min_tick @ 0: f64,
+                    multiplier @ 0: String,
+                    order_types @ 0: String,
+                    valid_exchanges @ 0: String,
+                    underlying_contract_id @ 1: ContractId,
+                    long_name @ 0: String,
+                    primary_exchange @ 0: String,
+                    sector @ 1: String,
+                    security_id_count @ 7: usize
+            );
 
-        let order_types = order_types
-            .split(',')
-            .map(std::borrow::ToOwned::to_owned)
-            .collect();
-        let valid_exchanges = valid_exchanges
-            .split(',')
-            .map(str::parse)
-            .collect::<Result<Vec<Routing>, _>>()
-            .with_context(|| "Invalid exchange in valid_exchanges")?;
-        let security_ids = (0..security_id_count)
-            .map(|_| {
-                match nth(fields, 0)
-                    .with_context(|| "Expected number of security_ids but none found")?
-                    .to_uppercase()
-                    .as_str()
-                {
-                    "CUSIP" => Ok(SecurityId::Cusip(
-                        nth(fields, 0).with_context(|| "Expected CUSIP but none found")?,
-                    )),
-                    "SEDOL" => Ok(SecurityId::Sedol(
-                        nth(fields, 0).with_context(|| "Expected SEDOL but none found")?,
-                    )),
-                    "ISIN" => Ok(SecurityId::Isin(
-                        nth(fields, 0).with_context(|| "Expected ISIN but none found")?,
-                    )),
-                    "RIC" => Ok(SecurityId::Ric(
-                        nth(fields, 0).with_context(|| "Expected RIC but none found")?,
-                    )),
-                    _ => Err(anyhow::Error::msg(
-                        "Invalid security_id type found in STK contract_data_msg",
-                    )),
+            let order_types = order_types
+                .split(',')
+                .map(std::borrow::ToOwned::to_owned)
+                .collect();
+            let valid_exchanges = valid_exchanges
+                .split(',')
+                .map(str::parse)
+                .collect::<Result<Vec<Routing>, _>>()
+                .with_context(|| "Invalid exchange in valid_exchanges")?;
+            let security_ids = (0..security_id_count)
+                .map(|_| {
+                    match nth(fields, 0)
+                        .with_context(|| "Expected number of security_ids but none found")?
+                        .to_uppercase()
+                        .as_str()
+                    {
+                        "CUSIP" => Ok(SecurityId::Cusip(
+                            nth(fields, 0).with_context(|| "Expected CUSIP but none found")?,
+                        )),
+                        "SEDOL" => Ok(SecurityId::Sedol(
+                            nth(fields, 0).with_context(|| "Expected SEDOL but none found")?,
+                        )),
+                        "ISIN" => Ok(SecurityId::Isin(
+                            nth(fields, 0).with_context(|| "Expected ISIN but none found")?,
+                        )),
+                        "RIC" => Ok(SecurityId::Ric(
+                            nth(fields, 0).with_context(|| "Expected RIC but none found")?,
+                        )),
+                        _ => Err(anyhow::Error::msg(
+                            "Invalid security_id type found in STK contract_data_msg",
+                        )),
+                    }
+                })
+                .collect::<Result<Vec<SecurityId>, _>>()?;
+
+            if let Ok(ToWrapper::ContractQuery((con_id_client, req_id_client))) = rx.try_recv() {
+                if con_id_client != contract_id {
+                    return Err(anyhow::Error::msg("Unexpected contract ID"));
                 }
-            })
-            .collect::<Result<Vec<SecurityId>, _>>()?;
-
-        if let Ok(ToWrapper::ContractQuery((con_id_client, req_id_client))) = rx.try_recv() {
-            if con_id_client != contract_id {
-                return Err(anyhow::Error::msg("Unexpected contract ID"));
-            }
-            if req_id_client != req_id {
-                return Err(anyhow::Error::msg("Unexpected request ID"));
-            }
-            let contract = match sec_type.as_str() {
-                "STK" => Some(Contract::Stock(Stock {
-                    symbol,
-                    exchange,
-                    currency,
-                    local_symbol,
-                    trading_class,
-                    contract_id,
-                    min_tick,
-                    primary_exchange: primary_exchange
-                        .parse()
-                        .with_context(|| "Invalid exchange in STK primary_exchange")?,
-                    long_name,
-                    sector,
-                    order_types,
-                    valid_exchanges,
-                    security_ids,
-                    stock_type: nth(fields, 5)
-                        .with_context(|| "Expected stock_type but none found")?,
-                })),
-                "OPT" => {
-                    let inner = SecOptionInner {
+                if req_id_client != req_id {
+                    return Err(anyhow::Error::msg("Unexpected request ID"));
+                }
+                let contract = match sec_type.as_str() {
+                    "STK" => Some(Contract::Stock(Stock {
+                        symbol,
+                        exchange,
+                        currency,
+                        local_symbol,
+                        trading_class,
+                        contract_id,
+                        min_tick,
+                        primary_exchange: primary_exchange
+                            .parse()
+                            .with_context(|| "Invalid exchange in STK primary_exchange")?,
+                        long_name,
+                        sector,
+                        order_types,
+                        valid_exchanges,
+                        security_ids,
+                        stock_type: nth(fields, 5)
+                            .with_context(|| "Expected stock_type but none found")?,
+                    })),
+                    "OPT" => {
+                        let inner = SecOptionInner {
+                            contract_id,
+                            min_tick,
+                            symbol,
+                            exchange,
+                            strike,
+                            multiplier: multiplier
+                                .parse()
+                                .with_context(|| "Invalid multiplier in OPT multiplier")?,
+                            expiration_date: NaiveDate::parse_and_remainder(
+                                expiration_date.as_str(),
+                                "%Y%m%d",
+                            )
+                            .with_context(|| "Invalid date string in OPT expiration_date")?
+                            .0,
+                            underlying_contract_id,
+                            sector,
+                            trading_class,
+                            currency,
+                            local_symbol,
+                            long_name,
+                            order_types,
+                            valid_exchanges,
+                        };
+                        match class.as_str() {
+                            "C" => Some(Contract::SecOption(SecOption::Call(inner))),
+                            "P" => Some(Contract::SecOption(SecOption::Put(inner))),
+                            _ => return Err(anyhow::Error::msg("Unexpected option class")),
+                        }
+                    }
+                    "CRYPTO" => Some(Contract::Crypto(Crypto {
                         contract_id,
                         min_tick,
                         symbol,
-                        exchange,
-                        strike,
-                        multiplier: multiplier
-                            .parse()
-                            .with_context(|| "Invalid multiplier in OPT multiplier")?,
-                        expiration_date: NaiveDate::parse_and_remainder(
-                            expiration_date.as_str(),
-                            "%Y%m%d",
-                        )
-                            .with_context(|| "Invalid date string in OPT expiration_date")?
-                            .0,
-                        underlying_contract_id,
-                        sector,
                         trading_class,
                         currency,
                         local_symbol,
                         long_name,
                         order_types,
                         valid_exchanges,
-                    };
-                    match class.as_str() {
-                        "C" => Some(Contract::SecOption(SecOption::Call(inner))),
-                        "P" => Some(Contract::SecOption(SecOption::Put(inner))),
-                        _ => return Err(anyhow::Error::msg("Unexpected option class")),
-                    }
-                }
-                "CRYPTO" => Some(Contract::Crypto(Crypto {
-                    contract_id,
-                    min_tick,
-                    symbol,
-                    trading_class,
-                    currency,
-                    local_symbol,
-                    long_name,
-                    order_types,
-                    valid_exchanges,
-                })),
-                "CASH" => Some(Contract::Forex(Forex {
-                    contract_id,
-                    min_tick,
-                    symbol,
-                    exchange,
-                    trading_class,
-                    currency,
-                    local_symbol,
-                    long_name,
-                    order_types,
-                    valid_exchanges,
-                })),
-                "IND" => Some(Contract::Index(Index {
-                    contract_id,
-                    min_tick,
-                    symbol,
-                    exchange,
-                    currency,
-                    local_symbol,
-                    long_name,
-                    order_types,
-                    valid_exchanges,
-                })),
-                "FUT" => Some(Contract::SecFuture(SecFuture {
-                    contract_id,
-                    min_tick,
-                    symbol,
-                    exchange,
-                    multiplier: multiplier
-                        .parse()
-                        .with_context(|| "Invalid multiplier in FUT multiplier")?,
-                    expiration_date: NaiveDate::parse_and_remainder(
-                        expiration_date.as_str(),
-                        "%Y%m%d",
-                    )
+                    })),
+                    "CASH" => Some(Contract::Forex(Forex {
+                        contract_id,
+                        min_tick,
+                        symbol,
+                        exchange,
+                        trading_class,
+                        currency,
+                        local_symbol,
+                        long_name,
+                        order_types,
+                        valid_exchanges,
+                    })),
+                    "IND" => Some(Contract::Index(Index {
+                        contract_id,
+                        min_tick,
+                        symbol,
+                        exchange,
+                        currency,
+                        local_symbol,
+                        long_name,
+                        order_types,
+                        valid_exchanges,
+                    })),
+                    "FUT" => Some(Contract::SecFuture(SecFuture {
+                        contract_id,
+                        min_tick,
+                        symbol,
+                        exchange,
+                        multiplier: multiplier
+                            .parse()
+                            .with_context(|| "Invalid multiplier in FUT multiplier")?,
+                        expiration_date: NaiveDate::parse_and_remainder(
+                            expiration_date.as_str(),
+                            "%Y%m%d",
+                        )
                         .with_context(|| "Invalid date string in OPT expiration_date")?
                         .0,
-                    trading_class,
-                    underlying_contract_id,
-                    currency,
-                    local_symbol,
-                    long_name,
-                    order_types,
-                    valid_exchanges,
-                })),
-                "CMDTY" => Some(Contract::Commodity(Commodity {
-                    contract_id,
-                    min_tick,
-                    symbol,
-                    exchange,
-                    trading_class,
-                    currency,
-                    local_symbol,
-                    long_name,
-                    order_types,
-                    valid_exchanges,
-                })),
-                _ => todo!(),
-            };
+                        trading_class,
+                        underlying_contract_id,
+                        currency,
+                        local_symbol,
+                        long_name,
+                        order_types,
+                        valid_exchanges,
+                    })),
+                    "CMDTY" => Some(Contract::Commodity(Commodity {
+                        contract_id,
+                        min_tick,
+                        symbol,
+                        exchange,
+                        trading_class,
+                        currency,
+                        local_symbol,
+                        long_name,
+                        order_types,
+                        valid_exchanges,
+                    })),
+                    _ => todo!(),
+                };
 
-            tx.send(ToClient::NewContract(
-                contract.ok_or_else(|| anyhow::Error::msg("No contract was created"))?,
-            ))
+                tx.send(ToClient::NewContract(
+                    contract.ok_or_else(|| anyhow::Error::msg("No contract was created"))?,
+                ))
                 .await
                 .with_context(|| "Failure when sending contract")?;
+            }
+            Ok(())
         }
-        Ok(())
-    } }
+    }
 
     #[inline]
-    fn execution_data_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> { async move {
-        println!("{:?}", &fields);
-        Ok(())
-    }}
+    fn execution_data_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
+        async move {
+            println!("{:?}", &fields);
+            Ok(())
+        }
+    }
 
     #[inline]
-    fn market_depth_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> { async move {
-        decode_fields!(
-            fields =>
-                req_id @ 1: i64,
-                position @ 0: u64,
-                operation @ 0: i64,
-                side @ 0: u32,
-                price @ 0: f64,
-                size @ 0: f64
-        );
+    fn market_depth_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
+        async move {
+            decode_fields!(
+                fields =>
+                    req_id @ 1: i64,
+                    position @ 0: u64,
+                    operation @ 0: i64,
+                    side @ 0: u32,
+                    price @ 0: f64,
+                    size @ 0: f64
+            );
 
-        let entry = CompleteEntry::Ordinary(Entry::try_from((side, position, price, size))?);
-        let operation = Operation::try_from((operation, entry))?;
+            let entry = CompleteEntry::Ordinary(Entry::try_from((side, position, price, size))?);
+            let operation = Operation::try_from((operation, entry))?;
 
-        wrapper.update_market_depth(req_id, operation).await;
-        Ok(())
-    }}
-
-    #[inline]
-    fn market_depth_l2_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> { async move {
-        decode_fields!(
-            fields =>
-                req_id @ 2: i64,
-                position  @ 0: u64,
-                market_maker @ 0: String,
-                operation @ 0: i64,
-                side @ 0: u32,
-                price @ 0: f64,
-                size @ 0: f64,
-                is_smart @ 0: i32
-        );
-        let entry = Entry::try_from((side, position, price, size))?;
-        let entry = match is_smart {
-            0 => CompleteEntry::MarketMaker {
-                market_maker: market_maker
-                    .chars()
-                    .take(4)
-                    .collect::<Vec<char>>()
-                    .try_into()
-                    .map_err(|_| anyhow::Error::msg("Invalid Mpid encountered"))?,
-                entry,
-            },
-            _ => CompleteEntry::SmartDepth {
-                exchange: market_maker.parse()?,
-                entry,
-            },
-        };
-        let operation = Operation::try_from((operation, entry))?;
-
-        wrapper.update_market_depth(req_id, operation).await;
-        Ok(())
-    }}
+            wrapper.update_market_depth(req_id, operation).await;
+            Ok(())
+        }
+    }
 
     #[inline]
-    fn news_bulletins_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn market_depth_l2_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
+        async move {
+            decode_fields!(
+                fields =>
+                    req_id @ 2: i64,
+                    position  @ 0: u64,
+                    market_maker @ 0: String,
+                    operation @ 0: i64,
+                    side @ 0: u32,
+                    price @ 0: f64,
+                    size @ 0: f64,
+                    is_smart @ 0: i32
+            );
+            let entry = Entry::try_from((side, position, price, size))?;
+            let entry = match is_smart {
+                0 => CompleteEntry::MarketMaker {
+                    market_maker: market_maker
+                        .chars()
+                        .take(4)
+                        .collect::<Vec<char>>()
+                        .try_into()
+                        .map_err(|_| anyhow::Error::msg("Invalid Mpid encountered"))?,
+                    entry,
+                },
+                _ => CompleteEntry::SmartDepth {
+                    exchange: market_maker.parse()?,
+                    entry,
+                },
+            };
+            let operation = Operation::try_from((operation, entry))?;
+
+            wrapper.update_market_depth(req_id, operation).await;
+            Ok(())
+        }
+    }
+
+    #[inline]
+    fn news_bulletins_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -830,14 +919,15 @@ pub trait Local<'c>: wrapper::Local<'c> {
         wrapper: &mut Self,
         tx: &mut Tx,
         rx: &mut Rx,
-    ) -> impl Future<Output=anyhow::Result<()>> {
-        async move {
-            Ok(())
-        }
+    ) -> impl Future<Output = anyhow::Result<()>> {
+        async move { Ok(()) }
     }
 
     #[inline]
-    fn receive_fa_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn receive_fa_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -845,15 +935,18 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn historical_data_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn historical_data_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            start_date_str @ 0: String,
-            end_date_str @ 0: String,
-            count @ 0: usize
-    );
+                fields =>
+                    req_id @ 1: i64,
+                    start_date_str @ 0: String,
+                    end_date_str @ 0: String,
+                    count @ 0: usize
+            );
             let mut bars = Vec::with_capacity(count);
             for chunk in fields.collect::<Vec<String>>().chunks(8) {
                 if let [date, open, high, low, close, volume, wap, trade_count] = chunk {
@@ -888,7 +981,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn bond_contract_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -899,7 +992,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn scanner_parameters_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -907,7 +1000,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn scanner_data_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn scanner_data_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -918,22 +1014,22 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn tick_option_computation_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            tick_type @ 0: u16,
-            base @ 0: u8,
-            implied_volatility @ 0: CalculationResult,
-            delta @ 0: CalculationResult,
-            price @ 0: CalculationResult,
-            pv_dividend @ 0: CalculationResult,
-            gamma @ 0: CalculationResult,
-            vega @ 0: CalculationResult,
-            theta @ 0: CalculationResult,
-            underlying_price @ 0: CalculationResult
-    );
+                fields =>
+                    req_id @ 1: i64,
+                    tick_type @ 0: u16,
+                    base @ 0: u8,
+                    implied_volatility @ 0: CalculationResult,
+                    delta @ 0: CalculationResult,
+                    price @ 0: CalculationResult,
+                    pv_dividend @ 0: CalculationResult,
+                    gamma @ 0: CalculationResult,
+                    vega @ 0: CalculationResult,
+                    theta @ 0: CalculationResult,
+                    underlying_price @ 0: CalculationResult
+            );
             let calc = SecOptionCalculationResults {
                 implied_volatility,
                 delta,
@@ -978,27 +1074,33 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn tick_generic_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn tick_generic_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            tick_type @ 0: u16,
-            value @ 0: f64
-    );
+                fields =>
+                    req_id @ 2: i64,
+                    tick_type @ 0: u16,
+                    value @ 0: f64
+            );
             Self::decode_generic_tick_msg(req_id, tick_type, value, wrapper).await
         }
     }
 
     #[inline]
-    fn tick_string_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn tick_string_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            tick_type @ 0: u16,
-            value @ 0: String
-    );
+                fields =>
+                    req_id @ 2: i64,
+                    tick_type @ 0: u16,
+                    value @ 0: String
+            );
             match tick_type {
                 32 | 33 | 84 => {
                     let quoting_exchanges = match tick_type {
@@ -1021,9 +1123,9 @@ pub trait Local<'c>: wrapper::Local<'c> {
                         85 => NaiveDateTime::from_timestamp_millis(value),
                         _ => panic!("The impossible occurred"),
                     }
-                        .ok_or_else(|| {
-                            anyhow::Error::msg("Invalid timestamp encountered in string message")
-                        })?;
+                    .ok_or_else(|| {
+                        anyhow::Error::msg("Invalid timestamp encountered in string message")
+                    })?;
                     let timestamp = match tick_type {
                         45 => Class::Live(TimeStamp::Last(timestamp)),
                         85 => Class::Live(TimeStamp::Regulatory(timestamp)),
@@ -1052,14 +1154,16 @@ pub trait Local<'c>: wrapper::Local<'c> {
                                 .ok_or(MissingInputData)
                                 .with_context(|| "No last time in real time volume message")?
                                 .parse()
-                                .with_context(|| "Invalid value in RealTimeVolume last_time decode")?,
+                                .with_context(|| {
+                                    "Invalid value in RealTimeVolume last_time decode"
+                                })?,
                             0,
                         )
-                            .ok_or_else(|| {
-                                anyhow::Error::msg(
-                                    "Invalid Unix timestamp found in real time volume message",
-                                )
-                            })?,
+                        .ok_or_else(|| {
+                            anyhow::Error::msg(
+                                "Invalid Unix timestamp found in real time volume message",
+                            )
+                        })?,
                         day_volume: vols
                             .next()
                             .ok_or(MissingInputData)
@@ -1110,10 +1214,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
                                     .with_context(|| "No next dividend date in dividend message")?,
                                 "%Y%m%d",
                             )
-                                .with_context(|| {
-                                    "Invalid value in Dividends next_dividend decode datetime"
-                                })?
-                                .0,
+                            .with_context(|| {
+                                "Invalid value in Dividends next_dividend decode datetime"
+                            })?
+                            .0,
                             divs.next()
                                 .ok_or(MissingInputData)
                                 .with_context(|| "No next price in dividend message")?
@@ -1139,20 +1243,26 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn tick_efp_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn tick_efp_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             unimplemented!();
         }
     }
 
     #[inline]
-    fn current_time_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn current_time_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            datetime @ 0: i64
-    );
+                fields =>
+                    req_id @ 1: i64,
+                    datetime @ 0: i64
+            );
 
             wrapper
                 .current_time(
@@ -1168,20 +1278,23 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn real_time_bars_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn real_time_bars_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            date_time @ 0: i64,
-            open @ 0: f64,
-            high @ 0: f64,
-            low @ 0: f64,
-            close @ 0: f64,
-            volume @ 0: f64,
-            wap @ 0: f64,
-            trade_count @ 0: i64
-    );
+                fields =>
+                    req_id @ 2: i64,
+                    date_time @ 0: i64,
+                    open @ 0: f64,
+                    high @ 0: f64,
+                    low @ 0: f64,
+                    close @ 0: f64,
+                    volume @ 0: f64,
+                    wap @ 0: f64,
+                    trade_count @ 0: i64
+            );
             let core = BarCore {
                 datetime: NaiveDateTime::from_timestamp_opt(date_time, 0)
                     .ok_or(anyhow::Error::msg("Invalid timestamp"))?,
@@ -1206,7 +1319,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn fundamental_data_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn fundamental_data_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1214,7 +1330,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn contract_data_end_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn contract_data_end_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(fields => req_id @ 2: i64);
             wrapper.contract_data_end(req_id).await;
@@ -1223,7 +1342,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn open_order_end_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn open_order_end_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             wrapper.open_order_end().await;
             Ok(())
@@ -1231,11 +1353,14 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn acct_download_end_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn acct_download_end_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields => account_number @ 2: String
-    );
+                fields => account_number @ 2: String
+            );
             wrapper.account_download_end(account_number).await;
             Ok(())
         }
@@ -1245,7 +1370,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn execution_data_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
 
@@ -1257,7 +1382,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn delta_neutral_validation_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1265,7 +1390,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn tick_snapshot_end_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn tick_snapshot_end_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1273,20 +1401,26 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn market_data_type_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn market_data_type_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            class @ 0: MarketDataClass
-    );
+                fields =>
+                    req_id @ 2: i64,
+                    class @ 0: MarketDataClass
+            );
             wrapper.market_data_class(req_id, class).await;
             Ok(())
         }
     }
 
     #[inline]
-    fn commission_report_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn commission_report_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1294,15 +1428,18 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn position_data_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn position_data_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            account_number @ 2: String,
-            contract_id @ 0: ContractId,
-            position @ 10: f64,
-            average_cost @ 0: f64
-    );
+                fields =>
+                    account_number @ 2: String,
+                    contract_id @ 0: ContractId,
+                    position @ 10: f64,
+                    average_cost @ 0: f64
+            );
             wrapper
                 .position_summary(PositionSummary {
                     contract_id,
@@ -1316,7 +1453,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn position_end_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn position_end_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             wrapper.position_end().await;
             Ok(())
@@ -1324,16 +1464,19 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn account_summary_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn account_summary_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            req_id @ 2: i64,
-            account_number @ 0: String,
-            tag @ 0: Tag,
-            value @ 0: String,
-            currency @ 0: String
-    );
+                fields =>
+                    req_id @ 2: i64,
+                    account_number @ 0: String,
+                    tag @ 0: Tag,
+                    value @ 0: String,
+                    currency @ 0: String
+            );
             let summary = match tag {
                 Tag::AccountType => TagValue::String(Tag::AccountType, value),
                 Tag::Cushion => TagValue::Float(Tag::Cushion, value.parse()?),
@@ -1354,11 +1497,11 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn account_summary_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields => req_id @ 2: i64
-    );
+                fields => req_id @ 2: i64
+            );
             wrapper.account_summary_end(req_id).await;
             Ok(())
         }
@@ -1368,7 +1511,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn verify_message_api_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1376,7 +1519,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn verify_completed_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn verify_completed_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1387,7 +1533,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn display_group_list_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1398,7 +1544,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn display_group_updated_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1409,7 +1555,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn verify_and_auth_message_api_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1420,7 +1566,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn verify_and_auth_completed_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1428,7 +1574,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn position_multi_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn position_multi_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1439,7 +1588,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn position_multi_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1450,7 +1599,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn account_update_multi_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1461,7 +1610,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn account_update_multi_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1472,7 +1621,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn security_definition_option_parameter_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1483,7 +1632,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn security_definition_option_parameter_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1491,7 +1640,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn soft_dollar_tiers_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn soft_dollar_tiers_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1499,7 +1651,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn family_codes_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn family_codes_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1507,7 +1662,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn symbol_samples_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn symbol_samples_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1518,7 +1676,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn mkt_depth_exchanges_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1526,15 +1684,18 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn tick_req_params_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn tick_req_params_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            min_tick @ 0: f64,
-            exchange_id @ 0: ExchangeId,
-            snapshot_permissions @ 0: u32
-    );
+                fields =>
+                    req_id @ 1: i64,
+                    min_tick @ 0: f64,
+                    exchange_id @ 0: ExchangeId,
+                    snapshot_permissions @ 0: u32
+            );
             wrapper
                 .tick_params(req_id, min_tick, exchange_id, snapshot_permissions)
                 .await;
@@ -1543,7 +1704,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn smart_components_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn smart_components_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1551,7 +1715,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn news_article_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn news_article_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1559,7 +1726,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn tick_news_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn tick_news_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1567,7 +1737,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn news_providers_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn news_providers_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1575,7 +1748,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn historical_news_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn historical_news_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1586,7 +1762,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn historical_news_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1594,13 +1770,16 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn head_timestamp_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn head_timestamp_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            timestamp @ 0: String
-    );
+                fields =>
+                    req_id @ 1: i64,
+                    timestamp @ 0: String
+            );
             wrapper
                 .head_timestamp(
                     req_id,
@@ -1612,13 +1791,16 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn histogram_data_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn histogram_data_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            num_points @ 0: usize
-    );
+                fields =>
+                    req_id @ 1: i64,
+                    num_points @ 0: usize
+            );
             let mut hist = std::collections::HashMap::with_capacity(num_points);
             for (bin, chunk) in fields
                 .take(num_points * 2)
@@ -1640,20 +1822,20 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn historical_data_update_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            trade_count @ 0: i64,
-            datetime_str @ 0: String,
-            open @ 0: f64,
-            high @ 0: f64,
-            low @ 0: f64,
-            close @ 0: f64,
-            wap @ 0: f64,
-            volume @ 0: f64
-    );
+                fields =>
+                    req_id @ 1: i64,
+                    trade_count @ 0: i64,
+                    datetime_str @ 0: String,
+                    open @ 0: f64,
+                    high @ 0: f64,
+                    low @ 0: f64,
+                    close @ 0: f64,
+                    wap @ 0: f64,
+                    volume @ 0: f64
+            );
             let core = BarCore {
                 datetime: NaiveDateTime::parse_and_remainder(datetime_str.as_str(), "%Y%m%d %T")?.0,
                 open,
@@ -1680,7 +1862,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn reroute_mkt_data_req_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1691,7 +1873,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn reroute_mkt_depth_req_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1699,7 +1881,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn market_rule_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn market_rule_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1707,15 +1892,18 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn pnl_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn pnl_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            daily_pnl @ 0: f64,
-            unrealized_pnl @ 0: f64,
-            realized_pnl @ 0: f64
-    );
+                fields =>
+                    req_id @ 1: i64,
+                    daily_pnl @ 0: f64,
+                    unrealized_pnl @ 0: f64,
+                    realized_pnl @ 0: f64
+            );
             let pnl = Pnl {
                 daily: daily_pnl,
                 unrealized: unrealized_pnl,
@@ -1727,17 +1915,20 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn pnl_single_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn pnl_single_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            position @ 0: f64,
-            daily_pnl @ 0: f64,
-            unrealized_pnl @ 0: f64,
-            realized_pnl @ 0: f64,
-            market_value @ 0: f64
-    );
+                fields =>
+                    req_id @ 1: i64,
+                    position @ 0: f64,
+                    daily_pnl @ 0: f64,
+                    unrealized_pnl @ 0: f64,
+                    realized_pnl @ 0: f64,
+                    market_value @ 0: f64
+            );
             let pnl = Pnl {
                 daily: daily_pnl,
                 unrealized: unrealized_pnl,
@@ -1752,13 +1943,13 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn historical_ticks_midpoint_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            tick_count @ 0: usize
-    );
+                fields =>
+                    req_id @ 1: i64,
+                    tick_count @ 0: usize
+            );
             let mut ticks = Vec::with_capacity(tick_count);
             for chunk in fields
                 .take(tick_count * 4)
@@ -1782,13 +1973,13 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn historical_ticks_bid_ask_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            tick_count @ 0: usize
-    );
+                fields =>
+                    req_id @ 1: i64,
+                    tick_count @ 0: usize
+            );
             let mut ticks = Vec::with_capacity(tick_count);
             for chunk in fields
                 .take(tick_count * 6)
@@ -1815,13 +2006,13 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn historical_ticks_last_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            tick_count @ 0: usize
-    );
+                fields =>
+                    req_id @ 1: i64,
+                    tick_count @ 0: usize
+            );
             let mut ticks = Vec::with_capacity(tick_count);
             for chunk in fields
                 .take(tick_count * 6)
@@ -1844,14 +2035,17 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn tick_by_tick_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn tick_by_tick_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             decode_fields!(
-        fields =>
-            req_id @ 1: i64,
-            tick_type @ 0: u8,
-            timestamp @ 0: i64
-    );
+                fields =>
+                    req_id @ 1: i64,
+                    tick_type @ 0: u8,
+                    timestamp @ 0: i64
+            );
             let datetime = NaiveDateTime::from_timestamp_opt(timestamp, 0)
                 .ok_or_else(|| anyhow::Error::msg("Invalid timestamp"))?;
             let tick = match tick_type {
@@ -1863,12 +2057,12 @@ pub trait Local<'c>: wrapper::Local<'c> {
                 },
                 3 => {
                     decode_fields!(
-                fields =>
-                    bid_price @ 0: f64,
-                    ask_price @ 0: f64,
-                    bid_size @ 0: f64,
-                    ask_size @ 0: f64
-            );
+                        fields =>
+                            bid_price @ 0: f64,
+                            ask_price @ 0: f64,
+                            bid_size @ 0: f64,
+                            ask_size @ 0: f64
+                    );
                     Tick::BidAsk {
                         datetime,
                         bid_price,
@@ -1889,7 +2083,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn order_bound_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn order_bound_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1897,7 +2094,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn completed_order_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn completed_order_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1908,7 +2108,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn completed_orders_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1916,7 +2116,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn replace_fa_end_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn replace_fa_end_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1924,7 +2127,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn wsh_meta_data_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn wsh_meta_data_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1932,7 +2138,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn wsh_event_data_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn wsh_event_data_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1943,7 +2152,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     fn historical_schedule_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1951,7 +2160,10 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 
     #[inline]
-    fn user_info_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output=anyhow::Result<()>> {
+    fn user_info_msg(
+        fields: &mut Fields,
+        wrapper: &mut Self,
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1964,7 +2176,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
         tick_type: u16,
         value: f64,
         wrapper: &mut Self,
-    ) -> impl Future<Output=anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             match tick_type {
                 0 | 3 | 5 => {
@@ -2090,7 +2302,6 @@ pub trait Local<'c>: wrapper::Local<'c> {
 impl<'c, W: wrapper::Local<'c>> Local<'c> for W {}
 
 impl<W: wrapper::Remote> Remote for W {}
-
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct MissingInputData;
