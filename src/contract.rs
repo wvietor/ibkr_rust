@@ -58,12 +58,14 @@ pub enum Contract {
 ///
 /// # Examples
 /// ```
-/// # use ibapi::{contract_dispatch, default_wrapper::DefaultWrapper, contract::{self, Contract, Stock, Forex, ContractId}, client::{Builder, Client, Mode::Paper, Host::Gateway}, market_data::live_data::{self, RefreshType}};
+/// # use ibapi::{contract_dispatch, contract::{self, Contract, Stock, Forex, ContractId}, client::{Builder, Client, Mode::Paper, Host::Gateway}, market_data::live_data::{self, RefreshType}};
 /// # use anyhow::Result;
+/// # struct DefaultWrapper;
+/// # impl ibapi::wrapper::Remote for DefaultWrapper {}
 /// # #[tokio::main]
 /// # async fn main() -> Result<()> {
 /// // Set up a client
-/// let mut client = Builder::from_config_file(Paper, Gateway, None)?.connect(31, DefaultWrapper).await?.run().await;
+/// let mut client = Builder::from_config_file(Paper, Gateway, None)?.connect(31).await?.remote(DefaultWrapper);
 ///
 /// // Create a couple of contracts
 /// let apple_inc = contract::new::<Stock>(&mut client, ContractId(242506861)).await?;
@@ -92,7 +94,7 @@ pub enum Contract {
 ///     client.req_market_data::<Forex, live_data::data_types::Empty>(&gbp_usd_2, vec![live_data::data_types::Empty], RefreshType::Snapshot, false).await?
 /// ];
 ///
-/// # std::thread::sleep(std::time::Duration::from_secs(5));
+/// # tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 /// # client.disconnect().await?;
 /// assert_eq!(ids_explicit, ids_macro.iter().map(|id| id + 2).collect::<Vec<i64>>());
 /// # Ok(())
