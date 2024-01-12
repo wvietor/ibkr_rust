@@ -69,7 +69,7 @@ pub type MarketDataClass = crate::market_data::live_data::Class;
 /// Contains types related to market depth updates from [`crate::client::Client::req_market_depth`]
 pub mod market_depth {
     use crate::exchange::Primary;
-    use serde::{Deserialize, Serialize};
+    use serde::{de::Error, Deserialize, Serialize};
 
     #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
     #[serde(tag = "operation")]
@@ -161,6 +161,10 @@ pub mod market_depth {
         /// An entry that indicates additional information about the market maker that has posted a given entry.
         MarketMaker {
             /// A unique identifier which conveys information about the market maker posting the entry.
+            #[serde(
+                serialize_with = "serialize_mpid",
+                deserialize_with = "deserialize_mpid"
+            )]
             market_maker: Mpid,
             /// The entry itself.
             entry: Entry,
@@ -171,6 +175,23 @@ pub mod market_depth {
 
     /// A unique four-character ID that identifies an individual market maker
     pub type Mpid = [char; 4];
+
+    fn serialize_mpid<S: serde::Serializer>(mpid: &Mpid, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(mpid.iter().collect::<String>().as_str())
+    }
+
+    fn deserialize_mpid<'de, D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Mpid, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        s.chars()
+            .take(4)
+            .collect::<Vec<char>>()
+            .try_into()
+            .map_err(|_| {
+                D::Error::invalid_value(serde::de::Unexpected::Str(&s), &"Valid UTF-8 Mpid")
+            })
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
