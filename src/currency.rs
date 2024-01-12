@@ -1,7 +1,8 @@
 use core::str::FromStr;
+use serde::{Deserialize, Serialize};
 
 // === Type definitions ===
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 /// Represents all the possible currencies available for trading at IBKR.
 pub enum Currency {
     #[serde(rename(serialize = "AUD"))]

@@ -1,8 +1,11 @@
+use std::fmt::Formatter;
 use chrono::{NaiveDate, NaiveDateTime};
 use std::num::ParseFloatError;
 use std::str::FromStr;
+use serde::{Deserialize, Deserializer, Serialize, Serializer, ser::SerializeTuple};
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "etf_nav")]
 /// The types of ticks related to ETF Net Asset Value (NAV).
 pub enum EtfNav {
     /// Today's closing price of ETF's Net Asset Value (NAV). Calculation is based on prices of ETF's underlying securities.
@@ -23,7 +26,8 @@ pub enum EtfNav {
     Low(f64),
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "price")]
 /// The types of ticks related to price data.
 pub enum Price {
     /// Highest priced bid for the contract.
@@ -44,7 +48,8 @@ pub enum Price {
     LastRthTrade(f64),
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "size")]
 /// The types of ticks related to size data.
 pub enum Size {
     /// Number of contracts or lots offered at the bid price.
@@ -55,7 +60,8 @@ pub enum Size {
     Last(f64),
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "yield")]
 /// The types of ticks related to yield data.
 pub enum Yield {
     /// Implied yield of the bond if it is purchased at the current bid.
@@ -66,7 +72,8 @@ pub enum Yield {
     Last(f64),
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "period")]
 /// Represents the various periods of trailing extreme value.
 pub enum Period {
     /// A value over a 13-week period.
@@ -77,7 +84,8 @@ pub enum Period {
     FiftyTwoWeek(f64),
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "extreme")]
 /// Represents the two types of extreme values.
 pub enum ExtremeValue {
     /// The lowest value.
@@ -86,7 +94,8 @@ pub enum ExtremeValue {
     High(Period),
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "source")]
 /// The various base prices that can be used to perform option computations.
 pub enum SecOptionCalculationSource {
     /// Use the bid price to perform the computations.
@@ -101,7 +110,8 @@ pub enum SecOptionCalculationSource {
     Custom(SecOptionCalculations),
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "base")]
 /// A collection of option calculations.
 pub enum SecOptionCalculations {
     /// Return-based computations
@@ -110,7 +120,7 @@ pub enum SecOptionCalculations {
     PriceBased(SecOptionCalculationResults),
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 /// The core results of an option calculation.
 pub struct SecOptionCalculationResults {
     /// The implied volatility calculated by the TWS option modeler, using the specified tick type value.
@@ -131,7 +141,8 @@ pub struct SecOptionCalculationResults {
     pub underlying_price: CalculationResult,
 }
 
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[serde(tag = "type")]
 /// The exchanges posting the best bid / best offer / last traded prices.
 pub enum QuotingExchanges {
     /// For stock and options, identifies the exchange(s) posting the bid price. See Component Exchanges.
@@ -142,7 +153,8 @@ pub enum QuotingExchanges {
     Last(Vec<char>),
 }
 
-#[derive(Debug, Clone, Copy, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "open_interest")]
 /// Represents the possible open interest callbacks.
 pub enum OpenInterest {
     /// Call option open interest.
@@ -153,7 +165,8 @@ pub enum OpenInterest {
     SecFuture(f64),
 }
 
-#[derive(Debug, Clone, Copy, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "volatility")]
 /// The types of volatility callbacks.
 pub enum Volatility {
     /// The 30-day historical volatility (currently for stocks).
@@ -164,16 +177,22 @@ pub enum Volatility {
     RealTimeHistorical(f64),
 }
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "timestamp")]
 /// Represents a timestamp callback.
 pub enum TimeStamp {
     /// Time of the last trade (in UNIX time).
+    #[serde(serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
+    #[serde(deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
     Last(NaiveDateTime),
     /// Timestamp (in Unix ms time) of last trade returned with regulatory snapshot.
+    #[serde(serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
+    #[serde(deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
     Regulatory(NaiveDateTime),
 }
 
-#[derive(Debug, Clone, Copy, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "auction_data")]
 /// Represents a callback that relates to auction data, auction prices, etc.
 pub enum AuctionData {
     /// The number of shares that would trade if no new orders were received and the auction were held now.
@@ -186,7 +205,8 @@ pub enum AuctionData {
     Regulatory(f64),
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "mark_price")]
 /// Represents a callback containing to mark prices.
 pub enum MarkPrice {
     /// The mark price is the current theoretical calculated value of an instrument. Since it is a calculated value, it will typically have many digits of precision.
@@ -195,7 +215,8 @@ pub enum MarkPrice {
     Slow(f64),
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "real_time_volume")]
 /// A callback containing real-time volume information that is updated quickly.
 pub enum RealTimeVolume {
     /// Last trade details (Including both "Last" and "Unreportable Last" trades).
@@ -204,7 +225,7 @@ pub enum RealTimeVolume {
     Trades(RealTimeVolumeBase),
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 /// A helper struct that represents all the information returned in [`RealTimeVolume`].
 pub struct RealTimeVolumeBase {
     /// The last trade's price.
@@ -212,6 +233,8 @@ pub struct RealTimeVolumeBase {
     /// The last trade's size.
     pub(crate) last_size: f64,
     /// The last trade's time.
+    #[serde(serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
+    #[serde(deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
     pub(crate) last_time: NaiveDateTime,
     /// The current day's total traded volume.
     pub(crate) day_volume: f64,
@@ -224,7 +247,8 @@ pub struct RealTimeVolumeBase {
 /// A callback containing volume information that is not updated as quickly as [`RealTimeVolume`]
 pub type Volume = Class<f64>;
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "rate")]
 /// A callback containing information about trades and volume on a per-minute basis.
 pub enum Rate {
     /// Trade count per minute.
@@ -233,7 +257,8 @@ pub enum Rate {
     Volume(f64),
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "sec_option_volume")]
 /// A callback containing information about option volume.
 pub enum SecOptionVolume {
     /// Call option volume for the trading day.
@@ -244,7 +269,8 @@ pub enum SecOptionVolume {
     Average(f64),
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "summary_volume")]
 /// A callback containing information about short-term volume
 pub enum SummaryVolume {
     /// The past three minutes volume. Interpolation may be applied. For stocks only.
@@ -257,7 +283,8 @@ pub enum SummaryVolume {
     NinetyDayAverage(f64),
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "price_factor")]
 /// A callback containing information that relates the price of an instrument to some reference value.
 pub enum PriceFactor {
     /// The bond factor is a number that indicates the ratio of the current bond principal to the original principal.
@@ -266,7 +293,8 @@ pub enum PriceFactor {
     IndexFuturePremium(f64),
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "accessibility")]
 /// A callback containing information about a security's accessibility for shorting and trading.
 pub enum Accessibility {
     /// Number of shares available to short (TWS Build 974+ is required)
@@ -277,7 +305,8 @@ pub enum Accessibility {
     Halted(f64),
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "ipo")]
 /// A callback related to IPO information.
 pub enum Ipo {
     /// Midpoint is calculated based on IPO price range.
@@ -286,7 +315,7 @@ pub enum Ipo {
     Final(f64),
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 /// Information about dividends
 pub struct Dividends {
     /// The sum of dividends for the past 12 months.
@@ -294,8 +323,32 @@ pub struct Dividends {
     /// The sum of dividends for the next 12 months.
     pub forward_year: f64,
     /// The next single dividend date and amount.
+    #[serde(serialize_with = "serialize_dividend_tuple")]
+    #[serde(deserialize_with = "deserialize_dividend_tuple")]
     pub next_dividend: (NaiveDate, f64),
 }
+
+fn serialize_dividend_tuple<S: Serializer>(div_tup: &(NaiveDate, f64), serializer: S) -> Result<S::Ok, S::Error> {
+    let mut s = serializer.serialize_tuple(2)?;
+    s.serialize_element(&div_tup.0.format("%Y-%m-%d").to_string())?;
+    s.serialize_element(&div_tup.1)?;
+    s.end()
+}
+
+fn deserialize_dividend_tuple<'de, D: Deserializer<'de>>(deserializer: D) -> Result<(NaiveDate, f64), D::Error> {
+    deserializer.deserialize_tuple(2, TupVisitor)
+}
+
+struct TupVisitor;
+
+impl serde::de::Visitor<'_> for TupVisitor {
+    type Value = (NaiveDate, f64);
+
+    fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+        write!(formatter, "either a YYYY-MM-DD date or a floating point number")
+    }
+}
+
 
 /// A contract's news feed
 pub type News = String;
@@ -303,7 +356,8 @@ pub type News = String;
 /// Trade count for the day.
 pub type TradeCount = f64;
 
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "data_class")]
 /// The two classes of data that can be returned for various market data requests.
 pub enum Class<P: indicators::Valid> {
     /// Live data that requires a live data subscription.
@@ -323,7 +377,8 @@ pub(crate) mod indicators {
     impl Valid for f64 {}
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
 /// The result of an option calculation.
 pub enum CalculationResult {
     /// The computed value.

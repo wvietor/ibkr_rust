@@ -1,7 +1,7 @@
 use chrono::NaiveDateTime;
 
 use crate::contract::ContractId;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 // macro_rules! make_error {
@@ -20,7 +20,7 @@ use std::str::FromStr;
 //     };
 // }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 /// The result of a [`crate::client::Client::req_market_data`] request, which contains an identifier that can be passed to
 /// [`crate::client::Client::req_smart_components`] request to find which exchanges are included in the SMART aggregate exchange.
 pub struct ExchangeId(String);
@@ -68,9 +68,11 @@ pub type MarketDataClass = crate::market_data::live_data::Class;
 
 /// Contains types related to market depth updates from [`crate::client::Client::req_market_depth`]
 pub mod market_depth {
+    use serde::{Deserialize, Serialize};
     use crate::exchange::Primary;
 
-    #[derive(Debug, Clone, Copy, PartialOrd, PartialEq)]
+    #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
+    #[serde(tag = "operation")]
     /// Represents a single change to an existing order book
     pub enum Operation {
         /// Insert a given row
@@ -98,7 +100,8 @@ pub mod market_depth {
         }
     }
 
-    #[derive(Debug, Clone, Copy, PartialOrd, PartialEq)]
+    #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
+    #[serde(tag = "type")]
     /// A single entry in a limit order book
     pub enum Entry {
         /// A resting buy order
@@ -143,7 +146,8 @@ pub mod market_depth {
         }
     }
 
-    #[derive(Debug, Clone, Copy, PartialOrd, PartialEq)]
+    #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
+    #[serde(tag = "origin")]
     /// A complete entry in a limit order book that potentially containing additional information about the market-maker / exchange from where
     /// the quote was sourced.
     pub enum CompleteEntry {
@@ -169,7 +173,7 @@ pub mod market_depth {
     pub type Mpid = [char; 4];
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
 /// A single entry in a histogram.
 pub struct HistogramEntry {
     /// The price (x-value).
@@ -178,10 +182,12 @@ pub struct HistogramEntry {
     pub size: f64,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
 /// A single historical bar
 pub struct BarCore {
     /// The ending datetime for the bar.
+    #[serde(serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
+    #[serde(deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
     pub datetime: NaiveDateTime,
     /// The bar's open price.
     pub open: f64,
@@ -193,7 +199,8 @@ pub struct BarCore {
     pub close: f64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[serde(tag = "bar_type")]
 /// A single bar.
 pub enum Bar {
     /// The ordinary bar data returned from non [`crate::market_data::historical_bar::data_types::Trades`] requests.
@@ -211,12 +218,15 @@ pub enum Bar {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[serde(tag = "tick")]
 /// A historical or live tick.
 pub enum Tick {
     /// A tick representing a midpoint price.
     Midpoint {
         /// The timestamp of the tick.
+        #[serde(serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
+        #[serde(deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
         datetime: NaiveDateTime,
         /// The midpoint price.
         price: f64,
@@ -224,6 +234,8 @@ pub enum Tick {
     /// A tick representing the current best bid / ask prices.
     BidAsk {
         /// The timestamp of the tick.
+        #[serde(serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
+        #[serde(deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
         datetime: NaiveDateTime,
         /// The bid price.
         bid_price: f64,
@@ -237,6 +249,8 @@ pub enum Tick {
     /// A tick representing the last trade.
     Last {
         /// The timestamp of the tick.
+        #[serde(serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
+        #[serde(deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
         datetime: NaiveDateTime,
         /// The last traded price.
         price: f64,
@@ -247,7 +261,7 @@ pub enum Tick {
     },
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 /// A single position, comprising a single security and details about its current value, P&L, etc.
 pub struct Position {
     /// The ID of the underlying contract.
@@ -268,7 +282,7 @@ pub struct Position {
     pub account_number: String,
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 /// A single position, comprising a single security and a few details about its cost, account, etc.
 pub struct PositionSummary {
     /// The ID of the underlying contract.
@@ -281,7 +295,7 @@ pub struct PositionSummary {
     pub account_number: String,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialOrd, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
 /// A simple struct representing a few types of P&L.
 pub struct Pnl {
     /// The daily P&L for the account in real-time.
@@ -293,7 +307,7 @@ pub struct Pnl {
 }
 
 #[allow(non_snake_case, missing_docs)]
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
 pub struct OrderDetails {
     pub OcaGroup: Option<String>,
     pub Account: Option<String>,

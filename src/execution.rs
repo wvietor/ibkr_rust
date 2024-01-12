@@ -1,4 +1,4 @@
-use crate::comm::serialize_naive_datetime_yyyymmdd_hhcolon_mm_colon_ss;
+use crate::comm::serialize_naive_datetime_yyyymmdd_hh_colon_mm_colon_ss;
 use crate::exchange::Primary;
 use chrono::NaiveDateTime;
 use serde::Serialize;
@@ -7,7 +7,7 @@ use serde::Serialize;
 pub struct Filter {
     pub client_id: i64,
     pub account_number: String,
-    #[serde(serialize_with = "serialize_naive_datetime_yyyymmdd_hhcolon_mm_colon_ss")]
+    #[serde(serialize_with = "serialize_naive_datetime_yyyymmdd_hh_colon_mm_colon_ss")]
     pub start_time: NaiveDateTime,
     pub symbol: String,
     pub contract_type: ContractType,

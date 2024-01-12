@@ -6,7 +6,7 @@ use crate::{
     exchange::{Primary, Routing},
 };
 use ibapi_macros::Security;
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 
 // =========================================================
 // === Utility Types and Functions for Contract Creation ===
@@ -220,7 +220,7 @@ impl std::error::Error for UnexpectedSecurityType {
 }
 
 #[allow(clippy::module_name_repetitions)]
-#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 /// A unique identifier used by both IBKR's trading systems and the API to define a specific
 /// contract.
 pub struct ContractId(pub i64);

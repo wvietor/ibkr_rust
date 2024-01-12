@@ -1,8 +1,9 @@
 use core::str::FromStr;
+use serde::{Deserialize, Serialize};
 
 // === Type definitions ===
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 /// Represents a "routing" exchange where orders and market data requests can be directed.
 pub enum Routing {
     #[serde(rename(serialize = "SMART"))]
@@ -40,7 +41,7 @@ impl std::error::Error for ParseExchangeError {
 
 // Docs here would be somewhat ridiculous
 #[allow(missing_docs)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 /// Represents all the valid physical trading venues for various contracts.
 pub enum Primary {
     #[serde(rename(serialize = "AEB"))]
