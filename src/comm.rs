@@ -1,8 +1,8 @@
 use chrono::NaiveDateTime;
+use serde::de::Error as DeError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
 use std::io::{Error, Write};
-use serde::de::Error as DeError;
 
 #[derive(Debug)]
 pub(crate) struct Writer {
@@ -514,17 +514,26 @@ pub(crate) fn serialize_naive_datetime_yyyymmdd_hh_colon_mm_colon_ss<S: Serializ
     dt.format("%Y%m%d %T").to_string().serialize(serializer)
 }
 
-pub(crate) fn serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss<S: Serializer>(
+pub(crate) fn serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss<
+    S: Serializer,
+>(
     dt: &NaiveDateTime,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
     dt.format("%Y-%m-%d %T").to_string().serialize(serializer)
 }
 
-pub(crate) fn deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss<'de, D: Deserializer<'de>>(
-    deserializer: D
+pub(crate) fn deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss<
+    'de,
+    D: Deserializer<'de>,
+>(
+    deserializer: D,
 ) -> Result<NaiveDateTime, D::Error> {
     let s = String::deserialize(deserializer)?;
-    NaiveDateTime::parse_from_str(s.as_str(), "%Y-%m-%d %T")
-        .map_err(|_| <D as Deserializer<'de>>::Error::invalid_value(serde::de::Unexpected::Str(s.as_str()), &"A YYYYMMDD HH:MM:SS datetime"))
+    NaiveDateTime::parse_from_str(s.as_str(), "%Y-%m-%d %T").map_err(|_| {
+        <D as Deserializer<'de>>::Error::invalid_value(
+            serde::de::Unexpected::Str(s.as_str()),
+            &"A YYYYMMDD HH:MM:SS datetime",
+        )
+    })
 }

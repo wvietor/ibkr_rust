@@ -41,12 +41,7 @@ pub trait Local<'c> {
     /// The callback message that corresponds to the price (in yield terms) data from [`crate::client::Client::req_market_data`].
     fn yield_data(&mut self, req_id: i64, yld: Yield) -> impl std::future::Future {}
     /// The callback message that corresponds to the high/low prices over a period from [`crate::client::Client::req_market_data`]..
-    fn extreme_data(
-        &mut self,
-        req_id: i64,
-        value: ExtremeValue,
-    ) -> impl std::future::Future {
-    }
+    fn extreme_data(&mut self, req_id: i64, value: ExtremeValue) -> impl std::future::Future {}
     /// The callback message that corresponds to the results of options computations (implied volatility, greeks, etc.) from [`crate::client::Client::req_market_data`]..
     fn sec_option_computation(
         &mut self,
@@ -71,30 +66,15 @@ pub trait Local<'c> {
     /// The callback message that corresponds to volatility data from [`crate::client::Client::req_market_data`].
     fn volatility(&mut self, req_id: i64, vol: Volatility) -> impl std::future::Future {}
     /// The callback message that corresponds to timestamp data from [`crate::client::Client::req_market_data`].
-    fn timestamp(
-        &mut self,
-        req_id: i64,
-        timestamp: Class<TimeStamp>,
-    ) -> impl std::future::Future {
-    }
+    fn timestamp(&mut self, req_id: i64, timestamp: Class<TimeStamp>) -> impl std::future::Future {}
     /// The callback message that corresponds to auction data from [`crate::client::Client::req_market_data`].
     fn auction(&mut self, req_id: i64, auction: AuctionData) -> impl std::future::Future {}
     /// The callback message associated with mark price data from [`crate::client::Client::req_market_data`].
     fn mark_price(&mut self, req_id: i64, mark: MarkPrice) -> impl std::future::Future {}
     /// The callback message associated with factors / multipliers related to prices from [`crate::client::Client::req_market_data`].
-    fn price_factor(
-        &mut self,
-        req_id: i64,
-        factor: PriceFactor,
-    ) -> impl std::future::Future {
-    }
+    fn price_factor(&mut self, req_id: i64, factor: PriceFactor) -> impl std::future::Future {}
     /// The callback message associated with the ability to short or trade a security from [`crate::client::Client::req_market_data`].
-    fn accessibility(
-        &mut self,
-        req_id: i64,
-        access: Accessibility,
-    ) -> impl std::future::Future {
-    }
+    fn accessibility(&mut self, req_id: i64, access: Accessibility) -> impl std::future::Future {}
     /// The callback message containing information about dividends from [`crate::client::Client::req_market_data`].
     fn dividends(&mut self, req_id: i64, dividends: Dividends) -> impl std::future::Future {}
     /// The callback message containing news information from [`crate::client::Client::req_market_data`].
@@ -102,12 +82,7 @@ pub trait Local<'c> {
     /// The callback message containing information about IPOs from [`crate::client::Client::req_market_data`].
     fn ipo(&mut self, req_id: i64, ipo: Ipo) -> impl std::future::Future {}
     /// The callback message containing summary information about trading volume throughout a day or 90-day rolling period from [`crate::client::Client::req_market_data`].
-    fn summary_volume(
-        &mut self,
-        req_id: i64,
-        volume: SummaryVolume,
-    ) -> impl std::future::Future {
-    }
+    fn summary_volume(&mut self, req_id: i64, volume: SummaryVolume) -> impl std::future::Future {}
     /// The callback message containing information about daily option volume (and average option volume) from [`crate::client::Client::req_market_data`].
     fn sec_option_volume(
         &mut self,
@@ -116,12 +91,7 @@ pub trait Local<'c> {
     ) -> impl std::future::Future {
     }
     /// The callback message containing information about the number of trades performed in a day from [`crate::client::Client::req_market_data`].
-    fn trade_count(
-        &mut self,
-        req_id: i64,
-        trade_count: TradeCount,
-    ) -> impl std::future::Future {
-    }
+    fn trade_count(&mut self, req_id: i64, trade_count: TradeCount) -> impl std::future::Future {}
     /// The callback message containing information about the rate of trades or volume throughout a day from [`crate::client::Client::req_market_data`].
     fn rate(&mut self, req_id: i64, rate: Rate) -> impl std::future::Future {}
     /// The callback message containing information about trading volume for the day (live/delayed) from [`crate::client::Client::req_market_data`].
@@ -166,12 +136,7 @@ pub trait Local<'c> {
     /// The callback message containing historical bar data from [`crate::client::Client::req_historical_bar`].
     fn historical_bars(&mut self, req_id: i64, bars: Vec<Bar>) -> impl std::future::Future {}
     /// The callback message containing an updated historical bar from [`crate::client::Client::req_updating_historical_bar`].
-    fn updating_historical_bar(
-        &mut self,
-        req_id: i64,
-        bar: Bar,
-    ) -> impl std::future::Future {
-    }
+    fn updating_historical_bar(&mut self, req_id: i64, bar: Bar) -> impl std::future::Future {}
     /// The callback message containing a timestamp for the beginning of data for a contract and specified data type from [`crate::client::Client::req_head_timestamp`].
     fn head_timestamp(
         &mut self,
@@ -180,12 +145,7 @@ pub trait Local<'c> {
     ) -> impl std::future::Future {
     }
     /// The callback message containing a vector of historical ticks from [`crate::client::Client::req_historical_ticks`] for [`crate::client::Client::req_tick_by_tick_data`].
-    fn historical_ticks(
-        &mut self,
-        req_id: i64,
-        ticks: Vec<Tick>,
-    ) -> impl std::future::Future {
-    }
+    fn historical_ticks(&mut self, req_id: i64, ticks: Vec<Tick>) -> impl std::future::Future {}
     /// The callback message containing a single tick from [`crate::client::Client::req_tick_by_tick_data`].
     fn live_tick(&mut self, req_id: i64, tick: Tick) -> impl std::future::Future {}
     /// The callback message containing account attributes from [`crate::client::Client::req_account_updates`].

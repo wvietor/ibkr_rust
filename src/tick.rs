@@ -1,8 +1,8 @@
-use std::fmt::Formatter;
 use chrono::{NaiveDate, NaiveDateTime};
+use serde::{ser::SerializeTuple, Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt::Formatter;
 use std::num::ParseFloatError;
 use std::str::FromStr;
-use serde::{Deserialize, Deserializer, Serialize, Serializer, ser::SerializeTuple};
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "etf_nav")]
@@ -182,12 +182,20 @@ pub enum Volatility {
 /// Represents a timestamp callback.
 pub enum TimeStamp {
     /// Time of the last trade (in UNIX time).
-    #[serde(serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
-    #[serde(deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
+    #[serde(
+        serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
+    )]
+    #[serde(
+        deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
+    )]
     Last(NaiveDateTime),
     /// Timestamp (in Unix ms time) of last trade returned with regulatory snapshot.
-    #[serde(serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
-    #[serde(deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
+    #[serde(
+        serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
+    )]
+    #[serde(
+        deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
+    )]
     Regulatory(NaiveDateTime),
 }
 
@@ -233,8 +241,12 @@ pub struct RealTimeVolumeBase {
     /// The last trade's size.
     pub(crate) last_size: f64,
     /// The last trade's time.
-    #[serde(serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
-    #[serde(deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss")]
+    #[serde(
+        serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
+    )]
+    #[serde(
+        deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
+    )]
     pub(crate) last_time: NaiveDateTime,
     /// The current day's total traded volume.
     pub(crate) day_volume: f64,
@@ -328,14 +340,19 @@ pub struct Dividends {
     pub next_dividend: (NaiveDate, f64),
 }
 
-fn serialize_dividend_tuple<S: Serializer>(div_tup: &(NaiveDate, f64), serializer: S) -> Result<S::Ok, S::Error> {
+fn serialize_dividend_tuple<S: Serializer>(
+    div_tup: &(NaiveDate, f64),
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
     let mut s = serializer.serialize_tuple(2)?;
     s.serialize_element(&div_tup.0.format("%Y-%m-%d").to_string())?;
     s.serialize_element(&div_tup.1)?;
     s.end()
 }
 
-fn deserialize_dividend_tuple<'de, D: Deserializer<'de>>(deserializer: D) -> Result<(NaiveDate, f64), D::Error> {
+fn deserialize_dividend_tuple<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<(NaiveDate, f64), D::Error> {
     deserializer.deserialize_tuple(2, TupVisitor)
 }
 
@@ -345,10 +362,12 @@ impl serde::de::Visitor<'_> for TupVisitor {
     type Value = (NaiveDate, f64);
 
     fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
-        write!(formatter, "either a YYYY-MM-DD date or a floating point number")
+        write!(
+            formatter,
+            "either a YYYY-MM-DD date or a floating point number"
+        )
     }
 }
-
 
 /// A contract's news feed
 pub type News = String;
