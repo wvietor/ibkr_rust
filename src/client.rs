@@ -5,7 +5,6 @@ use std::sync::Arc;
 use tokio::net::tcp::OwnedReadHalf;
 use tokio::task::JoinHandle;
 use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
-use tokio_util::sync::CancellationToken;
 
 use crate::contract::{ContractId, Security};
 use crate::market_data::{
@@ -13,7 +12,7 @@ use crate::market_data::{
     updating_historical_bar,
 };
 use crate::message::{In, Out, ToClient, ToWrapper};
-use crate::wrapper::{Initializer, Local, Remote};
+use crate::wrapper::{CancelToken, Initializer, Local, Remote};
 use crate::{
     account::Tag,
     comm::Writer,
@@ -1095,7 +1094,7 @@ pub(crate) mod indicators {
     #[derive(Debug)]
     pub struct Active {
         pub(crate) r_thread: JoinHandle<Reader>,
-        pub(crate) disconnect: tokio_util::sync::CancellationToken,
+        pub(crate) disconnect: super::CancelToken,
         pub(crate) tx: mpsc::Sender<ToWrapper>,
         pub(crate) rx: mpsc::Receiver<ToClient>,
         pub(crate) managed_accounts: HashSet<String>,
@@ -1194,12 +1193,8 @@ impl<S: indicators::Status> Client<S> {
 #[inline]
 fn spawn_reader_thread(
     rdr: OwnedReadHalf,
-) -> (
-    CancellationToken,
-    Arc<SegQueue<Vec<String>>>,
-    JoinHandle<Reader>,
-) {
-    let disconnect = CancellationToken::new();
+) -> (CancelToken, Arc<SegQueue<Vec<String>>>, JoinHandle<Reader>) {
+    let disconnect = CancelToken::new();
     let queue = Arc::new(SegQueue::new());
 
     let r_queue = Arc::clone(&queue);
@@ -1288,18 +1283,16 @@ impl Client<indicators::Inactive> {
 
     /// Initiates the main message loop and spawns all helper threads to manage the application.
     ///
-    /// # Returns
-    /// A [`Builder`] that can be used to reconnect to the IBKR TWS API.
+    /// # Arguments
+    /// * `init` - An `Initializer` for a `Local` wrapper, which defines how incoming data from the IBKR trading systems
+    /// should be handled.
     ///
-    /// # Errors
-    /// Any error that occurs in the [`Client<Active>::disconnect`] process
-    pub fn local<I: for<'c> Initializer<'c>>(
-        self,
-        init: I,
-    ) -> (impl std::future::Future<Output = Result<(), std::io::Error>>, CancellationToken) {
+    /// # Returns
+    /// A `CancelToken` that can be used to terminate the main message loop.
+    pub fn local<I: for<'c> Initializer<'c> + 'static>(self, init: I) -> CancelToken {
         let (mut client, mut tx, mut rx, queue) = self.into_active();
 
-        let temp = CancellationToken::new();
+        let temp = CancelToken::new();
         let temp_inner = temp.clone();
         let con_fut = tokio::spawn(async move {
             loop {
@@ -1318,9 +1311,9 @@ impl Client<indicators::Inactive> {
             }
         });
 
-        let break_loop = CancellationToken::new();
+        let break_loop = CancelToken::new();
         let break_loop_inner = break_loop.clone();
-        let fut = async move {
+        tokio::task::spawn_local(async move {
             let mut wrapper = Initializer::build(init, &mut client, break_loop_inner.clone()).await;
             temp.cancel();
             drop(temp);
@@ -1339,13 +1332,17 @@ impl Client<indicators::Inactive> {
                     } => (),
                 }
             }
+            drop(wrapper);
+            client.disconnect().await
+        });
 
-            Ok(())
-        };
-        (fut, break_loop)
+        break_loop
     }
 
     /// Initiates the main message loop and spawns all helper threads to manage the application.
+    ///
+    /// # Arguments
+    /// * `wrapper` - A `Remote` wrapper that defines how incoming data from the IBKR trading systems should be handled.
     ///
     /// # Returns
     /// An active [`Client`] that can be used to make API requests.
