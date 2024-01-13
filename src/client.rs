@@ -1288,8 +1288,9 @@ impl Client<indicators::Inactive> {
     /// should be handled.
     ///
     /// # Returns
-    /// A `CancelToken` that can be used to terminate the main message loop.
-    pub fn local<I: for<'c> Initializer<'c> + 'static>(self, init: I) -> CancelToken {
+    /// A `std::future::Future`, which when awaited launches the main message loop and a `CancelToken`, which can be
+    /// used to terminate the main message loop.
+    pub fn local<I: for<'c> Initializer<'c>>(self, init: I) -> (impl std::future::Future<Output = Result<Builder, std::io::Error>>, CancelToken) {
         let (mut client, mut tx, mut rx, queue) = self.into_active();
 
         let temp = CancelToken::new();
@@ -1313,7 +1314,7 @@ impl Client<indicators::Inactive> {
 
         let break_loop = CancelToken::new();
         let break_loop_inner = break_loop.clone();
-        tokio::task::spawn_local(async move {
+        let fut = async move {
             let mut wrapper = Initializer::build(init, &mut client, break_loop_inner.clone()).await;
             temp.cancel();
             drop(temp);
@@ -1334,9 +1335,9 @@ impl Client<indicators::Inactive> {
             }
             drop(wrapper);
             client.disconnect().await
-        });
+        };
 
-        break_loop
+        (fut, break_loop)
     }
 
     /// Initiates the main message loop and spawns all helper threads to manage the application.
