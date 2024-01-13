@@ -1293,18 +1293,18 @@ impl Client<indicators::Inactive> {
     ///
     /// # Errors
     /// Any error that occurs in the [`Client<Active>::disconnect`] process
-    pub async fn local<I: for<'c> Initializer<'c>>(
+    pub fn local<I: for<'c> Initializer<'c>>(
         self,
         init: I,
-    ) -> Result<Builder, std::io::Error> {
+    ) -> (impl std::future::Future<Output = Result<(), std::io::Error>>, CancellationToken) {
         let (mut client, mut tx, mut rx, queue) = self.into_active();
 
         let temp = CancellationToken::new();
-        let temp_2 = temp.clone();
+        let temp_inner = temp.clone();
         let con_fut = tokio::spawn(async move {
             loop {
                 tokio::select! {
-                    () = temp.cancelled() => { break (queue, tx, rx); },
+                    () = temp_inner.cancelled() => { break (queue, tx, rx); },
                     () = async {
                         let _ = if let Some(fields) = queue.pop() {
                             match fields.first().and_then(|t| t.parse().ok()) {
@@ -1319,25 +1319,30 @@ impl Client<indicators::Inactive> {
         });
 
         let break_loop = CancellationToken::new();
-        let mut wrapper = Initializer::build(init, &mut client, break_loop.clone()).await;
-        temp_2.cancel();
-        let (queue, mut tx, mut rx) = con_fut.await?;
+        let break_loop_inner = break_loop.clone();
+        let fut = async move {
+            let mut wrapper = Initializer::build(init, &mut client, break_loop_inner.clone()).await;
+            temp.cancel();
+            drop(temp);
+            let (queue, mut tx, mut rx) = con_fut.await?;
 
-        loop {
-            tokio::select! {
-                () = break_loop.cancelled() => {
-                    println!("Client loop: disconnecting");
-                    break
-                },
-                () = async {
-                    if let Some(fields) = queue.pop() {
-                        decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
-                    }
-                } => (),
+            loop {
+                tokio::select! {
+                    () = break_loop_inner.cancelled() => {
+                        println!("Client loop: disconnecting");
+                        break
+                    },
+                    () = async {
+                        if let Some(fields) = queue.pop() {
+                            decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
+                        }
+                    } => (),
+                }
             }
-        }
-        drop(wrapper);
-        client.disconnect().await
+
+            Ok(())
+        };
+        (fut, break_loop)
     }
 
     /// Initiates the main message loop and spawns all helper threads to manage the application.

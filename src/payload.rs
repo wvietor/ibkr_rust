@@ -105,23 +105,20 @@ pub mod market_depth {
     /// A single entry in a limit order book
     pub enum Entry {
         /// A resting buy order
-        Bid {
-            /// The order book's row being updated
-            position: u64,
-            /// The order's price
-            price: f64,
-            /// The order's size
-            size: f64,
-        },
+        Bid(Row),
         /// A resting sell order
-        Ask {
-            /// The order book's row being updated
-            position: u64,
-            /// The order's price
-            price: f64,
-            /// The order's size
-            size: f64,
-        },
+        Ask(Row),
+    }
+
+    #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
+    /// A single row in a limit order book
+    pub struct Row {
+        /// The position of the row in the order book.
+        pub position: u64,
+        /// The order's price.
+        pub price: f64,
+        /// The order's size.
+        pub size: f64,
     }
 
     impl TryFrom<(u32, u64, f64, f64)> for Entry {
@@ -129,16 +126,16 @@ pub mod market_depth {
 
         fn try_from(value: (u32, u64, f64, f64)) -> Result<Self, Self::Error> {
             Ok(match value.0 {
-                0 => Self::Ask {
+                0 => Self::Ask(Row {
                     position: value.1,
                     price: value.2,
                     size: value.3,
-                },
-                1 => Self::Bid {
+                }),
+                1 => Self::Bid(Row {
                     position: value.1,
                     price: value.2,
                     size: value.3,
-                },
+                }),
                 _ => Err(anyhow::Error::msg(
                     "Invalid int encountered while parsing side",
                 ))?,
