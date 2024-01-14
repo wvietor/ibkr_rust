@@ -2246,7 +2246,7 @@ impl Client<indicators::Active> {
     ///
     /// # Returns
     /// Returns the unique ID associated with the request.
-    pub async fn req_place_order<S, E>(&mut self, order: &Order<S, E>) -> IdResult
+    pub async fn req_place_order<S, E>(&mut self, order: &Order<'_, S, E>) -> IdResult
     where
         S: Security,
         E: Executable<S>,
@@ -2277,7 +2277,7 @@ impl Client<indicators::Active> {
     ///
     /// # Returns
     /// Returns the unique ID associated with the request.
-    pub async fn req_modify_order<S, E>(&mut self, order: &Order<S, E>, id: i64) -> IdResult
+    pub async fn req_modify_order<S, E>(&mut self, order: &Order<'_, S, E>, id: i64) -> IdResult
     where
         S: Security,
         E: Executable<S>,
