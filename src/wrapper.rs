@@ -13,7 +13,7 @@ use ibapi_macros::debug_trait;
 /// Re-export of [`tokio_util::sync::CancellationToken`]
 pub type CancelToken = tokio_util::sync::CancellationToken;
 
-#[ibapi_macros::make_send(Remote(Send): Send)]
+#[trait_variant::make(Remote: Send)]
 #[debug_trait]
 /// Contains the "callback functions" that correspond to the requests made by a [`crate::client::Client`].
 pub trait Local {
@@ -195,8 +195,8 @@ pub trait Local {
 }
 
 /// An initializer for a new [`Local`] wrapper.
-pub trait Initializer {
-    /// The Wrapper
+pub trait LocalInitializer {
+    /// The wrapper
     type Wrap<'c>: Local;
     /// The method to build the wrapper
     fn build(
@@ -204,4 +204,16 @@ pub trait Initializer {
         client: &mut ActiveClient,
         cancel_loop: CancelToken,
     ) -> impl std::future::Future<Output = Self::Wrap<'_>>;
+}
+
+/// An initializer for a new [`Remote`] wrapper.
+pub trait RemoteInitializer: Send {
+    /// The wrapper
+    type Wrap<'c>: Remote;
+    /// The method to build the wrapper
+    fn build(
+        self,
+        client: &mut ActiveClient,
+        cancel_loop: CancelToken,
+    ) -> impl std::future::Future<Output = Self::Wrap<'_>> + Send;
 }

@@ -12,7 +12,7 @@ use crate::market_data::{
     updating_historical_bar,
 };
 use crate::message::{In, Out, ToClient, ToWrapper};
-use crate::wrapper::{CancelToken, Initializer, Local, Remote};
+use crate::wrapper::{CancelToken, LocalInitializer, Local, Remote, RemoteInitializer};
 use crate::{
     account::Tag,
     comm::Writer,
@@ -1292,7 +1292,7 @@ impl Client<indicators::Inactive> {
     ///
     /// # Errors
     /// Returns any error that occurs in the loop initialization or in the disconnection process.
-    pub async fn local<I: Initializer>(self, init: I) -> Result<Builder, std::io::Error> {
+    pub async fn local<I: LocalInitializer>(self, init: I) -> Result<Builder, std::io::Error> {
         let (mut client, mut tx, mut rx, queue) = self.into_active();
 
         let temp = CancelToken::new();
@@ -1316,7 +1316,7 @@ impl Client<indicators::Inactive> {
 
         let break_loop = CancelToken::new();
         let break_loop_inner = break_loop.clone();
-        let mut wrapper = Initializer::build(init, &mut client, break_loop_inner.clone()).await;
+        let mut wrapper = LocalInitializer::build(init, &mut client, break_loop_inner.clone()).await;
         temp.cancel();
         drop(temp);
         let (queue, mut tx, mut rx) = con_fut.await?;
@@ -1338,6 +1338,58 @@ impl Client<indicators::Inactive> {
         client.disconnect().await
     }
 
+    pub fn remote<I: RemoteInitializer + 'static>(self, init: I) -> Result<CancelToken, std::io::Error> {
+        let (client, mut tx, mut rx, queue) = self.into_active();
+
+        let temp = CancelToken::new();
+        let temp_inner = temp.clone();
+        let con_fut = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    () = temp_inner.cancelled() => { break (queue, tx, rx); },
+                    () = async {
+                        let _ = if let Some(fields) = queue.pop() {
+                            match fields.first().and_then(|t| t.parse().ok()) {
+                                Some(In::ContractData) => decode::decode_contract_no_wrapper(&mut fields.into_iter(), &mut tx, &mut rx).await.with_context(|| "contract data msg"),
+                                Some(_) => { queue.push(fields); Ok(()) },
+                                None => Ok(()),
+                            }
+                        } else { Ok(()) };
+                    } => ()
+                }
+                tokio::task::yield_now().await;
+            }
+        });
+
+        let break_loop = CancelToken::new();
+        let break_loop_inner = break_loop.clone();
+
+        tokio::spawn(async move {
+            let mut client = client;
+            let mut wrapper = RemoteInitializer::build(init, &mut client, break_loop_inner.clone()).await;
+            temp.cancel();
+            drop(temp);
+            let (queue, mut tx, mut rx) = con_fut.await?;
+            loop {
+                tokio::select! {
+                    () = break_loop_inner.cancelled() => {
+                        println!("Client loop: disconnecting");
+                        break
+                    },
+                    () = async {
+                        if let Some(fields) = queue.pop() {
+                            decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
+                        }
+                    } => (),
+                }
+            }
+            drop(wrapper);
+            Ok::<(), std::io::Error>(())
+        });
+
+        Ok(break_loop)
+    }
+
     /// Initiates the main message loop and spawns all helper threads to manage the application.
     ///
     /// # Arguments
@@ -1345,7 +1397,7 @@ impl Client<indicators::Inactive> {
     ///
     /// # Returns
     /// An active [`Client`] that can be used to make API requests.
-    pub fn remote<W: Remote + Send + 'static>(self, mut wrapper: W) -> Client<indicators::Active> {
+    pub fn remote_unlinked<W: Remote + Send + 'static>(self, mut wrapper: W) -> Client<indicators::Active> {
         let (client, mut tx, mut rx, queue) = self.into_active();
         let c_loop_disconnect = client.status.disconnect.clone();
 
