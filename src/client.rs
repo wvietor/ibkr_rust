@@ -12,7 +12,7 @@ use crate::market_data::{
     updating_historical_bar,
 };
 use crate::message::{In, Out, ToClient, ToWrapper};
-use crate::wrapper::{CancelToken, LocalInitializer, Local, Remote, RemoteInitializer};
+use crate::wrapper::{CancelToken, Local, LocalInitializer, Remote, RemoteInitializer};
 use crate::{
     account::Tag,
     comm::Writer,
@@ -267,6 +267,12 @@ type IntoActive = (
     mpsc::Sender<ToClient>,
     mpsc::Receiver<ToWrapper>,
     Arc<SegQueue<Vec<String>>>,
+);
+
+type LoopParams = (
+    Arc<SegQueue<Vec<String>>>,
+    mpsc::Sender<ToClient>,
+    mpsc::Receiver<ToWrapper>,
 );
 
 #[inline]
@@ -1206,6 +1212,32 @@ fn spawn_reader_thread(
     (disconnect, queue, r_thread)
 }
 
+#[inline]
+fn spawn_temp_contract_thread(
+    cancel_token: CancelToken,
+    queue: Arc<SegQueue<Vec<String>>>,
+    mut tx: mpsc::Sender<ToClient>,
+    mut rx: mpsc::Receiver<ToWrapper>,
+) -> JoinHandle<LoopParams> {
+    tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                () = cancel_token.cancelled() => { break (queue, tx, rx); },
+                () = async {
+                    let _ = if let Some(fields) = queue.pop() {
+                        match fields.first().and_then(|t| t.parse().ok()) {
+                            Some(In::ContractData) => decode::decode_contract_no_wrapper(&mut fields.into_iter(), &mut tx, &mut rx).await.with_context(|| "contract data msg"),
+                            Some(_) => { queue.push(fields); Ok(()) },
+                            None => Ok(()),
+                        }
+                    } else { Ok(()) };
+                } => ()
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+}
+
 impl Client<indicators::Inactive> {
     // ==========================================
     // === Methods That Initiate the API Loop ===
@@ -1284,89 +1316,76 @@ impl Client<indicators::Inactive> {
     /// Initiates the main message loop and spawns all helper threads to manage the application.
     ///
     /// # Arguments
-    /// * `init` - An [`Initializer`] for a [`Local`] wrapper, which defines how incoming data from the IBKR trading systems
+    /// * `init` - A [`LocalInitializer`], which defines how incoming data from the IBKR trading systems
     /// should be handled.
     ///
     /// # Returns
-    /// A [`Builder`] that can be used to construct a new client.
+    /// Does not return until the loop is terminated from within a [`Local`] wrapper method using the [`CancelToken`]
+    /// provided to the [`LocalInitializer`] in the [`LocalInitializer::build`] method.
     ///
     /// # Errors
     /// Returns any error that occurs in the loop initialization or in the disconnection process.
-    pub async fn local<I: LocalInitializer>(self, init: I) -> Result<Builder, std::io::Error> {
-        let (mut client, mut tx, mut rx, queue) = self.into_active();
+    pub async fn local<I: LocalInitializer + 'static>(
+        self,
+        init: I,
+    ) -> Result<(), std::io::Error> {
+        let (mut client, tx, rx, queue) = self.into_active();
 
         let temp = CancelToken::new();
-        let temp_inner = temp.clone();
-        let con_fut = tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    () = temp_inner.cancelled() => { break (queue, tx, rx); },
-                    () = async {
-                        let _ = if let Some(fields) = queue.pop() {
-                            match fields.first().and_then(|t| t.parse().ok()) {
-                                Some(In::ContractData) => decode::decode_contract_no_wrapper(&mut fields.into_iter(), &mut tx, &mut rx).await.with_context(|| "contract data msg"),
-                                Some(_) => { queue.push(fields); Ok(()) },
-                                None => Ok(()),
-                            }
-                        } else { Ok(()) };
-                    } => ()
-                }
-            }
-        });
+        let con_fut = spawn_temp_contract_thread(temp.clone(), queue, tx, rx);
 
-        let break_loop = CancelToken::new();
-        let break_loop_inner = break_loop.clone();
-        let mut wrapper = LocalInitializer::build(init, &mut client, break_loop_inner.clone()).await;
-        temp.cancel();
-        drop(temp);
-        let (queue, mut tx, mut rx) = con_fut.await?;
-
-        loop {
-            tokio::select! {
-                () = break_loop_inner.cancelled() => {
-                    println!("Client loop: disconnecting");
-                    break
-                },
-                () = async {
-                    if let Some(fields) = queue.pop() {
-                        decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
+        let disconnect_token = CancelToken::new();
+        tokio::task::LocalSet::new()
+            .run_until(async move {
+                tokio::task::spawn_local(async move {
+                    let mut wrapper =
+                        LocalInitializer::build(init, &mut client, disconnect_token.clone()).await;
+                    temp.cancel();
+                    drop(temp);
+                    let (queue, mut tx, mut rx) = con_fut.await?;
+                    loop {
+                        tokio::select! {
+                            () = disconnect_token.cancelled() => {
+                                println!("Client loop: disconnecting");
+                                break
+                            },
+                            () = async {
+                                if let Some(fields) = queue.pop() {
+                                    decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
+                                }
+                            } => (),
+                        }
                     }
-                } => (),
-            }
-        }
-        drop(wrapper);
-        client.disconnect().await
+                    drop(wrapper);
+                    client.disconnect().await
+                })
+                .await
+            })
+            .await??;
+
+        Ok(())
     }
 
-    pub fn remote<I: RemoteInitializer + 'static>(self, init: I) -> Result<CancelToken, std::io::Error> {
-        let (client, mut tx, mut rx, queue) = self.into_active();
+    /// Initiates the main message loop and spawns all helper threads to manage the application.
+    ///
+    /// # Arguments
+    /// * `init` - A [`RemoteInitializer`], which defines how incoming data from the IBKR trading systems
+    /// should be handled.
+    ///
+    /// # Returns
+    /// A [`CancelToken`] that can be used to terminate the main loop and disconnect the client.
+    pub fn remote<I: RemoteInitializer + 'static>(self, init: I) -> CancelToken {
+        let (mut client, tx, rx, queue) = self.into_active();
 
         let temp = CancelToken::new();
-        let temp_inner = temp.clone();
-        let con_fut = tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    () = temp_inner.cancelled() => { break (queue, tx, rx); },
-                    () = async {
-                        let _ = if let Some(fields) = queue.pop() {
-                            match fields.first().and_then(|t| t.parse().ok()) {
-                                Some(In::ContractData) => decode::decode_contract_no_wrapper(&mut fields.into_iter(), &mut tx, &mut rx).await.with_context(|| "contract data msg"),
-                                Some(_) => { queue.push(fields); Ok(()) },
-                                None => Ok(()),
-                            }
-                        } else { Ok(()) };
-                    } => ()
-                }
-                tokio::task::yield_now().await;
-            }
-        });
+        let con_fut = spawn_temp_contract_thread(temp.clone(), queue, tx, rx);
 
         let break_loop = CancelToken::new();
         let break_loop_inner = break_loop.clone();
 
         tokio::spawn(async move {
-            let mut client = client;
-            let mut wrapper = RemoteInitializer::build(init, &mut client, break_loop_inner.clone()).await;
+            let mut wrapper =
+                RemoteInitializer::build(init, &mut client, break_loop_inner.clone()).await;
             temp.cancel();
             drop(temp);
             let (queue, mut tx, mut rx) = con_fut.await?;
@@ -1384,10 +1403,10 @@ impl Client<indicators::Inactive> {
                 }
             }
             drop(wrapper);
-            Ok::<(), std::io::Error>(())
+            client.disconnect().await
         });
 
-        Ok(break_loop)
+        break_loop
     }
 
     /// Initiates the main message loop and spawns all helper threads to manage the application.
@@ -1397,7 +1416,10 @@ impl Client<indicators::Inactive> {
     ///
     /// # Returns
     /// An active [`Client`] that can be used to make API requests.
-    pub fn remote_unlinked<W: Remote + Send + 'static>(self, mut wrapper: W) -> Client<indicators::Active> {
+    pub fn remote_unlinked<W: Remote + Send + 'static>(
+        self,
+        mut wrapper: W,
+    ) -> Client<indicators::Active> {
         let (client, mut tx, mut rx, queue) = self.into_active();
         let c_loop_disconnect = client.status.disconnect.clone();
 

@@ -9,6 +9,7 @@ use crate::tick::{
 };
 use chrono::{NaiveDateTime, NaiveTime};
 use ibapi_macros::debug_trait;
+use std::future::Future;
 
 /// Re-export of [`tokio_util::sync::CancellationToken`]
 pub type CancelToken = tokio_util::sync::CancellationToken;
@@ -216,4 +217,16 @@ pub trait RemoteInitializer: Send {
         client: &mut ActiveClient,
         cancel_loop: CancelToken,
     ) -> impl std::future::Future<Output = Self::Wrap<'_>> + Send;
+}
+
+impl<I: RemoteInitializer> LocalInitializer for I {
+    type Wrap<'c> = <I as RemoteInitializer>::Wrap<'c>;
+
+    fn build(
+        self,
+        client: &mut ActiveClient,
+        cancel_loop: CancelToken,
+    ) -> impl Future<Output = Self::Wrap<'_>> {
+        <I as RemoteInitializer>::build(self, client, cancel_loop)
+    }
 }
