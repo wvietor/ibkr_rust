@@ -682,13 +682,13 @@ async fn decode_msg_remote<W>(
 
 #[inline]
 #[allow(clippy::too_many_lines)]
-async fn decode_msg_local<'c, W>(
+async fn decode_msg_local<W>(
     fields: Vec<String>,
     local: &mut W,
     tx: &mut mpsc::Sender<ToClient>,
     rx: &mut mpsc::Receiver<ToWrapper>,
 ) where
-    W: Local<'c>,
+    W: Local,
 {
     let status = match fields.first() {
         None => Err(anyhow::Error::msg("Empty fields received from reader")),
@@ -1284,13 +1284,15 @@ impl Client<indicators::Inactive> {
     /// Initiates the main message loop and spawns all helper threads to manage the application.
     ///
     /// # Arguments
-    /// * `init` - An `Initializer` for a `Local` wrapper, which defines how incoming data from the IBKR trading systems
+    /// * `init` - An [`Initializer`] for a [`Local`] wrapper, which defines how incoming data from the IBKR trading systems
     /// should be handled.
     ///
     /// # Returns
-    /// A `std::future::Future`, which when awaited launches the main message loop and a `CancelToken`, which can be
-    /// used to terminate the main message loop.
-    pub fn local<I: for<'c> Initializer<'c>>(self, init: I) -> (impl std::future::Future<Output = Result<Builder, std::io::Error>>, CancelToken) {
+    /// A [`Builder`] that can be used to construct a new client.
+    ///
+    /// # Errors
+    /// Returns any error that occurs in the loop initialization or in the disconnection process.
+    pub async fn local<I: Initializer>(self, init: I) -> Result<Builder, std::io::Error> {
         let (mut client, mut tx, mut rx, queue) = self.into_active();
 
         let temp = CancelToken::new();
@@ -1314,30 +1316,26 @@ impl Client<indicators::Inactive> {
 
         let break_loop = CancelToken::new();
         let break_loop_inner = break_loop.clone();
-        let fut = async move {
-            let mut wrapper = Initializer::build(init, &mut client, break_loop_inner.clone()).await;
-            temp.cancel();
-            drop(temp);
-            let (queue, mut tx, mut rx) = con_fut.await?;
+        let mut wrapper = Initializer::build(init, &mut client, break_loop_inner.clone()).await;
+        temp.cancel();
+        drop(temp);
+        let (queue, mut tx, mut rx) = con_fut.await?;
 
-            loop {
-                tokio::select! {
-                    () = break_loop_inner.cancelled() => {
-                        println!("Client loop: disconnecting");
-                        break
-                    },
-                    () = async {
-                        if let Some(fields) = queue.pop() {
-                            decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
-                        }
-                    } => (),
-                }
+        loop {
+            tokio::select! {
+                () = break_loop_inner.cancelled() => {
+                    println!("Client loop: disconnecting");
+                    break
+                },
+                () = async {
+                    if let Some(fields) = queue.pop() {
+                        decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
+                    }
+                } => (),
             }
-            drop(wrapper);
-            client.disconnect().await
-        };
-
-        (fut, break_loop)
+        }
+        drop(wrapper);
+        client.disconnect().await
     }
 
     /// Initiates the main message loop and spawns all helper threads to manage the application.

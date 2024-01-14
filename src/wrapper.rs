@@ -16,7 +16,7 @@ pub type CancelToken = tokio_util::sync::CancellationToken;
 #[ibapi_macros::make_send(Remote(Send): Send)]
 #[debug_trait]
 /// Contains the "callback functions" that correspond to the requests made by a [`crate::client::Client`].
-pub trait Local<'c> {
+pub trait Local {
     /// The callback that corresponds to any error that encounters after an API request.
     ///
     /// Errors sent by the TWS are received here.
@@ -195,13 +195,13 @@ pub trait Local<'c> {
 }
 
 /// An initializer for a new [`Local`] wrapper.
-pub trait Initializer<'c> {
+pub trait Initializer {
     /// The Wrapper
-    type Wrap: Local<'c>;
+    type Wrap<'c>: Local;
     /// The method to build the wrapper
     fn build(
         self,
-        client: &'c mut ActiveClient,
+        client: &mut ActiveClient,
         cancel_loop: CancelToken,
-    ) -> impl std::future::Future<Output = Self::Wrap>;
+    ) -> impl std::future::Future<Output = Self::Wrap<'_>>;
 }

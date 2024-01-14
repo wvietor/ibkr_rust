@@ -88,7 +88,7 @@ macro_rules! impl_seg_variants {
 }
 
 #[ibapi_macros::make_send(Remote(Send): wrapper::Remote)]
-pub trait Local<'c>: wrapper::Local<'c> {
+pub trait Local: wrapper::Local {
     #[inline]
     fn tick_price_msg(
         fields: &mut Fields,
@@ -2299,7 +2299,7 @@ pub trait Local<'c>: wrapper::Local<'c> {
     }
 }
 
-impl<'c, W: wrapper::Local<'c>> Local<'c> for W {}
+impl<W: wrapper::Local> Local for W {}
 
 impl<W: wrapper::Remote> Remote for W {}
 
