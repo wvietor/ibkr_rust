@@ -1329,12 +1329,12 @@ impl Client<indicators::Inactive> {
     pub async fn local<I: LocalInitializer>(
         self,
         init: I,
+        disconnect_token: CancelToken,
     ) -> Result<Builder, std::io::Error> {
         let (mut client, tx, rx, queue) = self.into_active().await;
         let temp = CancelToken::new();
         let con_fut = spawn_temp_contract_thread(temp.clone(), queue, tx, rx);
 
-        let disconnect_token = CancelToken::new();
         let mut wrapper = LocalInitializer::build(init, &mut client, disconnect_token.clone()).await;
         temp.cancel();
         drop(temp);
