@@ -1,6 +1,6 @@
 use crate::account::{Attribute, TagValue};
 use crate::client::ActiveClient;
-use crate::payload::{self, Bar, ExchangeId, HistogramEntry, Pnl, Position, PositionSummary, Tick};
+use crate::payload::{self, Bar, ExchangeId, HistogramEntry, Pnl, Position, PositionSummary, Tick, OrderStatus};
 use crate::tick::{
     self, Accessibility, AuctionData, Class, Dividends, ExtremeValue, Ipo, MarkPrice, News,
     OpenInterest, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
@@ -193,6 +193,8 @@ pub trait Local {
     fn open_order_end(&mut self) -> impl std::future::Future {}
     /// The callback message that contains live bar data from [`crate::client::Client::req_real_time_bars`].
     fn real_time_bar(&mut self, req_id: i64, bar: Bar) -> impl std::future::Future {}
+    /// The callback message that contains order status data from [`crate::client::Client::req_place_order`].
+    fn order_status(&mut self, status: OrderStatus) -> impl std::future::Future {}
 }
 
 /// An initializer for a new [`Local`] wrapper.

@@ -1,3 +1,4 @@
+use std::fmt::Formatter;
 use chrono::NaiveDateTime;
 
 use crate::contract::ContractId;
@@ -26,7 +27,7 @@ use std::str::FromStr;
 pub struct ExchangeId(String);
 
 impl std::fmt::Display for ExchangeId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
@@ -50,7 +51,7 @@ impl std::error::Error for ParseExchangeIdError {
 }
 
 impl std::fmt::Display for ParseExchangeIdError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Invalid exchange ID, likely due to a bad UTF-8 code")
     }
 }
@@ -186,7 +187,7 @@ pub mod market_depth {
             .collect::<Vec<char>>()
             .try_into()
             .map_err(|_| {
-                D::Error::invalid_value(serde::de::Unexpected::Str(&s), &"Valid UTF-8 Mpid")
+                Error::invalid_value(serde::de::Unexpected::Str(&s), &"Valid UTF-8 Mpid")
             })
     }
 }
@@ -339,6 +340,76 @@ pub struct Pnl {
     /// Total realized P&L for the account.
     pub realized: f64,
 }
+
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "order_status")]
+/// The possible statuses for a given order.
+pub enum OrderStatus {
+    /// Indicates that you have transmitted the order, but have not yet received confirmation that it has been accepted by the order destination.
+    PendingSubmit(OrderStatusCore),
+    /// Indicates that you have sent a request to cancel the order but have not yet received cancel confirmation from the order destination. At this point, your order is not confirmed canceled. It is not guaranteed that the cancellation will be successful.
+    PendingCancel(OrderStatusCore),
+    /// Indicates that a simulated order type has been accepted by the IB system and that this order has yet to be elected. The order is held in the IB system until the election criteria are met. At that time the order is transmitted to the order destination as specified.
+    PreSubmitted(OrderStatusCore),
+    /// Indicates that your order has been accepted by the system.
+    Submitted(OrderStatusCore),
+    /// After an order has been submitted and before it has been acknowledged, an API client client can request its cancellation, producing this state.
+    ApiCancelled(OrderStatusCore),
+    /// Indicates that the balance of your order has been confirmed canceled by the IB system. This could occur unexpectedly when IB or the destination has rejected your order.
+    Cancelled(OrderStatusCore),
+    /// Indicates that the order has been completely filled. Market orders executions will not always trigger a Filled status.
+    Filled(OrderStatusCore),
+    /// Indicates that the order was received by the system but is no longer active because it was rejected or canceled.
+    Inactive(OrderStatusCore),
+}
+
+#[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
+/// The core fields of an Order's Status
+pub struct OrderStatusCore {
+    /// The order's ID.
+    pub order_id: i64,
+    /// The details of how many contracts have been filled.
+    pub fill: Option<Fill>,
+    /// The remnant positions.
+    pub remaining: f64,
+    /// The order’s permId used by the TWS to identify orders.
+    pub permanent_id: i64,
+    /// Parent’s id. Used for bracket and auto trailing stop orders.
+    pub parent_id: Option<i64>,
+    /// API client which submitted the order.
+    pub client_id: i64,
+    /// This field is used to identify an order held when TWS is trying to locate shares for a short sell.
+    pub why_held: Option<Locate>,
+    /// If an order has been capped, this indicates the current capped price.
+    pub market_cap_price: Option<f64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
+/// Contains the details of an order's filled positions.
+pub struct Fill {
+    /// Number of filled positions.
+    pub filled: f64,
+    /// Average filling price.
+    pub average_price: f64,
+    /// Price at which the last positions were filled.
+    pub last_price: f64,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialOrd, Eq, Ord, PartialEq, Serialize, Deserialize)]
+/// Indicates whether an order is being held because IBKR is trying to locate shares for a short sale.
+pub struct Locate;
+
+#[derive(Debug, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+/// An error that represents an invalid order status.
+pub struct ParseOrderStatusError(pub String);
+
+impl std::fmt::Display for ParseOrderStatusError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Invalid order status message: {}", self.0)
+    }
+}
+
+impl std::error::Error for ParseOrderStatusError {}
 
 #[allow(non_snake_case, missing_docs)]
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]

@@ -7,11 +7,7 @@ use crate::contract::{
     Commodity, Contract, ContractId, Crypto, Forex, Index, SecFuture, SecOption, SecOptionInner,
     SecurityId, Stock,
 };
-use crate::payload::{
-    market_depth::{CompleteEntry, Entry, Operation},
-    Bar, BarCore, ExchangeId, HistogramEntry, MarketDataClass, Pnl, Position, PositionSummary,
-    Tick,
-};
+use crate::payload::{market_depth::{CompleteEntry, Entry, Operation}, Bar, BarCore, ExchangeId, HistogramEntry, MarketDataClass, Pnl, Position, PositionSummary, Tick, OrderStatus, Fill};
 use crate::tick::{
     Accessibility, AuctionData, CalculationResult, Class, Dividends, EtfNav, ExtremeValue, Ipo,
     MarkPrice, OpenInterest, Period, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
@@ -22,7 +18,6 @@ use crate::{
     currency::Currency,
     exchange::Routing,
     message::{ToClient, ToWrapper},
-    order::TimeInForce,
     wrapper,
 };
 
@@ -239,7 +234,59 @@ pub trait Local: wrapper::Local {
         wrapper: &mut Self,
     ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
-            println!("{:?}", &fields);
+            decode_fields!(
+                fields =>
+                    order_id @ 1: i64,
+                    status @ 0: String,
+                    filled @ 0: f64,
+                    remaining @ 0: f64,
+                    average_price @ 0: f64,
+                    permanent_id @ 0: i64,
+                    parent_id @ 0: i64,
+                    last_price @ 0: f64,
+                    client_id @ 0: i64,
+                    why_held @ 0: String,
+                    market_cap_price @ 0: f64
+            );
+
+            let why_held = match why_held.as_str() {
+                "locate" => Some(crate::payload::Locate),
+                "" => None,
+                s => return Err(anyhow::anyhow!("Invalid Locate string. Expected \"locate\" or \"\", got {}", s))
+            };
+            let market_cap_price = if market_cap_price == 0.0 { None } else { Some(market_cap_price )};
+            let fill = if filled == 0.0 && average_price == 0.0 && last_price == 0.0 { None } else {
+                Some(Fill {
+                    filled,
+                    average_price,
+                    last_price
+                })
+            };
+            let parent_id = if parent_id == 0 { None } else { Some(parent_id) };
+            let core = crate::payload::OrderStatusCore {
+                order_id,
+                fill,
+                remaining,
+                permanent_id,
+                parent_id,
+                client_id,
+                why_held,
+                market_cap_price,
+            };
+            let status = match status.as_str() {
+                "PendingSubmit" => OrderStatus::PendingSubmit(core),
+                "PendingCancel" => OrderStatus::PendingCancel(core),
+                "PreSubmitted" => OrderStatus::PreSubmitted(core),
+                "Submitted" => OrderStatus::Submitted(core),
+                "ApiCancelled" => OrderStatus::ApiCancelled(core),
+                "Cancelled" => OrderStatus::Cancelled(core),
+                "Filled" => OrderStatus::Filled(core),
+                "Inactive" => OrderStatus::Inactive(core),
+                s => return Err(anyhow::anyhow!("Invalid order status string. Expected \"PendingSubmit\", \"PendingCancel\", \"PreSubmitted\", \"Submitted\", \"ApiCancelled\", \"Cancelled\", \"Filled\", or \"Inactive\". Got {}", s)),
+            };
+
+            wrapper.order_status(status).await;
+
             Ok(())
         }
     }
@@ -271,17 +318,18 @@ pub trait Local: wrapper::Local {
         wrapper: &mut Self,
     ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
-            decode_fields!(
-                fields =>
-                    order_id @ 1: i64,
-                    contract_id @ 0: ContractId,
-                    action @ 10: String,
-                    quantity @ 0: f64,
-                    order_type @ 0: String,
-                    price @ 0: String,
-                    aux_price @ 0: String,
-                    time_in_force @ 0: TimeInForce
-            );
+            // decode_fields!(
+            //     fields =>
+            //         order_id @ 1: i64,
+            //         contract_id @ 0: ContractId,
+            //         action @ 10: String,
+            //         quantity @ 0: f64,
+            //         order_type @ 0: String,
+            //         price @ 0: String,
+            //         aux_price @ 0: String,
+            //         time_in_force @ 0: TimeInForce
+            // );
+            println!("{:?}", &fields);
             Ok(())
         }
     }
