@@ -1253,7 +1253,7 @@ impl Client<indicators::Inactive> {
     }
 
     #[allow(clippy::unwrap_used, clippy::missing_panics_doc)]
-    fn into_active(self) -> IntoActive {
+    async fn into_active(self) -> IntoActive {
         let (disconnect, queue, r_thread) = spawn_reader_thread(self.status.reader);
 
         let (mut managed_accounts, mut valid_id) = (None, None);
@@ -1283,6 +1283,7 @@ impl Client<indicators::Inactive> {
                     None => (),
                 }
             }
+            tokio::task::yield_now().await;
         }
         let (managed_accounts, valid_id) = (managed_accounts.unwrap(), valid_id.unwrap()..);
 
@@ -1325,45 +1326,34 @@ impl Client<indicators::Inactive> {
     ///
     /// # Errors
     /// Returns any error that occurs in the loop initialization or in the disconnection process.
-    pub async fn local<I: LocalInitializer + 'static>(
+    pub async fn local<I: LocalInitializer>(
         self,
         init: I,
-    ) -> Result<(), std::io::Error> {
-        let (mut client, tx, rx, queue) = self.into_active();
-
+    ) -> Result<Builder, std::io::Error> {
+        let (mut client, tx, rx, queue) = self.into_active().await;
         let temp = CancelToken::new();
         let con_fut = spawn_temp_contract_thread(temp.clone(), queue, tx, rx);
 
         let disconnect_token = CancelToken::new();
-        tokio::task::LocalSet::new()
-            .run_until(async move {
-                tokio::task::spawn_local(async move {
-                    let mut wrapper =
-                        LocalInitializer::build(init, &mut client, disconnect_token.clone()).await;
-                    temp.cancel();
-                    drop(temp);
-                    let (queue, mut tx, mut rx) = con_fut.await?;
-                    loop {
-                        tokio::select! {
-                            () = disconnect_token.cancelled() => {
-                                println!("Client loop: disconnecting");
-                                break
-                            },
-                            () = async {
-                                if let Some(fields) = queue.pop() {
-                                    decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
-                                }
-                            } => (),
-                        }
+        let mut wrapper = LocalInitializer::build(init, &mut client, disconnect_token.clone()).await;
+        temp.cancel();
+        drop(temp);
+        let (queue, mut tx, mut rx) = con_fut.await?;
+        loop {
+            tokio::select! {
+                () = disconnect_token.cancelled() => {
+                    println!("Client loop: disconnecting");
+                    break
+                },
+                () = async {
+                    if let Some(fields) = queue.pop() {
+                        decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
                     }
-                    drop(wrapper);
-                    client.disconnect().await
-                })
-                .await
-            })
-            .await??;
-
-        Ok(())
+                } => (),
+            }
+        }
+        drop(wrapper);
+        client.disconnect().await
     }
 
     /// Initiates the main message loop and spawns all helper threads to manage the application.
@@ -1374,8 +1364,8 @@ impl Client<indicators::Inactive> {
     ///
     /// # Returns
     /// A [`CancelToken`] that can be used to terminate the main loop and disconnect the client.
-    pub fn remote<I: RemoteInitializer + 'static>(self, init: I) -> CancelToken {
-        let (mut client, tx, rx, queue) = self.into_active();
+    pub async fn remote<I: RemoteInitializer + 'static>(self, init: I) -> CancelToken {
+        let (mut client, tx, rx, queue) = self.into_active().await;
 
         let temp = CancelToken::new();
         let con_fut = spawn_temp_contract_thread(temp.clone(), queue, tx, rx);
@@ -1416,11 +1406,11 @@ impl Client<indicators::Inactive> {
     ///
     /// # Returns
     /// An active [`Client`] that can be used to make API requests.
-    pub fn remote_unlinked<W: Remote + Send + 'static>(
+    pub async fn remote_unlinked<W: Remote + Send + 'static>(
         self,
         mut wrapper: W,
     ) -> Client<indicators::Active> {
-        let (client, mut tx, mut rx, queue) = self.into_active();
+        let (client, mut tx, mut rx, queue) = self.into_active().await;
         let c_loop_disconnect = client.status.disconnect.clone();
 
         tokio::spawn(async move {
