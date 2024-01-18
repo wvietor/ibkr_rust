@@ -274,6 +274,7 @@ pub trait Local: wrapper::Local {
                 market_cap_price,
             };
             let status = match status.as_str() {
+                "ApiPending" => OrderStatus::ApiPending(core),
                 "PendingSubmit" => OrderStatus::PendingSubmit(core),
                 "PendingCancel" => OrderStatus::PendingCancel(core),
                 "PreSubmitted" => OrderStatus::PreSubmitted(core),
@@ -318,18 +319,75 @@ pub trait Local: wrapper::Local {
         wrapper: &mut Self,
     ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
-            // decode_fields!(
-            //     fields =>
-            //         order_id @ 1: i64,
-            //         contract_id @ 0: ContractId,
-            //         action @ 10: String,
-            //         quantity @ 0: f64,
-            //         order_type @ 0: String,
-            //         price @ 0: String,
-            //         aux_price @ 0: String,
-            //         time_in_force @ 0: TimeInForce
-            // );
-            println!("{:?}", &fields);
+            decode_fields!(
+                fields =>
+                    order_id @ 1: i64,
+                    contract_id @ 0: ContractId,
+                    client_id @ 21: i64,
+                    permanent_id @ 0: i64,
+                    parent_id @ 32: i64
+            );
+            let parent_id = if parent_id == 0 { None } else { Some(parent_id) };
+            wrapper.open_order(order_id, contract_id, client_id, parent_id, permanent_id).await;
+            // outside: 1,
+            // hidden: 1
+            // discretion: 1
+            // good_after: 1
+            // skip_shares: 1
+            // fa_params: 4
+            // model_code: 1
+            // good_til: 1
+            // rule_80a: 1
+            // percent_offset: 1
+            // settling_firm: 1
+            // short_sale_params: 3
+            // auction_strategy: 1
+            // box_order_params: 3
+            // peg_to_stk_or_vol: 2
+            // display_size: 1
+            // block: 1
+            // sweep: 1
+            // all_or_none: 1
+            // min_qty: 1
+            // oca_type: 1
+            // skip_etrade_only: 1
+            // skip_firm_quote_only: 1
+            // skip_nbbo_price_cap: 1
+
+            /* !!!parent_id!!! */
+
+            // trigger_method: 1
+            // vol_order_params: 6 OR 14
+            // trail_params: 2
+            // basis_points: 2
+            // combo_legs: 1 OR arbitrarily many
+            // smart_combo_routing_params: 1 OR arbitrarily many
+            // scale_order_params: 3 OR 10
+            // hedge_params: 1 OR 2
+            // opt_out_smart_routing: 1
+            // clearing_params: 2
+            // not_held: 1
+            // delta_neutral: 1 OR 5
+            // algo_params: 1 OR arbitrarily many
+            // solicited: 1
+
+            /* !!!whatifinfo!!! */
+
+            // vol_randomize: 2
+            // peg_to_bench: 0 OR 5
+            // conditions: 1 OR arbitrarily many
+            // adjusted_order_params: 8
+            // soft_dollar: 3
+            // cash_qty: 1
+            // dont_use_auto: 1
+            // is_oms: 1
+            // discretionary_up_to_limit: 1
+            // use_price_mgmt: 1
+            // duration: 1
+            // post_to_ats: 1
+            // auto_cancel_parent: 1
+            // peg_best_peg_mid: 5
+
             Ok(())
         }
     }

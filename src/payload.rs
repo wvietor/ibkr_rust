@@ -345,13 +345,15 @@ pub struct Pnl {
 #[serde(tag = "order_status")]
 /// The possible statuses for a given order.
 pub enum OrderStatus {
-    /// Indicates that you have transmitted the order, but have not yet received confirmation that it has been accepted by the order destination.
+    /// Indicates order has not yet been sent to IB server, for instance if there is a delay in receiving the security definition. Uncommonly received.
+    ApiPending(OrderStatusCore),
+    /// Indicates that you have transmitted the order, but have not yet received confirmation that it has been accepted by the order destination. Most commonly because exchange is closed.
     PendingSubmit(OrderStatusCore),
     /// Indicates that you have sent a request to cancel the order but have not yet received cancel confirmation from the order destination. At this point, your order is not confirmed canceled. It is not guaranteed that the cancellation will be successful.
     PendingCancel(OrderStatusCore),
     /// Indicates that a simulated order type has been accepted by the IB system and that this order has yet to be elected. The order is held in the IB system until the election criteria are met. At that time the order is transmitted to the order destination as specified.
     PreSubmitted(OrderStatusCore),
-    /// Indicates that your order has been accepted by the system.
+    /// Indicates that your order has been accepted at the order destination and is working.
     Submitted(OrderStatusCore),
     /// After an order has been submitted and before it has been acknowledged, an API client client can request its cancellation, producing this state.
     ApiCancelled(OrderStatusCore),

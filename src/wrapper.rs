@@ -10,6 +10,7 @@ use crate::tick::{
 use chrono::{NaiveDateTime, NaiveTime};
 use ibapi_macros::debug_trait;
 use std::future::Future;
+use crate::contract::ContractId;
 
 /// Re-export of [`tokio_util::sync::CancellationToken`]
 pub type CancelToken = tokio_util::sync::CancellationToken;
@@ -195,6 +196,8 @@ pub trait Local {
     fn real_time_bar(&mut self, req_id: i64, bar: Bar) -> impl std::future::Future {}
     /// The callback message that contains order status data from [`crate::client::Client::req_place_order`].
     fn order_status(&mut self, status: OrderStatus) -> impl std::future::Future {}
+    /// The callback message that contains information about currently open orders from [`crate::client::Client::req_place_order`].
+    fn open_order(&mut self, order_id: i64, contract_id: ContractId, client_id: i64, parent_id: Option<i64>, permanent_id: i64) -> impl std::future::Future {}
 }
 
 /// An initializer for a new [`Local`] wrapper.
