@@ -2,8 +2,9 @@ use std::fmt::Formatter;
 use chrono::NaiveDateTime;
 
 use crate::contract::ContractId;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::str::FromStr;
+use serde::ser::SerializeStruct;
 
 // macro_rules! make_error {
 //     ($( #[doc = $name_doc:expr] )? $name: ident: $msg: literal) => {
@@ -229,16 +230,37 @@ pub enum Bar {
     /// The ordinary bar data returned from non [`crate::market_data::historical_bar::data_types::Trades`] requests.
     Ordinary(BarCore),
     /// The bar data returned from a [`crate::market_data::historical_bar::data_types::Trades`] request.
-    Trades {
-        /// The core bar with open, high, low, close, etc.
-        bar: BarCore,
-        /// The bar's traded volume.
-        volume: f64,
-        /// The bar's Weighted Average Price.
-        wap: f64,
-        /// The number of trades during the bar's timespan.
-        trade_count: u64,
-    },
+    Trades(Trade),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Deserialize)]
+/// A trade bar with volume, WAP, and count data.
+pub struct Trade {
+    #[serde(flatten)]
+    /// The core bar with open, high, low, close, etc.
+    pub bar: BarCore,
+    /// The bar's traded volume.
+    pub volume: f64,
+    /// The bar's Weighted Average Price.
+    pub wap: f64,
+    /// The number of trades during the bar's timespan.
+    pub trade_count: u64,
+}
+
+impl Serialize for Trade {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        let BarCore {datetime, open, high, low, close} = self.bar;
+        let mut ser = serializer.serialize_struct("Trade", 8)?;
+        ser.serialize_field("datetime", &datetime.format("%Y-%m-%d %T").to_string())?;
+        ser.serialize_field("open", &open)?;
+        ser.serialize_field("high", &high)?;
+        ser.serialize_field("low", &low)?;
+        ser.serialize_field("close", &close)?;
+        ser.serialize_field("volume", &self.volume)?;
+        ser.serialize_field("wap", &self.wap)?;
+        ser.serialize_field("trade_count", &self.trade_count)?;
+        ser.end()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]

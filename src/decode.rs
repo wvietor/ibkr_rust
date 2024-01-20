@@ -7,7 +7,7 @@ use crate::contract::{
     Commodity, Contract, ContractId, Crypto, Forex, Index, SecFuture, SecOption, SecOptionInner,
     SecurityId, Stock,
 };
-use crate::payload::{market_depth::{CompleteEntry, Entry, Operation}, Bar, BarCore, ExchangeId, HistogramEntry, MarketDataClass, Pnl, Position, PositionSummary, Tick, OrderStatus, Fill};
+use crate::payload::{market_depth::{CompleteEntry, Entry, Operation}, Bar, BarCore, ExchangeId, HistogramEntry, MarketDataClass, Pnl, Position, PositionSummary, Tick, OrderStatus, Fill, Trade};
 use crate::tick::{
     Accessibility, AuctionData, CalculationResult, Class, Dividends, EtfNav, ExtremeValue, Ipo,
     MarkPrice, OpenInterest, Period, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
@@ -1055,9 +1055,15 @@ pub trait Local: wrapper::Local {
             );
             let mut bars = Vec::with_capacity(count);
             for chunk in fields.collect::<Vec<String>>().chunks(8) {
-                if let [date, open, high, low, close, volume, wap, trade_count] = chunk {
+                if let [datetime_str, open, high, low, close, volume, wap, trade_count] = chunk {
+                    let (date, rem) = NaiveDate::parse_and_remainder(datetime_str, "%Y%m%d")?;
+                    let time = if rem.is_empty() {
+                        NaiveTime::default()
+                    } else {
+                        NaiveTime::parse_and_remainder(rem, " %T")?.0
+                    };
                     let core = BarCore {
-                        datetime: NaiveDateTime::parse_and_remainder(date, "%Y%m%d %T")?.0,
+                        datetime: NaiveDateTime::new(date, time),
                         open: open.parse()?,
                         high: high.parse()?,
                         low: low.parse()?,
@@ -1066,12 +1072,12 @@ pub trait Local: wrapper::Local {
                     let (volume, wap, trade_count) =
                         (volume.parse()?, wap.parse()?, trade_count.parse::<i64>()?);
                     let bar = if volume > 0. && wap > 0. && trade_count > 0 {
-                        Bar::Trades {
+                        Bar::Trades(crate::payload::Trade {
                             bar: core,
                             volume,
                             wap,
                             trade_count: trade_count.try_into()?,
-                        }
+                        })
                     } else {
                         Bar::Ordinary(core)
                     };
@@ -1410,12 +1416,12 @@ pub trait Local: wrapper::Local {
                 close,
             };
             let bar = if trade_count > 0 && wap > 0. && volume > 0. {
-                Bar::Trades {
+                Bar::Trades(Trade {
                     bar: core,
                     volume,
                     wap,
                     trade_count: trade_count.try_into()?,
-                }
+                })
             } else {
                 Bar::Ordinary(core)
             };
@@ -1950,12 +1956,12 @@ pub trait Local: wrapper::Local {
                 close,
             };
             let bar = if trade_count > 0 && wap > 0. && volume > 0. {
-                Bar::Trades {
+                Bar::Trades(Trade {
                     bar: core,
                     volume,
                     wap,
                     trade_count: trade_count.try_into()?,
-                }
+                })
             } else {
                 Bar::Ordinary(core)
             };
