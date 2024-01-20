@@ -2,7 +2,7 @@ use std::fmt::Formatter;
 use chrono::NaiveDateTime;
 
 use crate::contract::ContractId;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 use std::str::FromStr;
 use serde::ser::SerializeStruct;
 
