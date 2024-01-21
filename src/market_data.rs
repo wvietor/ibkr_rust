@@ -154,7 +154,7 @@ pub mod historical_bar {
             S: Serializer,
         {
             match *self {
-                Self::Past(dt) => Some(dt.format("%Y%m%d %H%M%S").to_string()),
+                Self::Past(dt) => Some(dt.format("%Y%m%d %T").to_string()),
                 Self::Present => None,
             }
             .serialize(serializer)
