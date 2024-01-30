@@ -12,6 +12,8 @@ use ibapi_macros::debug_trait;
 use std::future::Future;
 use crate::contract::ContractId;
 
+// todo! Updated Bar payload api to make it more clear that BidAsk callback isn't just a "normal Bar"
+
 /// Re-export of [`tokio_util::sync::CancellationToken`]
 pub type CancelToken = tokio_util::sync::CancellationToken;
 

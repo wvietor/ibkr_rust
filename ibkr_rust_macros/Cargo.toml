@@ -1,0 +1,15 @@
+[package]
+name = "ibapi_macros"
+version = "0.1.0"
+authors = ["William Vietor <will.vietor@gmail.com>"]
+description = "A `cargo generate` template for quick-starting a procedural macro crate"
+keywords = ["template", "proc_macro", "procmacro"]
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1.0.33"
+proc-macro2 = "1.0.70"
+syn = { version = "2.0.40", features = ["full"] }
