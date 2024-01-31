@@ -170,28 +170,19 @@ macro_rules! contract_dispatch {
 /// # Returns
 /// Returns a fully-defined contract that can be used for market data, placing orders, etc.
 pub async fn new<S: Security>(
-    client: &mut crate::client::Client<crate::client::indicators::Active>,
+    client: &mut crate::client::ActiveClient,
     contract_id: ContractId,
-) -> anyhow::Result<S>
-where
-    <S as TryFrom<Forex>>::Error: 'static + std::error::Error + Send + Sync,
-    <S as TryFrom<Crypto>>::Error: 'static + std::error::Error + Send + Sync,
-    <S as TryFrom<Stock>>::Error: 'static + std::error::Error + Send + Sync,
-    <S as TryFrom<Index>>::Error: 'static + std::error::Error + Send + Sync,
-    <S as TryFrom<SecFuture>>::Error: 'static + std::error::Error + Send + Sync,
-    <S as TryFrom<SecOption>>::Error: 'static + std::error::Error + Send + Sync,
-    <S as TryFrom<Commodity>>::Error: 'static + std::error::Error + Send + Sync,
-{
+) -> anyhow::Result<S> {
     client.send_contract_query(contract_id).await?;
-    Ok(match client.recv_contract_query().await? {
-        Contract::Forex(fx) => fx.try_into()?,
-        Contract::Crypto(crypto) => crypto.try_into()?,
-        Contract::Stock(stk) => stk.try_into()?,
-        Contract::Index(ind) => ind.try_into()?,
-        Contract::SecFuture(fut) => fut.try_into()?,
-        Contract::SecOption(opt) => opt.try_into()?,
-        Contract::Commodity(cmdty) => cmdty.try_into()?,
-    })
+    match client.recv_contract_query().await? {
+        Contract::Forex(fx) => fx.try_into().map_err(|_| ()),
+        Contract::Crypto(crypto) => crypto.try_into().map_err(|_| ()),
+        Contract::Stock(stk) => stk.try_into().map_err(|_| ()),
+        Contract::Index(ind) => ind.try_into().map_err(|_| ()),
+        Contract::SecFuture(fut) => fut.try_into().map_err(|_| ()),
+        Contract::SecOption(opt) => opt.try_into().map_err(|_| ()),
+        Contract::Commodity(cmdty) => cmdty.try_into().map_err(|_| ()),
+    }.map_err(|_| anyhow::anyhow!("Failed to create contract from {:?}: ", contract_id))
 }
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
