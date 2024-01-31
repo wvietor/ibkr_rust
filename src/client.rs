@@ -215,17 +215,16 @@ impl Builder {
             .ok_or_else(|| anyhow::Error::msg("Missing server version in IBKR handshake response"))?
             .parse()
             .with_context(|| "Failed to parse server version")?;
-        let conn_time = chrono::NaiveDateTime::parse_and_remainder(
+        let (conn_time, tz) = chrono::NaiveDateTime::parse_and_remainder(
             params
                 .next()
                 .ok_or_else(|| {
                     anyhow::Error::msg("Missing connection time in IBKR handshake response")
-                })?
-                .trim_end_matches(|c: char| !c.is_numeric()),
-            "%Y%m%d %X",
+                })?,
+            "%Y%m%d %T",
         )
-        .with_context(|| "Failed to parse connection time")?
-        .0;
+        .with_context(|| "Failed to parse connection time")?;
+        let conn_time = conn_time.and_local_timezone(tz.trim().parse::<chrono_tz::Tz>().map_err(|e| anyhow::anyhow!("Failed to parse timezone in connection time: {}", e.as_str()))?).single().ok_or(anyhow::anyhow!("Failed to find unique timezone in connection time."))?.to_utc();
 
         let (client_tx, wrapper_rx) =
             mpsc::channel::<ToWrapper>(constants::TO_WRAPPER_CHANNEL_SIZE);
@@ -1136,7 +1135,7 @@ pub struct Client<C: indicators::Status> {
     address: std::net::Ipv4Addr,
     client_id: i64,
     server_version: u32,
-    conn_time: chrono::NaiveDateTime,
+    conn_time: chrono::DateTime<chrono::Utc>,
     writer: Writer,
     status: C,
 }
@@ -1185,7 +1184,7 @@ impl<S: indicators::Status> Client<S> {
 
     #[inline]
     /// Return the time at which the client successfully connected.
-    pub const fn get_conn_time(&self) -> chrono::NaiveDateTime {
+    pub const fn get_conn_time(&self) -> chrono::DateTime<chrono::Utc> {
         self.conn_time
     }
 
