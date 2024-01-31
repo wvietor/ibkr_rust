@@ -1319,22 +1319,25 @@ impl Client<indicators::Inactive> {
     /// # Arguments
     /// * `init` - A [`LocalInitializer`], which defines how incoming data from the IBKR trading systems
     /// should be handled.
+    /// * `disconnect_token` - If provided, the client will disconnect when this token is cancelled.
     ///
     /// # Returns
     /// Does not return until the loop is terminated from within a [`Local`] wrapper method using the [`CancelToken`]
-    /// provided to the [`LocalInitializer`] in the [`LocalInitializer::build`] method.
+    /// provided to the [`LocalInitializer`] in the [`LocalInitializer::build`] method or the `disconnect_token` passed
+    /// to this method.
     ///
     /// # Errors
     /// Returns any error that occurs in the loop initialization or in the disconnection process.
     pub async fn local<I: LocalInitializer>(
         self,
         init: I,
-        disconnect_token: CancelToken,
+        disconnect_token: Option<CancelToken>
     ) -> Result<Builder, std::io::Error> {
         let (mut client, tx, rx, queue) = self.into_active().await;
         let temp = CancelToken::new();
         let con_fut = spawn_temp_contract_thread(temp.clone(), queue, tx, rx);
 
+        let disconnect_token = disconnect_token.unwrap_or_default();
         let mut wrapper = LocalInitializer::build(init, &mut client, disconnect_token.clone()).await;
         temp.cancel();
         drop(temp);

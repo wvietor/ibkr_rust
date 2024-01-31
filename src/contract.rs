@@ -65,7 +65,7 @@ pub enum Contract {
 /// # #[tokio::main]
 /// # async fn main() -> Result<()> {
 /// // Set up a client
-/// let mut client = Builder::from_config_file(Paper, Gateway, None)?.connect(31).await?.remote(DefaultWrapper);
+/// let mut client = Builder::from_config_file(Paper, Gateway, None)?.connect(31).await?.remote_unlinked(DefaultWrapper).await;
 ///
 /// // Create a couple of contracts
 /// let apple_inc = contract::new::<Stock>(&mut client, ContractId(242506861)).await?;
