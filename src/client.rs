@@ -1351,6 +1351,8 @@ impl Client<indicators::Inactive> {
                 () = async {
                     if let Some(fields) = queue.pop() {
                         decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
+                    } else {
+                        tokio::task::yield_now().await;
                     }
                 } => (),
             }
@@ -1391,6 +1393,8 @@ impl Client<indicators::Inactive> {
                     () = async {
                         if let Some(fields) = queue.pop() {
                             decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
+                        } else {
+                            tokio::task::yield_now().await;
                         }
                     } => (),
                 }
@@ -1421,9 +1425,11 @@ impl Client<indicators::Inactive> {
                 tokio::select! {
                     () = c_loop_disconnect.cancelled() => {println!("Client loop: disconnecting"); break},
                     () = async {
-                            if let Some(fields) = queue.pop() {
-                                decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
-                            }
+                        if let Some(fields) = queue.pop() {
+                            decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
+                        } else {
+                            tokio::task::yield_now().await;
+                        }
                     } => (),
                 }
             }
