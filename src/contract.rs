@@ -182,7 +182,7 @@ pub async fn new<S: Security>(
         Contract::SecFuture(fut) => fut.try_into().map_err(|_| ()),
         Contract::SecOption(opt) => opt.try_into().map_err(|_| ()),
         Contract::Commodity(cmdty) => cmdty.try_into().map_err(|_| ()),
-    }.map_err(|_| anyhow::anyhow!("Failed to create contract from {:?}: ", contract_id))
+    }.map_err(|()| anyhow::anyhow!("Failed to create contract from {:?}: ", contract_id))
 }
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]

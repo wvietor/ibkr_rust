@@ -266,12 +266,14 @@ type IntoActive = (
     mpsc::Sender<ToClient>,
     mpsc::Receiver<ToWrapper>,
     Arc<SegQueue<Vec<String>>>,
+    std::collections::VecDeque<Vec<String>>,
 );
 
 type LoopParams = (
     Arc<SegQueue<Vec<String>>>,
     mpsc::Sender<ToClient>,
     mpsc::Receiver<ToWrapper>,
+    std::collections::VecDeque<Vec<String>>,
 );
 
 #[inline]
@@ -1215,18 +1217,19 @@ fn spawn_reader_thread(
 fn spawn_temp_contract_thread(
     cancel_token: CancelToken,
     queue: Arc<SegQueue<Vec<String>>>,
+    mut backlog: std::collections::VecDeque<Vec<String>>,
     mut tx: mpsc::Sender<ToClient>,
     mut rx: mpsc::Receiver<ToWrapper>,
 ) -> JoinHandle<LoopParams> {
     tokio::spawn(async move {
         loop {
             tokio::select! {
-                () = cancel_token.cancelled() => { break (queue, tx, rx); },
+                () = cancel_token.cancelled() => { break (queue, tx, rx, backlog); },
                 () = async {
                     let _ = if let Some(fields) = queue.pop() {
                         match fields.first().and_then(|t| t.parse().ok()) {
                             Some(In::ContractData) => decode::decode_contract_no_wrapper(&mut fields.into_iter(), &mut tx, &mut rx).await.with_context(|| "contract data msg"),
-                            Some(_) => { queue.push(fields); Ok(()) },
+                            Some(_) => { backlog.push_back(fields); Ok(()) },
                             None => Ok(()),
                         }
                     } else { Ok(()) };
@@ -1255,6 +1258,7 @@ impl Client<indicators::Inactive> {
     async fn into_active(self) -> IntoActive {
         let (disconnect, queue, r_thread) = spawn_reader_thread(self.status.reader);
 
+        let mut backlog = std::collections::VecDeque::new();
         let (mut managed_accounts, mut valid_id) = (None, None);
         while managed_accounts.is_none() || valid_id.is_none() {
             if let Some(fields) = queue.pop() {
@@ -1278,7 +1282,7 @@ impl Client<indicators::Inactive> {
                                     .ok()
                             });
                     }
-                    Some(_) => queue.push(fields),
+                    Some(_) => backlog.push_back(fields),
                     None => (),
                 }
             }
@@ -1310,6 +1314,7 @@ impl Client<indicators::Inactive> {
             self.status.wrapper_tx,
             self.status.wrapper_rx,
             queue,
+            backlog
         )
     }
 
@@ -1332,15 +1337,19 @@ impl Client<indicators::Inactive> {
         init: I,
         disconnect_token: Option<CancelToken>
     ) -> Result<Builder, std::io::Error> {
-        let (mut client, tx, rx, queue) = self.into_active().await;
+        let (mut client, tx, rx, queue, backlog) = self.into_active().await;
         let temp = CancelToken::new();
-        let con_fut = spawn_temp_contract_thread(temp.clone(), queue, tx, rx);
+        let con_fut = spawn_temp_contract_thread(temp.clone(), queue, backlog, tx, rx);
 
         let disconnect_token = disconnect_token.unwrap_or_default();
         let mut wrapper = LocalInitializer::build(init, &mut client, disconnect_token.clone()).await;
         temp.cancel();
         drop(temp);
-        let (queue, mut tx, mut rx) = con_fut.await?;
+        let (queue, mut tx, mut rx, mut backlog) = con_fut.await?;
+        while let Some(fields) = backlog.pop_front() {
+            decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
+        }
+        drop(backlog);
         loop {
             tokio::select! {
                 () = disconnect_token.cancelled() => {
@@ -1369,10 +1378,10 @@ impl Client<indicators::Inactive> {
     /// # Returns
     /// A [`CancelToken`] that can be used to terminate the main loop and disconnect the client.
     pub async fn remote<I: RemoteInitializer + 'static>(self, init: I) -> CancelToken {
-        let (mut client, tx, rx, queue) = self.into_active().await;
+        let (mut client, tx, rx, queue, backlog) = self.into_active().await;
 
         let temp = CancelToken::new();
-        let con_fut = spawn_temp_contract_thread(temp.clone(), queue, tx, rx);
+        let con_fut = spawn_temp_contract_thread(temp.clone(), queue, backlog, tx, rx);
 
         let break_loop = CancelToken::new();
         let break_loop_inner = break_loop.clone();
@@ -1382,7 +1391,11 @@ impl Client<indicators::Inactive> {
                 RemoteInitializer::build(init, &mut client, break_loop_inner.clone()).await;
             temp.cancel();
             drop(temp);
-            let (queue, mut tx, mut rx) = con_fut.await?;
+            let (queue, mut tx, mut rx, mut backlog) = con_fut.await?;
+            while let Some(fields) = backlog.pop_front() {
+                decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
+            }
+            drop(backlog);
             loop {
                 tokio::select! {
                     () = break_loop_inner.cancelled() => {
@@ -1416,9 +1429,13 @@ impl Client<indicators::Inactive> {
         self,
         mut wrapper: W,
     ) -> Client<indicators::Active> {
-        let (client, mut tx, mut rx, queue) = self.into_active().await;
+        let (client, mut tx, mut rx, queue, mut backlog) = self.into_active().await;
         let c_loop_disconnect = client.status.disconnect.clone();
 
+        while let Some(fields) = backlog.pop_front() {
+            decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
+        }
+        drop(backlog);
         tokio::spawn(async move {
             loop {
                 tokio::select! {
