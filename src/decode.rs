@@ -7,7 +7,7 @@ use crate::contract::{
     Commodity, Contract, ContractId, Crypto, Forex, Index, SecFuture, SecOption, SecOptionInner,
     SecurityId, Stock,
 };
-use crate::payload::{market_depth::{CompleteEntry, Entry, Operation}, Bar, BarCore, ExchangeId, HistogramEntry, MarketDataClass, Pnl, Position, PositionSummary, Tick, OrderStatus, Fill, Trade};
+use crate::payload::{market_depth::{CompleteEntry, Entry, Operation}, Bar, BarCore, ExchangeId, HistogramEntry, MarketDataClass, Pnl, Position, PositionSummary, Tick, OrderStatus, Fill, Trade, BidAsk, Last, Midpoint};
 use crate::tick::{
     Accessibility, AuctionData, CalculationResult, Class, Dividends, EtfNav, ExtremeValue, Ipo,
     MarkPrice, OpenInterest, Period, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
@@ -2069,11 +2069,11 @@ pub trait Local: wrapper::Local {
                 .chunks_exact(4)
             {
                 if let [time, _, price, size] = chunk {
-                    ticks.push(Tick::Midpoint {
+                    ticks.push(Tick::Midpoint(Midpoint {
                         datetime: NaiveDateTime::from_timestamp_opt(time.parse()?, 0)
                             .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
                         price: price.parse()?,
-                    });
+                    }));
                 }
             }
             wrapper.historical_ticks(req_id, ticks).await;
@@ -2099,14 +2099,14 @@ pub trait Local: wrapper::Local {
                 .chunks_exact(6)
             {
                 if let [time, _, bid_price, ask_price, bid_size, ask_size] = chunk {
-                    ticks.push(Tick::BidAsk {
+                    ticks.push(Tick::BidAsk(BidAsk {
                         datetime: NaiveDateTime::from_timestamp_opt(time.parse()?, 0)
                             .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
                         bid_price: bid_price.parse()?,
                         ask_price: ask_price.parse()?,
                         bid_size: bid_size.parse()?,
                         ask_size: ask_size.parse()?,
-                    });
+                    }));
                 }
             }
             wrapper.historical_ticks(req_id, ticks).await;
@@ -2132,13 +2132,13 @@ pub trait Local: wrapper::Local {
                 .chunks_exact(6)
             {
                 if let [time, _, price, size, exchange, _] = chunk {
-                    ticks.push(Tick::Last {
+                    ticks.push(Tick::Last(Last {
                         datetime: NaiveDateTime::from_timestamp_opt(time.parse()?, 0)
                             .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
                         price: price.parse()?,
                         size: size.parse()?,
                         exchange: exchange.parse()?,
-                    });
+                    }));
                 }
             }
             wrapper.historical_ticks(req_id, ticks).await;
@@ -2161,12 +2161,12 @@ pub trait Local: wrapper::Local {
             let datetime = NaiveDateTime::from_timestamp_opt(timestamp, 0)
                 .ok_or_else(|| anyhow::Error::msg("Invalid timestamp"))?;
             let tick = match tick_type {
-                1 | 2 => Tick::Last {
+                1 | 2 => Tick::Last(Last {
                     datetime,
                     price: nth(fields, 0)?.parse()?,
                     size: nth(fields, 0)?.parse()?,
                     exchange: nth(fields, 1)?.parse()?,
-                },
+                }),
                 3 => {
                     decode_fields!(
                         fields =>
@@ -2175,18 +2175,18 @@ pub trait Local: wrapper::Local {
                             bid_size @ 0: f64,
                             ask_size @ 0: f64
                     );
-                    Tick::BidAsk {
+                    Tick::BidAsk(BidAsk {
                         datetime,
                         bid_price,
                         ask_price,
                         bid_size,
                         ask_size,
-                    }
+                    })
                 }
-                4 => Tick::Midpoint {
+                4 => Tick::Midpoint(Midpoint {
                     datetime,
                     price: nth(fields, 0)?.parse()?,
-                },
+                }),
                 _ => Err(anyhow::Error::msg("Unexpected tick type"))?,
             };
             wrapper.live_tick(req_id, tick).await;

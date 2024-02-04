@@ -268,54 +268,66 @@ impl Serialize for Trade {
 /// A historical or live tick.
 pub enum Tick {
     /// A tick representing a midpoint price.
-    Midpoint {
-        /// The timestamp of the tick.
-        #[serde(
-            serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-        )]
-        #[serde(
-            deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-        )]
-        datetime: NaiveDateTime,
-        /// The midpoint price.
-        price: f64,
-    },
+    Midpoint(Midpoint),
     /// A tick representing the current best bid / ask prices.
-    BidAsk {
-        /// The timestamp of the tick.
-        #[serde(
-            serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-        )]
-        #[serde(
-            deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-        )]
-        datetime: NaiveDateTime,
-        /// The bid price.
-        bid_price: f64,
-        /// The ask price.
-        ask_price: f64,
-        /// The bid size.
-        bid_size: f64,
-        /// The ask size.
-        ask_size: f64,
-    },
+    BidAsk(BidAsk),
     /// A tick representing the last trade.
-    Last {
-        /// The timestamp of the tick.
-        #[serde(
-            serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-        )]
-        #[serde(
-            deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-        )]
-        datetime: NaiveDateTime,
-        /// The last traded price.
-        price: f64,
-        /// The last traded size.
-        size: f64,
-        /// The last traded exchange.
-        exchange: crate::exchange::Primary,
-    },
+    Last(Last),
+}
+
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+/// A tick representing the midpoint.
+pub struct Midpoint {
+    /// The timestamp of the tick.
+    #[serde(
+    serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
+    )]
+    #[serde(
+    deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
+    )]
+    pub datetime: NaiveDateTime,
+    /// The midpoint price.
+    pub price: f64,
+}
+
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+/// A tick representing a bid/ask.
+pub struct BidAsk {
+    /// The timestamp of the tick.
+    #[serde(
+    serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
+    )]
+    #[serde(
+    deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
+    )]
+    pub datetime: NaiveDateTime,
+    /// The bid price.
+    pub bid_price: f64,
+    /// The ask price.
+    pub ask_price: f64,
+    /// The bid size.
+    pub bid_size: f64,
+    /// The ask size.
+    pub ask_size: f64,
+}
+
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+/// A tick representing the last traded price.
+pub struct Last {
+    /// The timestamp of the tick.
+    #[serde(
+    serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
+    )]
+    #[serde(
+    deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
+    )]
+    pub datetime: NaiveDateTime,
+    /// The last traded price.
+    pub price: f64,
+    /// The last traded size.
+    pub size: f64,
+    /// The last traded exchange.
+    pub exchange: crate::exchange::Primary,
 }
 
 #[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]

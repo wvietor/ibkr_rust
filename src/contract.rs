@@ -39,6 +39,35 @@ pub enum Contract {
     //StructuredProduct(StructuredProduct),
 }
 
+macro_rules! contract_impl {
+    ($sec_type: ty, $pat: pat_param => $exp: expr, $func_name_ref: ident, $func_name: ident) => {
+        #[allow(missing_docs, clippy::missing_errors_doc)]
+        pub fn $func_name_ref(&self) -> anyhow::Result<&$sec_type> {
+            match self {
+                $pat => $exp,
+                _ => Err(anyhow::anyhow!("Expected {}; found other contract type.", stringify!($func_name))),
+            }
+        }
+        #[allow(missing_docs, clippy::missing_errors_doc)]
+        pub fn $func_name(self) -> anyhow::Result<$sec_type> {
+            match self {
+                $pat => $exp,
+                _ => Err(anyhow::anyhow!("Expected {}; found other contract type.", stringify!($func_name))),
+            }
+        }
+    }
+}
+
+impl Contract {
+    contract_impl!(Forex, Self::Forex(t) => Ok(t), forex_ref, forex);
+    contract_impl!(Crypto, Self::Crypto(t) => Ok(t), crypto_ref, crypto);
+    contract_impl!(Stock, Self::Stock(t) => Ok(t), stock_ref, stock);
+    contract_impl!(Index, Self::Index(t) => Ok(t), index_ref, index);
+    contract_impl!(SecFuture, Self::SecFuture(t) => Ok(t), secfuture_ref, secfuture);
+    contract_impl!(SecOption, Self::SecOption(t) => Ok(t), secoption_ref, secoption);
+    contract_impl!(Commodity, Self::Commodity(t) => Ok(t), commodity_ref, commodity);
+}
+
 #[allow(clippy::module_name_repetitions)]
 #[macro_export]
 /// Call a given function on a [`Contract`] by unwrapping it and applying the function to the underlying [`Security`].

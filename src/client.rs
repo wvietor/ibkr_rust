@@ -1,3 +1,4 @@
+use std::fmt::Formatter;
 use anyhow::Context;
 use crossbeam::queue::SegQueue;
 use serde::{Deserialize, Serialize};
@@ -98,6 +99,15 @@ impl Default for Mode {
     }
 }
 
+impl std::fmt::Display for Mode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Paper => write!(f, "Paper"),
+            Self::Live => write!(f, "Live"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// Represents the two platforms that facilitate trading with IBKR's systems. The two hosts are
 /// indistinguishable from the perspective of an API application.
@@ -107,6 +117,15 @@ pub enum Host {
     /// A leaner GUI that requires less performance overhead but has no monitoring of sophisticated
     /// graphical capabilities.
     Gateway,
+}
+
+impl std::fmt::Display for Host {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Gateway => write!(f, "IB Gateway"),
+            Self::Tws => write!(f, "Trader Workstation (TWS)"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
