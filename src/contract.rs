@@ -70,7 +70,7 @@ impl Contract {
 
 #[macro_export]
 /// Perform the same action for every [`Contract`] variant.
-macro_rules! security_match {
+macro_rules! match_security {
     ($self: expr; $($($pat: pat_param)|* => $meth_call: expr),*) => {
         match $self {
             $($($pat => $meth_call),*),*
@@ -79,8 +79,9 @@ macro_rules! security_match {
 }
 
 impl Serialize for Contract {
+    #[inline]
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-        security_match!(self;
+        match_security!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -93,8 +94,9 @@ impl Serialize for Contract {
 }
 
 impl Security for Contract {
+    #[inline]
     fn get_contract_id(&self) -> ContractId {
-        security_match!(self;
+        match_security!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -105,8 +107,9 @@ impl Security for Contract {
         )
     }
 
+    #[inline]
     fn get_symbol(&self) -> &str {
-        security_match!(self;
+        match_security!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -117,8 +120,9 @@ impl Security for Contract {
         )
     }
 
+    #[inline]
     fn get_security_type(&self) -> &'static str {
-        security_match!(self;
+        match_security!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -129,8 +133,9 @@ impl Security for Contract {
         )
     }
 
+    #[inline]
     fn get_expiration_date(&self) -> Option<NaiveDate> {
-        security_match!(self;
+        match_security!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -141,8 +146,9 @@ impl Security for Contract {
         )
     }
 
+    #[inline]
     fn get_strike(&self) -> Option<f64> {
-        security_match!(self;
+        match_security!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -153,8 +159,9 @@ impl Security for Contract {
         )
     }
 
+    #[inline]
     fn get_right(&self) -> Option<&'static str> {
-        security_match!(self;
+        match_security!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -165,8 +172,9 @@ impl Security for Contract {
         )
     }
 
+    #[inline]
     fn get_multiplier(&self) -> Option<u32> {
-        security_match!(self;
+        match_security!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -177,8 +185,9 @@ impl Security for Contract {
         )
     }
 
+    #[inline]
     fn get_exchange(&self) -> Routing {
-        security_match!(self;
+        match_security!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -189,8 +198,9 @@ impl Security for Contract {
         )
     }
 
+    #[inline]
     fn get_primary_exchange(&self) -> Option<Primary> {
-        security_match!(self;
+        match_security!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -201,8 +211,9 @@ impl Security for Contract {
         )
     }
 
+    #[inline]
     fn get_currency(&self) -> Currency {
-        security_match!(self;
+        match_security!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -213,8 +224,9 @@ impl Security for Contract {
         )
     }
 
+    #[inline]
     fn get_local_symbol(&self) -> &str {
-        security_match!(self;
+        match_security!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -225,8 +237,9 @@ impl Security for Contract {
         )
     }
 
+    #[inline]
     fn get_trading_class(&self) -> Option<&str> {
-        security_match!(self;
+        match_security!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
