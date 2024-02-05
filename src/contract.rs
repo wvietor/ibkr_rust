@@ -71,9 +71,9 @@ impl Contract {
 #[macro_export]
 /// Perform the same action for every [`Contract`] variant.
 macro_rules! security_match {
-    ($self: expr; $($pat: pat_param)|* => $meth_call: expr) => {
+    ($self: expr; $($($pat: pat_param)|* => $meth_call: expr),*) => {
         match $self {
-            $($pat => $meth_call),*
+            $($($pat => $meth_call),*),*
         }
     };
 }
