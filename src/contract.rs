@@ -68,118 +68,174 @@ impl Contract {
     contract_impl!(Commodity, Self::Commodity(t) => Ok(t), commodity_ref, commodity);
 }
 
-#[allow(clippy::module_name_repetitions)]
 #[macro_export]
-/// Call a given function on a [`Contract`] by unwrapping it and applying the function to the underlying [`Security`].
-/// It is useful because it allows for a degree of polymorphism across all the possible [`Contract`] structs.
-///
-/// For example you might have a [`Vec<Contract>`]. With this macro, you can can call a function on every
-/// Contract without having to explicitly match the specific [`Security`].
-///
-/// Note that the return type of the function to call MUST be the same for all variants of [`Contract`].
-///
-/// # Matches
-/// * `con` - An expression that evaluates to a [`Contract`].
-/// * `func` - A token tree containing the name of the function to call. If func is async, then `async` must be passed before `func`.
-/// Doing so will await the [`std::future::Future`] returned by function.
-/// * `pre_args` - A (potentially empty) comma-delimited set of positional arguments that are passed to the function before `con`.
-/// * `post_args` (optional) - A comma-delimited set of positional arguments that are passed to the function after `con`.
-///
-/// # Examples
-/// ```
-/// # use ibapi::{contract_dispatch, contract::{self, Contract, Stock, Forex, ContractId}, client::{Builder, Client, Mode::Paper, Host::Gateway}, market_data::live_data::{self, RefreshType}};
-/// # use anyhow::Result;
-/// # struct DefaultWrapper;
-/// # impl ibapi::wrapper::Remote for DefaultWrapper {}
-/// # #[tokio::main]
-/// # async fn main() -> Result<()> {
-/// // Set up a client
-/// let mut client = Builder::from_config_file(Paper, Gateway, None)?.connect(31).await?.remote_unlinked(DefaultWrapper).await;
-///
-/// // Create a couple of contracts
-/// let apple_inc = contract::new::<Stock>(&mut client, ContractId(242506861)).await?;
-/// let gbp_usd = contract::new::<Forex>(&mut client, ContractId(12087797)).await?;
-/// // Clone them so we can use them later
-/// let apple_inc_2 = apple_inc.clone();
-/// let gbp_usd_2 = gbp_usd.clone();
-/// let contracts = vec![apple_inc.into(), gbp_usd.into()];
-///
-/// // Let's make a market data request for each contract
-/// let mut ids_macro = Vec::with_capacity(2);
-/// for con in contracts.iter() {
-///     ids_macro.push(
-///         contract_dispatch! {
-///             con =>
-///                 async (Client::req_market_data)
-///                 (&mut client)
-///                 (vec![live_data::data_types::Empty], RefreshType::Snapshot, false)
-///         }?
-///     );
-///  }
-///
-/// // Does the exact same thing as the for loop
-/// let ids_explicit = vec![
-///     client.req_market_data::<Stock, live_data::data_types::Empty>(&apple_inc_2, vec![live_data::data_types::Empty], RefreshType::Snapshot, false).await?,
-///     client.req_market_data::<Forex, live_data::data_types::Empty>(&gbp_usd_2, vec![live_data::data_types::Empty], RefreshType::Snapshot, false).await?
-/// ];
-///
-/// # tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-/// # client.disconnect().await?;
-/// assert_eq!(ids_explicit, ids_macro.iter().map(|id| id + 2).collect::<Vec<i64>>());
-/// # Ok(())
-/// # }
-/// ```
-macro_rules! contract_dispatch {
-    {$con: expr => async $func: tt ($($($pre_args: expr),+)?) $(($($post_args: expr),+))?} => {
-        match $con {
-            Contract::Forex(fx) => {
-                $func($($($pre_args),+)?, fx, $($($post_args),+)?).await
-            },
-            Contract::Crypto(crypto) => {
-                $func($($($pre_args),+)?, crypto, $($($post_args),+)?).await
-            },
-            Contract::Stock(stk) => {
-                $func($($($pre_args),+)?, stk, $($($post_args),+)?).await
-            },
-            Contract::Index(ind) => {
-                $func($($($pre_args),+)?, ind, $($($post_args),+)?).await
-            },
-            Contract::SecFuture(fut) => {
-                $func($($($pre_args),+)?, fut, $($($post_args),+)?).await
-            },
-            Contract::SecOption(opt) => {
-                $func($($($pre_args),+)?, opt, $($($post_args),+)?).await
-            },
-            Contract::Commodity(cmdty) => {
-                $func($($($pre_args),+)?, cmdty, $($($post_args),+)?).await
-            },
+/// Perform the same action for every [`Contract`] variant.
+macro_rules! security_match {
+    ($self: expr; $($pat: pat_param)|* => $meth_call: expr) => {
+        match $self {
+            $($pat => $meth_call),*
         }
     };
-    {$con: expr => $func: tt ($($($pre_args: expr),+)?) $(($($post_args: expr),+))?} => {
-        match $con {
-            Contract::Forex(fx) => {
-                $func($($($pre_args),+)?, fx, $($($post_args),+)?)
-            },
-            Contract::Crypto(crypto) => {
-                $func($($($pre_args),+)?, crypto, $($($post_args),+)?)
-            },
-            Contract::Stock(stk) => {
-                $func($($($pre_args),+)?, stk, $($($post_args),+)?)
-            },
-            Contract::Index(ind) => {
-                $func($($($pre_args),+)?, ind, $($($post_args),+)?)
-            },
-            Contract::SecFuture(fut) => {
-                $func($($($pre_args),+)?, fut, $($($post_args),+)?)
-            },
-            Contract::SecOption(opt) => {
-                $func($($($pre_args),+)?, opt, $($($post_args),+)?)
-            },
-            Contract::Commodity(cmdty) => {
-                $func($($($pre_args),+)?, cmdty, $($($post_args),+)?)
-            },
-        }
-    };
+}
+
+impl Serialize for Contract {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        security_match!(self;
+            Self::Forex(t)
+            | Self::Crypto(t)
+            | Self::Stock(t)
+            | Self::Index(t)
+            | Self::SecFuture(t)
+            | Self::SecOption(t)
+            | Self::Commodity(t) => t.serialize(serializer)
+        )
+    }
+}
+
+impl Security for Contract {
+    fn get_contract_id(&self) -> ContractId {
+        security_match!(self;
+            Self::Forex(t)
+            | Self::Crypto(t)
+            | Self::Stock(t)
+            | Self::Index(t)
+            | Self::SecFuture(t)
+            | Self::SecOption(t)
+            | Self::Commodity(t) => t.get_contract_id()
+        )
+    }
+
+    fn get_symbol(&self) -> &str {
+        security_match!(self;
+            Self::Forex(t)
+            | Self::Crypto(t)
+            | Self::Stock(t)
+            | Self::Index(t)
+            | Self::SecFuture(t)
+            | Self::SecOption(t)
+            | Self::Commodity(t) => t.get_symbol()
+        )
+    }
+
+    fn get_security_type(&self) -> &'static str {
+        security_match!(self;
+            Self::Forex(t)
+            | Self::Crypto(t)
+            | Self::Stock(t)
+            | Self::Index(t)
+            | Self::SecFuture(t)
+            | Self::SecOption(t)
+            | Self::Commodity(t) => t.get_security_type()
+        )
+    }
+
+    fn get_expiration_date(&self) -> Option<NaiveDate> {
+        security_match!(self;
+            Self::Forex(t)
+            | Self::Crypto(t)
+            | Self::Stock(t)
+            | Self::Index(t)
+            | Self::SecFuture(t)
+            | Self::SecOption(t)
+            | Self::Commodity(t) => t.get_expiration_date()
+        )
+    }
+
+    fn get_strike(&self) -> Option<f64> {
+        security_match!(self;
+            Self::Forex(t)
+            | Self::Crypto(t)
+            | Self::Stock(t)
+            | Self::Index(t)
+            | Self::SecFuture(t)
+            | Self::SecOption(t)
+            | Self::Commodity(t) => t.get_strike()
+        )
+    }
+
+    fn get_right(&self) -> Option<&'static str> {
+        security_match!(self;
+            Self::Forex(t)
+            | Self::Crypto(t)
+            | Self::Stock(t)
+            | Self::Index(t)
+            | Self::SecFuture(t)
+            | Self::SecOption(t)
+            | Self::Commodity(t) => t.get_right()
+        )
+    }
+
+    fn get_multiplier(&self) -> Option<u32> {
+        security_match!(self;
+            Self::Forex(t)
+            | Self::Crypto(t)
+            | Self::Stock(t)
+            | Self::Index(t)
+            | Self::SecFuture(t)
+            | Self::SecOption(t)
+            | Self::Commodity(t) => t.get_multiplier()
+        )
+    }
+
+    fn get_exchange(&self) -> Routing {
+        security_match!(self;
+            Self::Forex(t)
+            | Self::Crypto(t)
+            | Self::Stock(t)
+            | Self::Index(t)
+            | Self::SecFuture(t)
+            | Self::SecOption(t)
+            | Self::Commodity(t) => t.get_exchange()
+        )
+    }
+
+    fn get_primary_exchange(&self) -> Option<Primary> {
+        security_match!(self;
+            Self::Forex(t)
+            | Self::Crypto(t)
+            | Self::Stock(t)
+            | Self::Index(t)
+            | Self::SecFuture(t)
+            | Self::SecOption(t)
+            | Self::Commodity(t) => t.get_primary_exchange()
+        )
+    }
+
+    fn get_currency(&self) -> Currency {
+        security_match!(self;
+            Self::Forex(t)
+            | Self::Crypto(t)
+            | Self::Stock(t)
+            | Self::Index(t)
+            | Self::SecFuture(t)
+            | Self::SecOption(t)
+            | Self::Commodity(t) => t.get_currency()
+        )
+    }
+
+    fn get_local_symbol(&self) -> &str {
+        security_match!(self;
+            Self::Forex(t)
+            | Self::Crypto(t)
+            | Self::Stock(t)
+            | Self::Index(t)
+            | Self::SecFuture(t)
+            | Self::SecOption(t)
+            | Self::Commodity(t) => t.get_local_symbol()
+        )
+    }
+
+    fn get_trading_class(&self) -> Option<&str> {
+        security_match!(self;
+            Self::Forex(t)
+            | Self::Crypto(t)
+            | Self::Stock(t)
+            | Self::Index(t)
+            | Self::SecFuture(t)
+            | Self::SecOption(t)
+            | Self::Commodity(t) => t.get_trading_class()
+        )
+    }
 }
 
 /// Create a new contract based on the unique IBKR contract ID. These contract IDs can be found
@@ -292,6 +348,8 @@ mod indicators {
         + Into<Contract>
     {
     }
+
+    impl Valid for Contract {}
 }
 
 #[doc(alias = "Contract")]

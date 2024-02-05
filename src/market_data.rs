@@ -334,9 +334,9 @@ pub mod historical_ticks {
     /// be returned.
     pub enum TimeStamp {
         /// A starting date: Return some number ticks beginning at the provided date and time.
-        StartDateTime(chrono::NaiveDateTime),
+        StartDateTime(chrono::DateTime<chrono::Utc>),
         /// An ending date: Return some number ticks ending at the provided date and time.
-        EndDateTime(chrono::NaiveDateTime),
+        EndDateTime(chrono::DateTime<chrono::Utc>),
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
