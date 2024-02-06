@@ -1,6 +1,7 @@
 mod security;
 mod debug_trait;
 mod send_trait;
+mod variant_value;
 
 use proc_macro::TokenStream;
 use quote::ToTokens;
@@ -23,4 +24,11 @@ pub fn debug_trait(_attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn make_send(attr: TokenStream, item: TokenStream) -> TokenStream {
     send_trait::impl_make_send(attr, item.clone()).into()
+}
+
+#[proc_macro_attribute]
+pub fn typed_variants(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let mut ast = syn::parse(item).unwrap();
+
+    variant_value::impl_typed_variants(&mut ast).into()
 }

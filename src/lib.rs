@@ -70,3 +70,13 @@ pub mod tick;
 /// Contains the definition of the [`wrapper::Local`] and [`wrapper::Remote`] traits. Implementing these traits for a
 /// type allows users to customize callback behavior.
 pub mod wrapper;
+
+#[macro_export]
+/// Match across typed variant values
+macro_rules! match_typed_variants {
+    ($self: expr; $($($pat: pat_param)|* => $meth_call: expr),*) => {
+        match $self {
+            $($($pat => $meth_call),*),*
+        }
+    };
+}

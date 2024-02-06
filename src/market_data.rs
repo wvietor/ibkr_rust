@@ -286,9 +286,26 @@ pub mod updating_historical_bar {
 
     /// Contains the potential data types for a [`crate::client::Client::req_updating_historical_bar`] request.
     pub mod data_types {
+        use ibapi_macros::typed_variants;
+        use serde::{Deserialize, Serialize};
         use crate::contract::{
             Commodity, Crypto, Forex, Index, SecFuture, SecOption, Security, Stock,
         };
+
+        #[typed_variants]
+        #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+        #[serde(rename_all="UPPERCASE")]
+        /// The possible data types for a historical bar request.
+        pub enum DataTypes {
+            /// The actual traded prices during the bar interval.
+            Trades2,
+            /// The posted midpoint price during the bar interval.
+            Midpoint2,
+            /// The posted bid price during the bar interval.
+            Bid2,
+            /// The posted ask price during the bar interval.
+            Ask2,
+        }
 
         make_variants!(
             /// The actual traded prices during the bar interval.

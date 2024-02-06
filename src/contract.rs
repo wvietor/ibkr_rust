@@ -4,6 +4,7 @@ use std::{num::ParseIntError, str::FromStr};
 use crate::{
     currency::Currency,
     exchange::{Primary, Routing},
+    match_typed_variants
 };
 use ibapi_macros::Security;
 use serde::{Deserialize, Serialize, Serializer};
@@ -68,20 +69,10 @@ impl Contract {
     contract_impl!(Commodity, Self::Commodity(t) => Ok(t), commodity_ref, commodity);
 }
 
-#[macro_export]
-/// Perform the same action for every [`Contract`] variant.
-macro_rules! match_security {
-    ($self: expr; $($($pat: pat_param)|* => $meth_call: expr),*) => {
-        match $self {
-            $($($pat => $meth_call),*),*
-        }
-    };
-}
-
 impl Serialize for Contract {
     #[inline]
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-        match_security!(self;
+        match_typed_variants!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -96,7 +87,7 @@ impl Serialize for Contract {
 impl Security for Contract {
     #[inline]
     fn get_contract_id(&self) -> ContractId {
-        match_security!(self;
+        match_typed_variants!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -109,7 +100,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_symbol(&self) -> &str {
-        match_security!(self;
+        match_typed_variants!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -122,7 +113,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_security_type(&self) -> &'static str {
-        match_security!(self;
+        match_typed_variants!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -135,7 +126,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_expiration_date(&self) -> Option<NaiveDate> {
-        match_security!(self;
+        match_typed_variants!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -148,7 +139,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_strike(&self) -> Option<f64> {
-        match_security!(self;
+        match_typed_variants!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -161,7 +152,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_right(&self) -> Option<&'static str> {
-        match_security!(self;
+        match_typed_variants!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -174,7 +165,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_multiplier(&self) -> Option<u32> {
-        match_security!(self;
+        match_typed_variants!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -187,7 +178,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_exchange(&self) -> Routing {
-        match_security!(self;
+        match_typed_variants!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -200,7 +191,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_primary_exchange(&self) -> Option<Primary> {
-        match_security!(self;
+        match_typed_variants!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -213,7 +204,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_currency(&self) -> Currency {
-        match_security!(self;
+        match_typed_variants!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -226,7 +217,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_local_symbol(&self) -> &str {
-        match_security!(self;
+        match_typed_variants!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -239,7 +230,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_trading_class(&self) -> Option<&str> {
-        match_security!(self;
+        match_typed_variants!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
