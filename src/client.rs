@@ -1778,7 +1778,7 @@ impl Client<indicators::Active> {
     ) -> IdResult
     where
         S: Security,
-        D: historical_bar::data_types::DataType<S>,
+        D: historical_bar::DataType<S>,
     {
         let id = self.get_next_req_id();
 
@@ -1826,7 +1826,7 @@ impl Client<indicators::Active> {
     ) -> IdResult
     where
         S: Security,
-        D: updating_historical_bar::data_types::DataType<S>,
+        D: updating_historical_bar::DataType<S>,
     {
         let id = self.get_next_req_id();
 
@@ -1884,7 +1884,7 @@ impl Client<indicators::Active> {
     ) -> IdResult
     where
         S: Security,
-        D: historical_ticks::data_types::DataType<S>,
+        D: historical_ticks::DataType<S>,
     {
         let id = self.get_next_req_id();
 
@@ -1985,7 +1985,7 @@ impl Client<indicators::Active> {
     ) -> IdResult
     where
         S: Security,
-        D: historical_ticks::data_types::DataType<S>,
+        D: historical_ticks::DataType<S>,
     {
         let id = self.get_next_req_id();
 
@@ -2032,7 +2032,7 @@ impl Client<indicators::Active> {
     ) -> IdResult
     where
         S: Security,
-        D: live_data::data_types::DataType<S>,
+        D: live_data::DataType<S>,
     {
         const VERSION: u8 = 11;
         let id = self.get_next_req_id();
@@ -2103,7 +2103,7 @@ impl Client<indicators::Active> {
     ) -> IdResult
     where
         S: Security,
-        D: live_bar::data_types::DataType<S>,
+        D: live_bar::DataType<S>,
     {
         const VERSION: u8 = 3;
         let id = self.get_next_req_id();
@@ -2162,7 +2162,7 @@ impl Client<indicators::Active> {
     ) -> IdResult
     where
         S: Security,
-        D: live_ticks::data_types::DataType<S>,
+        D: live_ticks::DataType<S>,
     {
         let id = self.get_next_req_id();
 

@@ -1,16 +1,10 @@
-macro_rules! make_variants {
-    ($($( #[doc = $name_doc:expr] )? $name: ident: $repr: literal),*) => {
-        $(
-            #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
-            #[serde(rename(serialize = $repr))]
-            $( #[doc = $name_doc] )?
-            pub struct $name;
-        )*
-
+macro_rules! make_valid {
+    ($($name: ident),*) => {
         pub(crate) mod indicators {
             use serde::Serialize;
 use super::{$($name,)*};
 
+            /// A simple indicator trait to ensure that no foreign types can be implemented as valid data types.
             pub trait Valid: Serialize + Copy + Clone {}
 
             $(
@@ -18,19 +12,9 @@ use super::{$($name,)*};
             )*
         }
 
-        $(
-            impl ToString for $name {
-                #[inline]
-                fn to_string(&self) -> String {
-                    $repr.to_owned()
-                }
-            }
-        )*
-
-
         /// Implemented by all valid data types for a given security. In particular,
         /// if a type `D` implements [`DataType<S>`], then `D` is a valid data type for `S`.
-        pub trait DataType<S: Security>: ToString + Send + Sync + indicators::Valid {}
+        pub trait DataType<S: crate::contract::Security>: Send + Sync + indicators::Valid {}
     };
 }
 
@@ -49,10 +33,11 @@ macro_rules! impl_data_type {
 
 /// Contains types and traits used by [`crate::client::Client::req_historical_bar`].
 pub mod historical_bar {
+    use ibapi_macros::typed_variants;
+    use serde::{Deserialize, Serialize, Serializer};
+    use crate::contract::{Forex, Crypto, Stock, Index, SecFuture, SecOption, Commodity};
 
     // === Type definitions ===
-
-    use serde::{Serialize, Serializer};
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
     /// The last time for which bar data will be returned.
@@ -217,52 +202,64 @@ pub mod historical_bar {
 
     // === Data types ===
 
-    /// Contains the potential data types for a [`crate::client::Client::req_historical_bar`] request.
-    pub mod data_types {
-        use crate::contract::{
-            Commodity, Crypto, Forex, Index, SecFuture, SecOption, Security, Stock,
-        };
+    #[typed_variants]
+    #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "UPPERCASE")]
+    /// The data types for a [`crate::client::Client::req_historical_bar`] request.
+    pub enum DataTypes {
+        #[serde(rename = "TRADES")]
+        /// The actual traded prices during the bar interval.
+        Trades,
+        #[serde(rename = "MIDPOINT")]
+        /// The posted midpoint price during the bar interval.
+        Midpoint,
+        #[serde(rename = "BID")]
+        /// The posted bid price during the bar interval.
+        Bid,
+        #[serde(rename = "ASK")]
+        /// The posted ask price during the bar interval.
+        Ask,
+        #[serde(rename = "BID_ASK")]
+        /// The time averaged bid and ask during the bar interval.
+        BidAsk,
+        #[serde(rename = "HISTORICAL_VOLATILITY")]
+        /// The realized volatility during the bar interval.
+        HistoricalVolatility,
+        #[serde(rename = "OPTION_IMPLIED_VOLATILITY")]
+        /// The options market implied volatility during the bar interval.
+        SecOptionImpliedVolatility,
+    }
 
-        make_variants!(
-            /// The actual traded prices during the bar interval.
-            Trades: "TRADES",
-            /// The posted midpoint price during the bar interval.
-            Midpoint: "MIDPOINT",
-            /// The posted bid price during the bar interval.
-            Bid: "BID",
-            /// The posted ask price during the bar interval.
-            Ask: "ASK",
-            /// The time averaged bid and ask during the bar interval.
-            BidAsk: "BID_ASK",
-            /// The realized volatility during the bar interval.
-            HistoricalVolatility: "HISTORICAL_VOLATILITY",
-            /// The options market implied volatility during the bar interval.
-            SecOptionImpliedVolatility: "OPTION_IMPLIED_VOLATILITY"
-        );
+    make_valid!(Trades, Midpoint, Bid, Ask, BidAsk, HistoricalVolatility, SecOptionImpliedVolatility, DataTypes);
 
-        impl_data_type!(
-            (Trades, Midpoint, Bid, Ask, BidAsk, HistoricalVolatility, SecOptionImpliedVolatility);
+    impl_data_type!(
+            (Trades, Midpoint, Bid, Ask, BidAsk, HistoricalVolatility, SecOptionImpliedVolatility, DataTypes);
             (Stock)
         );
 
-        impl_data_type!(
+    impl_data_type!(
             (Trades, HistoricalVolatility, SecOptionImpliedVolatility);
             (Index)
         );
 
-        impl_data_type!(
+    impl_data_type!(
             (Trades, Midpoint, Bid, Ask, BidAsk);
             (SecOption, SecFuture, Crypto)
         );
-        impl_data_type!(
+
+    impl_data_type!(
             (Midpoint, Bid, Ask, BidAsk);
             (Forex, Commodity)
         );
-    }
 }
 
 /// Contains types and traits used by [`crate::client::Client::req_updating_historical_bar`].
 pub mod updating_historical_bar {
+    use ibapi_macros::typed_variants;
+    use serde::{Deserialize, Serialize};
+    use crate::contract::{
+        Forex, Crypto, Stock, Index, SecFuture, SecOption, Commodity
+    };
     use super::historical_bar;
 
     // === Type definitions ===
@@ -284,65 +281,51 @@ pub mod updating_historical_bar {
 
     // === Data types ===
 
-    /// Contains the potential data types for a [`crate::client::Client::req_updating_historical_bar`] request.
-    pub mod data_types {
-        use ibapi_macros::typed_variants;
-        use serde::{Deserialize, Serialize};
-        use crate::contract::{
-            Commodity, Crypto, Forex, Index, SecFuture, SecOption, Security, Stock,
-        };
-
-        #[typed_variants]
-        #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
-        #[serde(rename_all="UPPERCASE")]
-        /// The possible data types for a historical bar request.
-        pub enum DataTypes {
-            /// The actual traded prices during the bar interval.
-            Trades2,
-            /// The posted midpoint price during the bar interval.
-            Midpoint2,
-            /// The posted bid price during the bar interval.
-            Bid2,
-            /// The posted ask price during the bar interval.
-            Ask2,
-        }
-
-        make_variants!(
-            /// The actual traded prices during the bar interval.
-            Trades: "TRADES",
-            /// The posted midpoint price during the bar interval.
-            Midpoint: "MIDPOINT",
-            /// The posted bid price during the bar interval.
-            Bid: "BID",
-            /// The posted ask price during the bar interval.
-            Ask: "ASK"
-        );
-
-        impl_data_type!(
-            (Trades, Midpoint, Bid, Ask);
-            (Stock)
-        );
-
-        impl_data_type!(
-            (Trades);
-            (Index)
-        );
-
-        impl_data_type!(
-            (Trades, Midpoint, Bid, Ask);
-            (SecOption, SecFuture, Crypto)
-        );
-        impl_data_type!(
-            (Midpoint, Bid, Ask);
-            (Forex, Commodity)
-        );
+    #[typed_variants]
+    #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "UPPERCASE")]
+    /// The data types for a ['crate::client::Client::req_updating_historical_bar'] request or a [`crate::client::Client::req_real_time_bars`] request.
+    pub enum DataTypes {
+        #[serde(rename = "TRADES")]
+        /// The actual traded prices during the bar interval.
+        Trades,
+        #[serde(rename = "MIDPOINT")]
+        /// The posted midpoint price during the bar interval.
+        Midpoint,
+        #[serde(rename = "BID")]
+        /// The posted bid price during the bar interval.
+        Bid,
+        #[serde(rename = "ASK")]
+        /// The posted ask price during the bar interval.
+        Ask,
     }
+
+    make_valid!(Trades, Midpoint, Bid, Ask, DataTypes);
+
+    impl_data_type!(
+        (Trades, Midpoint, Bid, Ask, DataTypes);
+        (Stock, SecOption, SecFuture, Crypto)
+    );
+
+    impl_data_type!(
+        (Trades);
+        (Index)
+    );
+
+    impl_data_type!(
+        (Midpoint, Bid, Ask);
+        (Forex, Commodity)
+    );
 }
 
 /// Contains types and traits used by [`crate::client::Client::req_historical_ticks`] and
 /// [`crate::client::Client::req_head_timestamp`].
 pub mod historical_ticks {
-    use serde::{Serialize, Serializer};
+    use ibapi_macros::typed_variants;
+    use serde::{Deserialize, Serialize, Serializer};
+    use crate::contract::{
+        Contract, Forex, Crypto, Stock, Index, SecFuture, SecOption, Commodity
+    };
 
     // === Type definitions ===
 
@@ -356,7 +339,7 @@ pub mod historical_ticks {
         EndDateTime(chrono::DateTime<chrono::Utc>),
     }
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
     /// A simple struct to ensure that the number of ticks to return never exceeds 1,000.
     pub struct NumberOfTicks(u16);
 
@@ -400,35 +383,36 @@ pub mod historical_ticks {
 
     // === Data types ===
 
-    /// Contains the potential data types for a [`crate::client::Client::req_historical_ticks`] or
+    #[typed_variants]
+    #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "UPPERCASE")]
+    /// The data types for a [`crate::client::Client::req_historical_ticks`] request or a
     /// [`crate::client::Client::req_head_timestamp`] request.
-    pub mod data_types {
-        use crate::contract::{
-            Commodity, Crypto, Forex, Index, SecFuture, SecOption, Security, Stock,
-        };
-
-        make_variants!(
-            /// The prices (and sizes) of actual trades for a given tick.
-            Trades: "TRADES",
-            /// The posted midpoint price (and aggregated size) for a given tick.
-            Midpoint: "MIDPOINT",
-            /// The posted bid and ask prices (and sizes) for a given tick.
-            BidAsk: "BID_ASK"
-        );
-
-        impl_data_type!(
-            (Trades, Midpoint, BidAsk);
-            (Stock, Forex, SecOption, SecFuture, Crypto, Index, Commodity)
-        );
+    pub enum DataTypes {
+        #[serde(rename = "TRADES")]
+        /// The prices (and sizes) of actual trades for a given tick.
+        Trades,
+        #[serde(rename = "MIDPOINT")]
+        /// The posted midpoint price (and aggregated size) for a given tick.
+        Midpoint,
+        #[serde(rename = "BID_ASK")]
+        /// The posted bid and ask prices (and sizes) for a given tick.
+        BidAsk,
     }
+
+    make_valid!(Trades, Midpoint, BidAsk, DataTypes);
+
+    impl_data_type!(
+        (Trades, Midpoint, BidAsk, DataTypes);
+        (Contract, Stock, Forex, SecOption, SecFuture, Crypto, Index, Commodity)
+    );
 }
 
 /// Contains types and traits used by [`crate::client::Client::req_histogram_data`].
 pub mod histogram {
+    use serde::{Serialize, Serializer};
 
     // === Type definitions ===
-
-    use serde::{Serialize, Serializer};
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
     /// The span of dates and times over which bars will be returned.
@@ -466,42 +450,46 @@ pub mod histogram {
 
 /// Contains the types and traits used by [`crate::client::Client::req_real_time_bars`].
 pub mod live_bar {
+    use crate::contract::{
+        Contract, Forex, Crypto, Stock, Index, SecFuture, SecOption, Commodity
+    };
+    use super::updating_historical_bar;
 
     // === Data types ===
 
-    /// Contains the potential data types for a [`crate::client::Client::req_real_time_bars`] request.
-    pub mod data_types {
-        use crate::contract::{
-            Commodity, Crypto, Forex, Index, SecFuture, SecOption, Security, Stock,
-        };
+    /// Re-export of [`updating_historical_bar::DataTypes`]
+    pub type DataTypes = updating_historical_bar::DataTypes;
 
-        make_variants!(
-            /// The actual trades for a given 5-second interval.
-            Trades: "TRADES",
-            /// The posted midpoint prices for a given 5-second interval.
-            Midpoint: "MIDPOINT",
-            /// The posted bid prices for a given 5-second interval.
-            Bid: "BID",
-            /// The posted ask prices for a given 5-second interval.
-            Ask: "ASK"
-        );
+    /// Re-export of [`updating_historical_bar::Trades`]
+    pub type Trades = updating_historical_bar::Trades;
 
-        impl_data_type!(
-            (Trades, Midpoint, Bid, Ask);
-            (Stock, Forex, SecOption, SecFuture, Crypto, Index, Commodity)
-        );
-    }
+    /// Re-export of [`historical_bar::Midpoint`]
+    pub type Midpoint = updating_historical_bar::Midpoint;
+
+    /// Re-export of [`updating_historical_bar::Bid`]
+    pub type Bid = updating_historical_bar::Bid;
+
+    /// Re-export of [`updating_historical_bar::Ask`]
+    pub type Ask = updating_historical_bar::Ask;
+
+    make_valid!(Trades, Midpoint, Bid, Ask, DataTypes);
+
+    impl_data_type!(
+        (Trades, Midpoint, Bid, Ask, DataTypes);
+        (Stock, Forex, SecOption, SecFuture, Crypto, Index, Commodity, Contract)
+    );
 }
 
 #[allow(clippy::module_name_repetitions)]
 /// Contains types and traits used by [`crate::client::Client::req_market_data`] and
 /// [`crate::client::Client::req_market_data_type`].
 pub mod live_data {
+    use serde::{Deserialize, Serialize};
+    use std::fmt::Formatter;
+    use ibapi_macros::typed_variants;
+    use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Stock};
 
     // === Type definitions ===
-
-    use serde::Serialize;
-    use std::fmt::Formatter;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
     /// The frequency at which data will be updated.
@@ -561,114 +549,154 @@ pub mod live_data {
 
     // === Data types ===
 
-    /// Contains the potential data types for a [`crate::client::Client::req_market_data`] request.
-    pub mod data_types {
-        use crate::contract::{
-            Commodity, Crypto, Forex, Index, SecFuture, SecOption, Security, Stock,
-        };
-
-        make_variants!(
-            /// The volume of options contracts exchanged.
-            SecOptionVolume: "100",
-            /// The open interest of options contracts.
-            SecOptionOpenInterest: "101",
-            /// The realized price volatility.
-            HistoricalVolatility: "104",
-            /// The average options contract volume.
-            AverageSecOptionVolume: "105",
-            /// The implied volatility by the options market.
-            SecOptionImpliedVolatility: "106",
-            /// The number of points that the index is over the cash index.
-            IndexFuturePremium: "162",
-            /// Miscellaneous statistics associated with the stock.
-            MiscellaneousStats: "165",
-            /// The mark-to-market price used for margin at IBKR.
-            MarkPrice: "221",
-            /// The volume, price, and imbalance of an auction.
-            AuctionValues: "225",
-            /// Last trade's price, size, and time.
-            RealTimeVolume: "233",
-            /// The level of difficulty associated with short-selling a security.
-            Shortable: "236",
-            /// Available inventory for short-selling.
-            Inventory: "256",
-            /// Fundamental stock ratios.
-            FundamentalRatios: "258",
-            /// 30-day real time historical volatility.
-            RealtimeHistoricalVolatility: "411",
-            /// Information about past and future dividends.
-            IBDividends: "456",
-            /// No additional data
-            Empty: ""
-        );
-
-        impl_data_type!(
-            (
-                SecOptionVolume,
-                SecOptionOpenInterest,
-                HistoricalVolatility,
-                AverageSecOptionVolume,
-                SecOptionImpliedVolatility,
-                IndexFuturePremium,
-                MiscellaneousStats,
-                MarkPrice,
-                AuctionValues,
-                RealTimeVolume,
-                Shortable,
-                Inventory,
-                FundamentalRatios,
-                RealtimeHistoricalVolatility,
-                IBDividends,
-                Empty
-            );
-            (Stock)
-        );
-
-        impl_data_type!(
-            (
-                IndexFuturePremium,
-                MiscellaneousStats,
-                MarkPrice,
-                AuctionValues,
-                RealTimeVolume,
-                Shortable,
-                Inventory,
-                FundamentalRatios,
-                RealtimeHistoricalVolatility,
-                IBDividends,
-                Empty
-            );
-            (Forex, SecOption, SecFuture, Crypto, Index, Commodity)
-        );
+    #[typed_variants]
+    #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
+    /// Contains the data types for a [`crate::client::Client::req_market_data`] request.
+    pub enum DataTypes {
+        #[serde(rename = "100")]
+        /// The volume of options contracts exchanged.
+        SecOptionVolume,
+        #[serde(rename = "101")]
+        /// The open interest of options contracts.
+        SecOptionOpenInterest,
+        #[serde(rename = "104")]
+        /// The realized price volatility.
+        HistoricalVolatility,
+        #[serde(rename = "105")]
+        /// The average options contract volume.
+        AverageSecOptionVolume,
+        #[serde(rename = "106")]
+        /// The implied volatility by the options market.
+        SecOptionImpliedVolatility,
+        #[serde(rename = "162")]
+        /// The number of points that the index is over the cash index.
+        IndexFuturePremium,
+        #[serde(rename = "165")]
+        /// Miscellaneous statistics associated with the stock.
+        MiscellaneousStats,
+        #[serde(rename = "221")]
+        /// The mark-to-market price used for margin at IBKR.
+        MarkPrice,
+        #[serde(rename = "225")]
+        /// The volume, price, and imbalance of an auction.
+        AuctionValues,
+        #[serde(rename = "233")]
+        /// Last trade's price, size, and time.
+        RealTimeVolume,
+        #[serde(rename = "236")]
+        /// The level of difficulty associated with short-selling a security.
+        Shortable,
+        #[serde(rename = "256")]
+        /// Available inventory for short-selling.
+        Inventory,
+        #[serde(rename = "258")]
+        /// Fundamental stock ratios.
+        FundamentalRatios,
+        #[serde(rename = "411")]
+        /// 30-day real time historical volatility.
+        RealtimeHistoricalVolatility,
+        #[serde(rename = "456")]
+        /// Information about past and future dividends.
+        IBDividends,
+        #[serde(rename = "")]
+        /// No additional data
+        Empty,
     }
+
+    make_valid!(
+        SecOptionVolume,
+        SecOptionOpenInterest,
+        HistoricalVolatility,
+        AverageSecOptionVolume,
+        SecOptionImpliedVolatility,
+        IndexFuturePremium,
+        MiscellaneousStats,
+        MarkPrice,
+        AuctionValues,
+        RealTimeVolume,
+        Shortable,
+        Inventory,
+        FundamentalRatios,
+        RealtimeHistoricalVolatility,
+        IBDividends,
+        Empty,
+        DataTypes
+    );
+
+    impl_data_type!(
+        (
+            SecOptionVolume,
+            SecOptionOpenInterest,
+            HistoricalVolatility,
+            AverageSecOptionVolume,
+            SecOptionImpliedVolatility,
+            IndexFuturePremium,
+            MiscellaneousStats,
+            MarkPrice,
+            AuctionValues,
+            RealTimeVolume,
+            Shortable,
+            Inventory,
+            FundamentalRatios,
+            RealtimeHistoricalVolatility,
+            IBDividends,
+            Empty,
+            DataTypes
+        );
+        (Stock)
+    );
+
+    impl_data_type!(
+        (
+            IndexFuturePremium,
+            MiscellaneousStats,
+            MarkPrice,
+            AuctionValues,
+            RealTimeVolume,
+            Shortable,
+            Inventory,
+            FundamentalRatios,
+            RealtimeHistoricalVolatility,
+            IBDividends,
+            Empty
+        );
+        (Forex, SecOption, SecFuture, Crypto, Index, Commodity)
+    );
 }
 
 /// Contains types and traits used by [`crate::client::Client::req_tick_by_tick_data`].
 pub mod live_ticks {
+    use ibapi_macros::typed_variants;
+    use serde::{Deserialize, Serialize};
+    use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, Stock};
 
     // === Data types ===
 
     /// Re-export of [`super::historical_ticks::NumberOfTicks`] for convenience.
     pub type NumberOfTicks = super::historical_ticks::NumberOfTicks;
 
-    /// Contains the potential data types for a [`crate::client::Client::req_tick_by_tick_data`] request.
-    pub mod data_types {
-        use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, Security, Stock};
-
-        make_variants!(
-            /// All the last actual trades since prior tick (and size)
-            AllLast: "AllLast",
-            /// The last actual trade (and size).
-            Last: "Last",
-            /// The posted bid and ask prices (and sizes).
-            BidAsk: "BidAsk",
-            /// The posted midpoint (and size).
-            Midpoint: "MidPoint"
-        );
-
-        impl_data_type!(
-            (AllLast, Last, BidAsk, Midpoint);
-            (Stock, Forex, SecFuture, Crypto, Index, Commodity)
-        );
+    #[typed_variants]
+    #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
+    /// The data types for a [`crate::client::Client::req_tick_by_tick_data`] request.
+    pub enum DataTypes {
+        #[serde(rename = "AllLast")]
+        /// All the last actual trades since prior tick (and size)
+        AllLast,
+        #[serde(rename = "Last")]
+        /// The last actual trade (and size).
+        Last,
+        #[serde(rename = "BidAsk")]
+        /// The posted bid and ask prices (and sizes).
+        BidAsk,
+        #[serde(rename = "MidPoint")]
+        /// The posted midpoint (and size).
+        Midpoint,
     }
+
+    make_valid!(DataTypes, AllLast, Last, BidAsk, Midpoint);
+
+    impl_data_type!(
+        (DataTypes, AllLast, Last, BidAsk, Midpoint);
+        (Stock, Forex, SecFuture, Crypto, Index, Commodity)
+    );
 }

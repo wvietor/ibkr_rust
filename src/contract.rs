@@ -4,7 +4,7 @@ use std::{num::ParseIntError, str::FromStr};
 use crate::{
     currency::Currency,
     exchange::{Primary, Routing},
-    match_typed_variants
+    match_poly
 };
 use ibapi_macros::Security;
 use serde::{Deserialize, Serialize, Serializer};
@@ -72,7 +72,7 @@ impl Contract {
 impl Serialize for Contract {
     #[inline]
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-        match_typed_variants!(self;
+        match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -87,7 +87,7 @@ impl Serialize for Contract {
 impl Security for Contract {
     #[inline]
     fn get_contract_id(&self) -> ContractId {
-        match_typed_variants!(self;
+        match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -100,7 +100,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_symbol(&self) -> &str {
-        match_typed_variants!(self;
+        match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -113,7 +113,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_security_type(&self) -> &'static str {
-        match_typed_variants!(self;
+        match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -126,7 +126,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_expiration_date(&self) -> Option<NaiveDate> {
-        match_typed_variants!(self;
+        match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -139,7 +139,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_strike(&self) -> Option<f64> {
-        match_typed_variants!(self;
+        match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -152,7 +152,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_right(&self) -> Option<&'static str> {
-        match_typed_variants!(self;
+        match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -165,7 +165,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_multiplier(&self) -> Option<u32> {
-        match_typed_variants!(self;
+        match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -178,7 +178,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_exchange(&self) -> Routing {
-        match_typed_variants!(self;
+        match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -191,7 +191,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_primary_exchange(&self) -> Option<Primary> {
-        match_typed_variants!(self;
+        match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -204,7 +204,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_currency(&self) -> Currency {
-        match_typed_variants!(self;
+        match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -217,7 +217,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_local_symbol(&self) -> &str {
-        match_typed_variants!(self;
+        match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
@@ -230,7 +230,7 @@ impl Security for Contract {
 
     #[inline]
     fn get_trading_class(&self) -> Option<&str> {
-        match_typed_variants!(self;
+        match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
             | Self::Stock(t)
