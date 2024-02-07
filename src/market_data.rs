@@ -206,7 +206,7 @@ pub mod historical_bar {
     #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "UPPERCASE")]
     /// The data types for a [`crate::client::Client::req_historical_bar`] request.
-    pub enum DataTypes {
+    pub enum Data {
         #[serde(rename = "TRADES")]
         /// The actual traded prices during the bar interval.
         Trades,
@@ -230,10 +230,10 @@ pub mod historical_bar {
         SecOptionImpliedVolatility,
     }
 
-    make_valid!(Trades, Midpoint, Bid, Ask, BidAsk, HistoricalVolatility, SecOptionImpliedVolatility, DataTypes);
+    make_valid!(Trades, Midpoint, Bid, Ask, BidAsk, HistoricalVolatility, SecOptionImpliedVolatility, Data);
 
     impl_data_type!(
-            (Trades, Midpoint, Bid, Ask, BidAsk, HistoricalVolatility, SecOptionImpliedVolatility, DataTypes);
+            (Trades, Midpoint, Bid, Ask, BidAsk, HistoricalVolatility, SecOptionImpliedVolatility, Data);
             (Stock)
         );
 
@@ -285,7 +285,7 @@ pub mod updating_historical_bar {
     #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "UPPERCASE")]
     /// The data types for a ['crate::client::Client::req_updating_historical_bar'] request or a [`crate::client::Client::req_real_time_bars`] request.
-    pub enum DataTypes {
+    pub enum Data {
         #[serde(rename = "TRADES")]
         /// The actual traded prices during the bar interval.
         Trades,
@@ -300,10 +300,10 @@ pub mod updating_historical_bar {
         Ask,
     }
 
-    make_valid!(Trades, Midpoint, Bid, Ask, DataTypes);
+    make_valid!(Trades, Midpoint, Bid, Ask, Data);
 
     impl_data_type!(
-        (Trades, Midpoint, Bid, Ask, DataTypes);
+        (Trades, Midpoint, Bid, Ask, Data);
         (Stock, SecOption, SecFuture, Crypto)
     );
 
@@ -388,7 +388,7 @@ pub mod historical_ticks {
     #[serde(rename_all = "UPPERCASE")]
     /// The data types for a [`crate::client::Client::req_historical_ticks`] request or a
     /// [`crate::client::Client::req_head_timestamp`] request.
-    pub enum DataTypes {
+    pub enum Data {
         #[serde(rename = "TRADES")]
         /// The prices (and sizes) of actual trades for a given tick.
         Trades,
@@ -400,10 +400,10 @@ pub mod historical_ticks {
         BidAsk,
     }
 
-    make_valid!(Trades, Midpoint, BidAsk, DataTypes);
+    make_valid!(Trades, Midpoint, BidAsk, Data);
 
     impl_data_type!(
-        (Trades, Midpoint, BidAsk, DataTypes);
+        (Trades, Midpoint, BidAsk, Data);
         (Contract, Stock, Forex, SecOption, SecFuture, Crypto, Index, Commodity)
     );
 }
@@ -457,8 +457,8 @@ pub mod live_bar {
 
     // === Data types ===
 
-    /// Re-export of [`updating_historical_bar::DataTypes`]
-    pub type DataTypes = updating_historical_bar::DataTypes;
+    /// Re-export of [`updating_historical_bar::Data`]
+    pub type Data = updating_historical_bar::Data;
 
     /// Re-export of [`updating_historical_bar::Trades`]
     pub type Trades = updating_historical_bar::Trades;
@@ -472,10 +472,10 @@ pub mod live_bar {
     /// Re-export of [`updating_historical_bar::Ask`]
     pub type Ask = updating_historical_bar::Ask;
 
-    make_valid!(Trades, Midpoint, Bid, Ask, DataTypes);
+    make_valid!(Trades, Midpoint, Bid, Ask, Data);
 
     impl_data_type!(
-        (Trades, Midpoint, Bid, Ask, DataTypes);
+        (Trades, Midpoint, Bid, Ask, Data);
         (Stock, Forex, SecOption, SecFuture, Crypto, Index, Commodity, Contract)
     );
 }
@@ -552,7 +552,7 @@ pub mod live_data {
     #[typed_variants]
     #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
     /// Contains the data types for a [`crate::client::Client::req_market_data`] request.
-    pub enum DataTypes {
+    pub enum Data {
         #[serde(rename = "100")]
         /// The volume of options contracts exchanged.
         SecOptionVolume,
@@ -620,7 +620,7 @@ pub mod live_data {
         RealtimeHistoricalVolatility,
         IBDividends,
         Empty,
-        DataTypes
+        Data
     );
 
     impl_data_type!(
@@ -641,7 +641,7 @@ pub mod live_data {
             RealtimeHistoricalVolatility,
             IBDividends,
             Empty,
-            DataTypes
+            Data
         );
         (Stock)
     );
@@ -678,7 +678,7 @@ pub mod live_ticks {
     #[typed_variants]
     #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
     /// The data types for a [`crate::client::Client::req_tick_by_tick_data`] request.
-    pub enum DataTypes {
+    pub enum Data {
         #[serde(rename = "AllLast")]
         /// All the last actual trades since prior tick (and size)
         AllLast,
@@ -693,10 +693,10 @@ pub mod live_ticks {
         Midpoint,
     }
 
-    make_valid!(DataTypes, AllLast, Last, BidAsk, Midpoint);
+    make_valid!(Data, AllLast, Last, BidAsk, Midpoint);
 
     impl_data_type!(
-        (DataTypes, AllLast, Last, BidAsk, Midpoint);
+        (Data, AllLast, Last, BidAsk, Midpoint);
         (Stock, Forex, SecFuture, Crypto, Index, Commodity)
     );
 }
