@@ -1611,9 +1611,9 @@ impl Client<indicators::Active> {
     ///
     /// # Returns
     /// Returns the unique ID associated with the request.
-    pub async fn req_pnl(&mut self, account_number: String) -> IdResult {
+    pub async fn req_pnl(&mut self, account_number: &String) -> IdResult {
         let req_id = self.get_next_req_id();
-        check_valid_account(self, &account_number)?;
+        check_valid_account(self, account_number)?;
 
         self.writer
             .add_body((Out::ReqPnl, req_id, account_number, None::<()>))?;
@@ -1649,11 +1649,11 @@ impl Client<indicators::Active> {
     /// Returns the unique ID associated with the request.
     pub async fn req_single_position_pnl(
         &mut self,
-        account_number: String,
+        account_number: &String,
         contract_id: ContractId,
     ) -> IdResult {
         let req_id = self.get_next_req_id();
-        check_valid_account(self, &account_number)?;
+        check_valid_account(self, account_number)?;
 
         self.writer.add_body((
             Out::ReqPnlSingle,
