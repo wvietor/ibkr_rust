@@ -254,10 +254,6 @@ impl Builder {
             ))?
             .to_utc();
 
-        let (client_tx, wrapper_rx) =
-            mpsc::channel::<ToWrapper>(constants::TO_WRAPPER_CHANNEL_SIZE);
-        let (wrapper_tx, client_rx) = mpsc::channel::<ToClient>(constants::TO_CLIENT_CHANNEL_SIZE);
-
         let mut client = Client {
             mode,
             host,
@@ -267,13 +263,7 @@ impl Builder {
             server_version,
             conn_time,
             writer,
-            status: indicators::Inactive {
-                reader,
-                client_tx,
-                client_rx,
-                wrapper_tx,
-                wrapper_rx,
-            },
+            status: indicators::Inactive { reader },
         };
         client.start_api().await?;
 
@@ -1118,10 +1108,6 @@ pub(crate) mod indicators {
 
     pub struct Inactive {
         pub(crate) reader: OwnedReadHalf,
-        pub(crate) client_tx: mpsc::Sender<ToWrapper>,
-        pub(crate) client_rx: mpsc::Receiver<ToClient>,
-        pub(crate) wrapper_tx: mpsc::Sender<ToClient>,
-        pub(crate) wrapper_rx: mpsc::Receiver<ToWrapper>,
     }
 
     impl Status for Inactive {}
@@ -1317,6 +1303,9 @@ impl Client<indicators::Inactive> {
             tokio::task::yield_now().await;
         }
         let (managed_accounts, valid_id) = (managed_accounts.unwrap(), valid_id.unwrap()..);
+        let (client_tx, wrapper_rx) =
+            mpsc::channel::<ToWrapper>(constants::TO_WRAPPER_CHANNEL_SIZE);
+        let (wrapper_tx, client_rx) = mpsc::channel::<ToClient>(constants::TO_CLIENT_CHANNEL_SIZE);
 
         let client = Client {
             mode: self.mode,
@@ -1330,20 +1319,14 @@ impl Client<indicators::Inactive> {
             status: indicators::Active {
                 r_thread,
                 disconnect,
-                tx: self.status.client_tx,
-                rx: self.status.client_rx,
+                tx: client_tx,
+                rx: client_rx,
                 managed_accounts,
                 order_id: valid_id,
                 req_id: 0_i64..,
             },
         };
-        (
-            client,
-            self.status.wrapper_tx,
-            self.status.wrapper_rx,
-            queue,
-            backlog,
-        )
+        (client, wrapper_tx, wrapper_rx, queue, backlog)
     }
 
     /// Initiates the main message loop and spawns all helper threads to manage the application.
