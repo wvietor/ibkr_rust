@@ -4,7 +4,7 @@ use std::{num::ParseIntError, str::FromStr};
 use crate::{
     currency::Currency,
     exchange::{Primary, Routing},
-    match_poly
+    match_poly,
 };
 use ibapi_macros::Security;
 use serde::{Deserialize, Serialize, Serializer};
@@ -46,17 +46,23 @@ macro_rules! contract_impl {
         pub fn $func_name_ref(&self) -> anyhow::Result<&$sec_type> {
             match self {
                 $pat => $exp,
-                _ => Err(anyhow::anyhow!("Expected {}; found other contract type.", stringify!($func_name))),
+                _ => Err(anyhow::anyhow!(
+                    "Expected {}; found other contract type.",
+                    stringify!($func_name)
+                )),
             }
         }
         #[allow(missing_docs, clippy::missing_errors_doc)]
         pub fn $func_name(self) -> anyhow::Result<$sec_type> {
             match self {
                 $pat => $exp,
-                _ => Err(anyhow::anyhow!("Expected {}; found other contract type.", stringify!($func_name))),
+                _ => Err(anyhow::anyhow!(
+                    "Expected {}; found other contract type.",
+                    stringify!($func_name)
+                )),
             }
         }
-    }
+    };
 }
 
 impl Contract {
@@ -71,7 +77,10 @@ impl Contract {
 
 impl Serialize for Contract {
     #[inline]
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
         match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
@@ -271,7 +280,8 @@ pub async fn new<S: Security>(
         Contract::SecFuture(fut) => fut.try_into().map_err(|_| ()),
         Contract::SecOption(opt) => opt.try_into().map_err(|_| ()),
         Contract::Commodity(cmdty) => cmdty.try_into().map_err(|_| ()),
-    }.map_err(|()| anyhow::anyhow!("Failed to create contract from {:?}: ", contract_id))
+    }
+    .map_err(|()| anyhow::anyhow!("Failed to create contract from {:?}: ", contract_id))
 }
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]

@@ -7,7 +7,11 @@ use crate::contract::{
     Commodity, Contract, ContractId, Crypto, Forex, Index, SecFuture, SecOption, SecOptionInner,
     SecurityId, Stock,
 };
-use crate::payload::{market_depth::{CompleteEntry, Entry, Operation}, Bar, BarCore, ExchangeId, HistogramEntry, MarketDataClass, Pnl, Position, PositionSummary, Tick, OrderStatus, Fill, Trade, BidAsk, Last, Midpoint, PnlSingle};
+use crate::payload::{
+    market_depth::{CompleteEntry, Entry, Operation},
+    Bar, BarCore, BidAsk, ExchangeId, Fill, HistogramEntry, Last, MarketDataClass, Midpoint,
+    OrderStatus, Pnl, PnlSingle, Position, PositionSummary, Tick, Trade,
+};
 use crate::tick::{
     Accessibility, AuctionData, CalculationResult, Class, Dividends, EtfNav, ExtremeValue, Ipo,
     MarkPrice, OpenInterest, Period, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
@@ -252,17 +256,32 @@ pub trait Local: wrapper::Local {
             let why_held = match why_held.as_str() {
                 "locate" => Some(crate::payload::Locate),
                 "" => None,
-                s => return Err(anyhow::anyhow!("Invalid Locate string. Expected \"locate\" or \"\", got {}", s))
+                s => {
+                    return Err(anyhow::anyhow!(
+                        "Invalid Locate string. Expected \"locate\" or \"\", got {}",
+                        s
+                    ))
+                }
             };
-            let market_cap_price = if market_cap_price == 0.0 { None } else { Some(market_cap_price )};
-            let fill = if filled == 0.0 && average_price == 0.0 && last_price == 0.0 { None } else {
+            let market_cap_price = if market_cap_price == 0.0 {
+                None
+            } else {
+                Some(market_cap_price)
+            };
+            let fill = if filled == 0.0 && average_price == 0.0 && last_price == 0.0 {
+                None
+            } else {
                 Some(Fill {
                     filled,
                     average_price,
-                    last_price
+                    last_price,
                 })
             };
-            let parent_id = if parent_id == 0 { None } else { Some(parent_id) };
+            let parent_id = if parent_id == 0 {
+                None
+            } else {
+                Some(parent_id)
+            };
             let core = crate::payload::OrderStatusCore {
                 order_id,
                 fill,
@@ -327,8 +346,14 @@ pub trait Local: wrapper::Local {
                     permanent_id @ 0: i64,
                     parent_id @ 32: i64
             );
-            let parent_id = if parent_id == 0 { None } else { Some(parent_id) };
-            wrapper.open_order(order_id, contract_id, client_id, parent_id, permanent_id).await;
+            let parent_id = if parent_id == 0 {
+                None
+            } else {
+                Some(parent_id)
+            };
+            wrapper
+                .open_order(order_id, contract_id, client_id, parent_id, permanent_id)
+                .await;
             // outside: 1,
             // hidden: 1
             // discretion: 1
@@ -2046,7 +2071,7 @@ pub trait Local: wrapper::Local {
                 unrealized,
                 realized,
                 position_size,
-                market_value
+                market_value,
             };
             wrapper.single_position_pnl(req_id, pnl).await;
             Ok(())

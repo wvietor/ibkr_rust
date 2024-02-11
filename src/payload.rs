@@ -1,10 +1,10 @@
-use std::fmt::Formatter;
 use chrono::NaiveDateTime;
+use std::fmt::Formatter;
 
 use crate::contract::ContractId;
+use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 use std::str::FromStr;
-use serde::ser::SerializeStruct;
 
 // macro_rules! make_error {
 //     ($( #[doc = $name_doc:expr] )? $name: ident: $msg: literal) => {
@@ -187,9 +187,7 @@ pub mod market_depth {
             .take(4)
             .collect::<Vec<char>>()
             .try_into()
-            .map_err(|_| {
-                Error::invalid_value(serde::de::Unexpected::Str(&s), &"Valid UTF-8 Mpid")
-            })
+            .map_err(|_| Error::invalid_value(serde::de::Unexpected::Str(&s), &"Valid UTF-8 Mpid"))
     }
 }
 
@@ -248,8 +246,17 @@ pub struct Trade {
 }
 
 impl Serialize for Trade {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-        let BarCore {datetime, open, high, low, close} = self.bar;
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let BarCore {
+            datetime,
+            open,
+            high,
+            low,
+            close,
+        } = self.bar;
         let mut ser = serializer.serialize_struct("Trade", 8)?;
         ser.serialize_field("datetime", &datetime.format("%Y-%m-%d %T").to_string())?;
         ser.serialize_field("open", &open)?;
@@ -280,10 +287,10 @@ pub enum Tick {
 pub struct Midpoint {
     /// The timestamp of the tick.
     #[serde(
-    serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
+        serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
     )]
     #[serde(
-    deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
+        deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
     )]
     pub datetime: NaiveDateTime,
     /// The midpoint price.
@@ -295,10 +302,10 @@ pub struct Midpoint {
 pub struct BidAsk {
     /// The timestamp of the tick.
     #[serde(
-    serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
+        serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
     )]
     #[serde(
-    deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
+        deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
     )]
     pub datetime: NaiveDateTime,
     /// The bid price.
@@ -316,10 +323,10 @@ pub struct BidAsk {
 pub struct Last {
     /// The timestamp of the tick.
     #[serde(
-    serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
+        serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
     )]
     #[serde(
-    deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
+        deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
     )]
     pub datetime: NaiveDateTime,
     /// The last traded price.

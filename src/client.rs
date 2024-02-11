@@ -1,7 +1,7 @@
-use std::fmt::Formatter;
 use anyhow::Context;
 use crossbeam::queue::SegQueue;
 use serde::{Deserialize, Serialize};
+use std::fmt::Formatter;
 use std::sync::Arc;
 use tokio::net::tcp::OwnedReadHalf;
 use tokio::task::JoinHandle;
@@ -235,15 +235,24 @@ impl Builder {
             .parse()
             .with_context(|| "Failed to parse server version")?;
         let (conn_time, tz) = chrono::NaiveDateTime::parse_and_remainder(
-            params
-                .next()
-                .ok_or_else(|| {
-                    anyhow::Error::msg("Missing connection time in IBKR handshake response")
-                })?,
+            params.next().ok_or_else(|| {
+                anyhow::Error::msg("Missing connection time in IBKR handshake response")
+            })?,
             "%Y%m%d %T",
         )
         .with_context(|| "Failed to parse connection time")?;
-        let conn_time = conn_time.and_local_timezone(tz.trim().parse::<chrono_tz::Tz>().map_err(|e| anyhow::anyhow!("Failed to parse timezone in connection time: {}", e.as_str()))?).single().ok_or(anyhow::anyhow!("Failed to find unique timezone in connection time."))?.to_utc();
+        let conn_time = conn_time
+            .and_local_timezone(tz.trim().parse::<chrono_tz::Tz>().map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to parse timezone in connection time: {}",
+                    e.as_str()
+                )
+            })?)
+            .single()
+            .ok_or(anyhow::anyhow!(
+                "Failed to find unique timezone in connection time."
+            ))?
+            .to_utc();
 
         let (client_tx, wrapper_rx) =
             mpsc::channel::<ToWrapper>(constants::TO_WRAPPER_CHANNEL_SIZE);
@@ -1333,7 +1342,7 @@ impl Client<indicators::Inactive> {
             self.status.wrapper_tx,
             self.status.wrapper_rx,
             queue,
-            backlog
+            backlog,
         )
     }
 
@@ -1354,14 +1363,15 @@ impl Client<indicators::Inactive> {
     pub async fn local<I: LocalInitializer>(
         self,
         init: I,
-        disconnect_token: Option<CancelToken>
+        disconnect_token: Option<CancelToken>,
     ) -> Result<Builder, std::io::Error> {
         let (mut client, tx, rx, queue, backlog) = self.into_active().await;
         let temp = CancelToken::new();
         let con_fut = spawn_temp_contract_thread(temp.clone(), queue, backlog, tx, rx);
 
         let disconnect_token = disconnect_token.unwrap_or_default();
-        let mut wrapper = LocalInitializer::build(init, &mut client, disconnect_token.clone()).await;
+        let mut wrapper =
+            LocalInitializer::build(init, &mut client, disconnect_token.clone()).await;
         temp.cancel();
         drop(temp);
         let (queue, mut tx, mut rx, mut backlog) = con_fut.await?;

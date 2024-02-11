@@ -1,6 +1,10 @@
 use crate::account::{Attribute, TagValue};
 use crate::client::ActiveClient;
-use crate::payload::{self, Bar, ExchangeId, HistogramEntry, Pnl, Position, PositionSummary, Tick, OrderStatus, PnlSingle};
+use crate::contract::ContractId;
+use crate::payload::{
+    self, Bar, ExchangeId, HistogramEntry, OrderStatus, Pnl, PnlSingle, Position, PositionSummary,
+    Tick,
+};
 use crate::tick::{
     self, Accessibility, AuctionData, Class, Dividends, ExtremeValue, Ipo, MarkPrice, News,
     OpenInterest, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
@@ -10,7 +14,6 @@ use crate::tick::{
 use chrono::{NaiveDateTime, NaiveTime};
 use ibapi_macros::debug_trait;
 use std::future::Future;
-use crate::contract::ContractId;
 
 // todo! Updated Bar payload api to make it more clear that BidAsk callback isn't just a "normal Bar"
 
@@ -61,12 +64,7 @@ pub trait Local {
     ) -> impl Future {
     }
     /// The callback message that corresponds to the open interest of various derivatives contracts from [`crate::client::Client::req_market_data`].
-    fn open_interest(
-        &mut self,
-        req_id: i64,
-        open_interest: OpenInterest,
-    ) -> impl Future {
-    }
+    fn open_interest(&mut self, req_id: i64, open_interest: OpenInterest) -> impl Future {}
     /// The callback message that corresponds to volatility data from [`crate::client::Client::req_market_data`].
     fn volatility(&mut self, req_id: i64, vol: Volatility) -> impl Future {}
     /// The callback message that corresponds to timestamp data from [`crate::client::Client::req_market_data`].
@@ -88,12 +86,7 @@ pub trait Local {
     /// The callback message containing summary information about trading volume throughout a day or 90-day rolling period from [`crate::client::Client::req_market_data`].
     fn summary_volume(&mut self, req_id: i64, volume: SummaryVolume) -> impl Future {}
     /// The callback message containing information about daily option volume (and average option volume) from [`crate::client::Client::req_market_data`].
-    fn sec_option_volume(
-        &mut self,
-        req_id: i64,
-        volume: SecOptionVolume,
-    ) -> impl Future {
-    }
+    fn sec_option_volume(&mut self, req_id: i64, volume: SecOptionVolume) -> impl Future {}
     /// The callback message containing information about the number of trades performed in a day from [`crate::client::Client::req_market_data`].
     fn trade_count(&mut self, req_id: i64, trade_count: TradeCount) -> impl Future {}
     /// The callback message containing information about the rate of trades or volume throughout a day from [`crate::client::Client::req_market_data`].
@@ -101,12 +94,7 @@ pub trait Local {
     /// The callback message containing information about trading volume for the day (live/delayed) from [`crate::client::Client::req_market_data`].
     fn volume(&mut self, req_id: i64, volume: Volume) -> impl Future {}
     /// The callback message containing information about real-time volume from [`crate::client::Client::req_market_data`].
-    fn real_time_volume(
-        &mut self,
-        req_id: i64,
-        volume: RealTimeVolume,
-    ) -> impl Future {
-    }
+    fn real_time_volume(&mut self, req_id: i64, volume: RealTimeVolume) -> impl Future {}
     /// The callback message containing information about the parameters of a market data request from [`crate::client::Client::req_market_data`].
     fn tick_params(
         &mut self,
@@ -117,12 +105,7 @@ pub trait Local {
     ) -> impl Future {
     }
     /// The callback message containing information about the class of data that will be returned from [`crate::client::Client::req_market_data`].
-    fn market_data_class(
-        &mut self,
-        req_id: i64,
-        class: payload::MarketDataClass,
-    ) -> impl Future {
-    }
+    fn market_data_class(&mut self, req_id: i64, class: payload::MarketDataClass) -> impl Future {}
     /// The callback message containing information about updating an existing order book from [`crate::client::Client::req_market_depth`].
     fn update_market_depth(
         &mut self,
@@ -142,23 +125,13 @@ pub trait Local {
     /// The callback message containing an updated historical bar from [`crate::client::Client::req_updating_historical_bar`].
     fn updating_historical_bar(&mut self, req_id: i64, bar: Bar) -> impl Future {}
     /// The callback message containing a timestamp for the beginning of data for a contract and specified data type from [`crate::client::Client::req_head_timestamp`].
-    fn head_timestamp(
-        &mut self,
-        req_id: i64,
-        timestamp: NaiveDateTime,
-    ) -> impl Future {
-    }
+    fn head_timestamp(&mut self, req_id: i64, timestamp: NaiveDateTime) -> impl Future {}
     /// The callback message containing a vector of historical ticks from [`crate::client::Client::req_historical_ticks`] for [`crate::client::Client::req_tick_by_tick_data`].
     fn historical_ticks(&mut self, req_id: i64, ticks: Vec<Tick>) -> impl Future {}
     /// The callback message containing a single tick from [`crate::client::Client::req_tick_by_tick_data`].
     fn live_tick(&mut self, req_id: i64, tick: Tick) -> impl Future {}
     /// The callback message containing account attributes from [`crate::client::Client::req_account_updates`].
-    fn account_attribute(
-        &mut self,
-        attribute: Attribute,
-        account_number: String,
-    ) -> impl Future {
-    }
+    fn account_attribute(&mut self, attribute: Attribute, account_number: String) -> impl Future {}
     /// The callback message containing information about a single [`Position`] from [`crate::client::Client::req_positions`].
     fn position(&mut self, position: Position) -> impl Future {}
     /// The callback message containing information about the time at which [`Local::account_attribute`] data is valid.
@@ -192,7 +165,15 @@ pub trait Local {
     /// The callback message that contains order status data from [`crate::client::Client::req_place_order`].
     fn order_status(&mut self, status: OrderStatus) -> impl Future {}
     /// The callback message that contains information about currently open orders from [`crate::client::Client::req_place_order`].
-    fn open_order(&mut self, order_id: i64, contract_id: ContractId, client_id: i64, parent_id: Option<i64>, permanent_id: i64) -> impl Future {}
+    fn open_order(
+        &mut self,
+        order_id: i64,
+        contract_id: ContractId,
+        client_id: i64,
+        parent_id: Option<i64>,
+        permanent_id: i64,
+    ) -> impl Future {
+    }
 }
 
 /// An initializer for a new [`Local`] wrapper.
