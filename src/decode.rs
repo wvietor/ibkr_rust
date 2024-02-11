@@ -7,7 +7,7 @@ use crate::contract::{
     Commodity, Contract, ContractId, Crypto, Forex, Index, SecFuture, SecOption, SecOptionInner,
     SecurityId, Stock,
 };
-use crate::payload::{market_depth::{CompleteEntry, Entry, Operation}, Bar, BarCore, ExchangeId, HistogramEntry, MarketDataClass, Pnl, Position, PositionSummary, Tick, OrderStatus, Fill, Trade, BidAsk, Last, Midpoint};
+use crate::payload::{market_depth::{CompleteEntry, Entry, Operation}, Bar, BarCore, ExchangeId, HistogramEntry, MarketDataClass, Pnl, Position, PositionSummary, Tick, OrderStatus, Fill, Trade, BidAsk, Last, Midpoint, PnlSingle};
 use crate::tick::{
     Accessibility, AuctionData, CalculationResult, Class, Dividends, EtfNav, ExtremeValue, Ipo,
     MarkPrice, OpenInterest, Period, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
@@ -2035,18 +2035,20 @@ pub trait Local: wrapper::Local {
             decode_fields!(
                 fields =>
                     req_id @ 1: i64,
-                    position @ 0: f64,
-                    daily_pnl @ 0: f64,
-                    unrealized_pnl @ 0: f64,
-                    realized_pnl @ 0: f64,
+                    position_size @ 0: f64,
+                    daily @ 0: f64,
+                    unrealized @ 0: f64,
+                    realized @ 0: f64,
                     market_value @ 0: f64
             );
-            let pnl = Pnl {
-                daily: daily_pnl,
-                unrealized: unrealized_pnl,
-                realized: realized_pnl,
+            let pnl = PnlSingle {
+                daily,
+                unrealized,
+                realized,
+                position_size,
+                market_value
             };
-
+            wrapper.single_position_pnl(req_id, pnl).await;
             Ok(())
         }
     }

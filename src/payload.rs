@@ -375,6 +375,21 @@ pub struct Pnl {
     pub realized: f64,
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
+/// A simple struct representing single position P&L
+pub struct PnlSingle {
+    /// The daily P&L for the position in real-time.
+    pub daily: f64,
+    /// Unrealized P&L for the position.
+    pub unrealized: f64,
+    /// Realized P&L for the position.
+    pub realized: f64,
+    /// Current size of the position
+    pub position_size: f64,
+    /// The current market value of the position
+    pub market_value: f64,
+}
+
 #[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "order_status")]
 /// The possible statuses for a given order.
