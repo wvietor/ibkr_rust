@@ -22,4 +22,3 @@ anyhow = "1.0.79"
 itoa = "1.0.10"
 ryu = "1.0.16"
 trait-variant = "0.1.1"
-chrono-tz = { version = "0.8.5", features = ["serde"] }
