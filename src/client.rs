@@ -242,10 +242,10 @@ impl Builder {
         )
         .with_context(|| "Failed to parse connection time")?;
         let conn_time = conn_time
-            .and_local_timezone(tz.trim().parse::<chrono_tz::Tz>().map_err(|e| {
+            .and_local_timezone(tz.trim().parse::<crate::timezone::IbTimeZone>().map_err(|e| {
                 anyhow::anyhow!(
-                    "Failed to parse timezone in connection time: {}",
-                    e.as_str()
+                    "Failed to parse timezone in connection time: {:?}",
+                    e
                 )
             })?)
             .single()
