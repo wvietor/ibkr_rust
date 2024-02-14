@@ -1,5 +1,5 @@
+use chrono::{FixedOffset, LocalResult, NaiveDate, NaiveDateTime, Offset, TimeZone};
 use std::fmt::Formatter;
-use chrono::{LocalResult, NaiveDate, NaiveDateTime, TimeZone, FixedOffset, Offset};
 
 #[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -539,1074 +539,539 @@ pub enum IbTimeZone {
 
 impl Offset for IbTimeZone {
     // Don't worry about the `unwrap()`. This function can NEVER panic.
-    #[allow(clippy::unwrap_used)]
-    /// ```
-    /// # use chrono::{Offset, FixedOffset};
-    /// # use ibapi::timezone::IbTimeZone;
-    /// assert_eq!(IbTimeZone::AfricaAbidjan.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaAccra.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaAddisAbaba.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaAlgiers.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaAsmara.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaAsmera.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaBamako.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaBangui.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaBanjul.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaBissau.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaBlantyre.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaBrazzaville.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaBujumbura.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaCairo.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaCasablanca.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaCeuta.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaConakry.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaDakar.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaDarEsSalaam.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaDjibouti.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaDouala.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaElAaiun.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaFreetown.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaGaborone.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaHarare.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaJohannesburg.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaJuba.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaKampala.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaKhartoum.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaKigali.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaKinshasa.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaLagos.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaLibreville.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaLome.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaLuanda.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaLubumbashi.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaLusaka.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaMalabo.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaMaputo.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaMaseru.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaMbabane.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaMogadishu.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaMonrovia.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaNairobi.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaNdjamena.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaNiamey.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaNouakchott.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaOuagadougou.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaPortoNovo.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaSaoTome.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaTimbuktu.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaTripoli.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaTunis.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AfricaWindhoek.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaAdak.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaAnchorage.fix(), FixedOffset::east_opt(-32400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaAnguilla.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaAntigua.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaAraguaina.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaArgentinaBuenosAires.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaArgentinaCatamarca.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaArgentinaCordoba.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaArgentinaJujuy.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaArgentinaLaRioja.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaArgentinaMendoza.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaArgentinaRioGallegos.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaArgentinaSalta.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaArgentinaSanJuan.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaArgentinaSanLuis.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaArgentinaTucuman.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaArgentinaUshuaia.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaAruba.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaAsuncion.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaAtikokan.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaAtka.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaBahia.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaBahiaBanderas.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaBarbados.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaBelem.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaBelize.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaBlancSablon.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaBoaVista.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaBogota.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaBoise.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaBuenosAires.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaCambridgeBay.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaCampoGrande.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaCancun.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaCaracas.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaCayenne.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaCayman.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaChicago.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaChihuahua.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaCoralHarbour.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaCordoba.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaCostaRica.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaCreston.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaCuiaba.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaCuracao.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaDanmarkshavn.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaDawson.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaDawsonCreek.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaDenver.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaDetroit.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaDominica.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaEdmonton.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaEirunepe.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaElSalvador.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaEnsenada.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaFortNelson.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaFortWayne.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaFortaleza.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaGlaceBay.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaGodthab.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaGooseBay.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaGrandTurk.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaGrenada.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaGuadeloupe.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaGuatemala.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaGuayaquil.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaGuyana.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaHalifax.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaHermosillo.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaIndianaIndianapolis.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaIndianaMarengo.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaIndianaPetersburg.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaIndianaTellCity.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaIndianaVevay.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaIndianaVincennes.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaIndianaWinamac.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaIndianapolis.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaInuvik.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaIqaluit.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaJamaica.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaJuneau.fix(), FixedOffset::east_opt(-32400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaKentuckyLouisville.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaKentuckyMonticello.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaKralendijk.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaLaPaz.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaLima.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaLosAngeles.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaLouisville.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaLowerPrinces.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaMaceio.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaManagua.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaManaus.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaMarigot.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaMartinique.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaMatamoros.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaMazatlan.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaMenominee.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaMerida.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaMetlakatla.fix(), FixedOffset::east_opt(-32400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaMexicoCity.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaMiquelon.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaMoncton.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaMonterrey.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaMontevideo.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaMontreal.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaMontserrat.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaNassau.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaNewYork.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaNipigon.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaNome.fix(), FixedOffset::east_opt(-32400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaNoronha.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaNorthDakotaBeulah.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaNorthDakotaCenter.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaNorthDakotaNewSalem.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaNuuk.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaOjinaga.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaPanama.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaPangnirtung.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaParamaribo.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaPhoenix.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaPortAuPrince.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaPortOfSpain.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaPortoAcre.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaPortoVelho.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaPuertoRico.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaPuntaArenas.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaRainyRiver.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaRankinInlet.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaRecife.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaRegina.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaResolute.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaRioBranco.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaRosario.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaSantaIsabel.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaSantarem.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaSantiago.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaSantoDomingo.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaSaoPaulo.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaScoresbysund.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaShiprock.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaSitka.fix(), FixedOffset::east_opt(-32400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaStBarthelemy.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaStJohns.fix(), FixedOffset::east_opt(-12600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaStKitts.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaStLucia.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaStThomas.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaStVincent.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaSwiftCurrent.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaTegucigalpa.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaThule.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaThunderBay.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaTijuana.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaToronto.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaTortola.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaVancouver.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaVirgin.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaWhitehorse.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaWinnipeg.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaYakutat.fix(), FixedOffset::east_opt(-32400).unwrap());
-    /// assert_eq!(IbTimeZone::AmericaYellowknife.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AntarcticaCasey.fix(), FixedOffset::east_opt(-39600).unwrap());
-    /// assert_eq!(IbTimeZone::AntarcticaDavis.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AntarcticaDumontdurville.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::AntarcticaMacquarie.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::AntarcticaMawson.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AntarcticaMcmurdo.fix(), FixedOffset::east_opt(-43200).unwrap());
-    /// assert_eq!(IbTimeZone::AntarcticaPalmer.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AntarcticaRothera.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AntarcticaSyowa.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AntarcticaVostok.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::ArcticLongyearbyen.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaAden.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaAlmaty.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaAmman.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaAnadyr.fix(), FixedOffset::east_opt(-43200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaAqtau.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaAqtobe.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaAshgabat.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaAshkhabad.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaAtyrau.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaBaghdad.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaBahrain.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaBaku.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaBangkok.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaBarnaul.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaBeirut.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaBishkek.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaBrunei.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaCalcutta.fix(), FixedOffset::east_opt(-19800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaChita.fix(), FixedOffset::east_opt(-32400).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaChoibalsan.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaChongqing.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaChungking.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaColombo.fix(), FixedOffset::east_opt(-19800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaDacca.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaDamascus.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaDhaka.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaDili.fix(), FixedOffset::east_opt(-32400).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaDubai.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaDushanbe.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaFamagusta.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaGaza.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaHarbin.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaHebron.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaHoChiMinh.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaHongKong.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaHovd.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaIrkutsk.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaIstanbul.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaJakarta.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaJayapura.fix(), FixedOffset::east_opt(-32400).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaJerusalem.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaKabul.fix(), FixedOffset::east_opt(-16200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaKamchatka.fix(), FixedOffset::east_opt(-43200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaKarachi.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaKashgar.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaKathmandu.fix(), FixedOffset::east_opt(-20700).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaKhandyga.fix(), FixedOffset::east_opt(-32400).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaKolkata.fix(), FixedOffset::east_opt(-19800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaKrasnoyarsk.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaKualaLumpur.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaKuching.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaKuwait.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaMacao.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaMacau.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaMagadan.fix(), FixedOffset::east_opt(-39600).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaMakassar.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaManila.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaMuscat.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaNicosia.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaNovokuznetsk.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaNovosibirsk.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaOmsk.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaOral.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaPhnomPenh.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaPontianak.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaPyongyang.fix(), FixedOffset::east_opt(-32400).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaQatar.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaQostanay.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaQyzylorda.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaRangoon.fix(), FixedOffset::east_opt(-23400).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaRiyadh.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaSaigon.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaSakhalin.fix(), FixedOffset::east_opt(-39600).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaSamarkand.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaSeoul.fix(), FixedOffset::east_opt(-32400).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaShanghai.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaSingapore.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaSrednekolymsk.fix(), FixedOffset::east_opt(-39600).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaTaipei.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaTashkent.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaTbilisi.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaTehran.fix(), FixedOffset::east_opt(-12600).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaTelAviv.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaThimbu.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaThimphu.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaTokyo.fix(), FixedOffset::east_opt(-32400).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaTomsk.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaUjungPandang.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaUlaanbaatar.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaUrumqi.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaUstNera.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaVientiane.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaVladivostok.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaYangon.fix(), FixedOffset::east_opt(-23400).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaYekaterinburg.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::AsiaYerevan.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AtlanticAzores.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AtlanticBermuda.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::AtlanticCanary.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AtlanticCapeVerde.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AtlanticFaeroe.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AtlanticFaroe.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AtlanticJanMayen.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::AtlanticMadeira.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AtlanticReykjavik.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AtlanticSouthGeorgia.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::AtlanticStHelena.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::AtlanticStanley.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaAct.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaAdelaide.fix(), FixedOffset::east_opt(-34200).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaBrisbane.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaBrokenHill.fix(), FixedOffset::east_opt(-34200).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaCanberra.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaCurrie.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaDarwin.fix(), FixedOffset::east_opt(-34200).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaEucla.fix(), FixedOffset::east_opt(-31500).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaHobart.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaLhi.fix(), FixedOffset::east_opt(-37800).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaLindeman.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaLordHowe.fix(), FixedOffset::east_opt(-37800).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaMelbourne.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaNsw.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaNorth.fix(), FixedOffset::east_opt(-34200).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaPerth.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaQueensland.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaSouth.fix(), FixedOffset::east_opt(-34200).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaSydney.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaTasmania.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaVictoria.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::AustraliaWest.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::BrazilAcre.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::BrazilDenoronha.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::BrazilEast.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::BrazilWest.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::Cet.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::Cst6Cdt.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::CanadaAtlantic.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::CanadaCentral.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::CanadaEastern.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::CanadaMountain.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::CanadaPacific.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::CanadaSaskatchewan.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::CanadaYukon.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::ChileContinental.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::ChileEasterlsland.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::Eet.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::Est5Edt.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::Egypt.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::Eire.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeAmsterdam.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeAndorra.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeAstrakhan.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeAthens.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeBelfast.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeBelgrade.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeBerlin.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeBratislava.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeBrussels.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeBucharest.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeBudapest.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeBusingen.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeChisinau.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeCopenhagen.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeDublin.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeGibraltar.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeGuernsey.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeHelsinki.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeIsleOfMan.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeIstanbul.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeJersey.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeKaliningrad.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeKiev.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeKirov.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeKyiv.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeLisbon.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeLjubljana.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeLondon.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeLuxembourg.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeMadrid.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeMalta.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeMariehamn.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeMinsk.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeMonaco.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeMoscow.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeNicosia.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeOslo.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeParis.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropePodgorica.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropePrague.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeRiga.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeRome.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeSamara.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeSanMarino.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeSarajevo.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeSaratov.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeSimferopol.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeSkopje.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeSofia.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeStockholm.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeTallinn.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeTirane.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeUlyanovsk.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeUzhgorod.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeVaduz.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeVatican.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeVienna.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeVilnius.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeVolgograd.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeWarsaw.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeZagreb.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeZaporozhye.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::EuropeZurich.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::Gb.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::GbEire.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::Greenwich.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::Hongkong.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::Iceland.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::IndianAntananarivo.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::IndianChagos.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::IndianChristmas.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::IndianCocos.fix(), FixedOffset::east_opt(-23400).unwrap());
-    /// assert_eq!(IbTimeZone::IndianComoro.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::IndianKerguelen.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::IndianMahe.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::IndianMaldives.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::IndianMauritius.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::IndianMayotte.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::IndianReunion.fix(), FixedOffset::east_opt(-14400).unwrap());
-    /// assert_eq!(IbTimeZone::Israel.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::Jamaica.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::Japan.fix(), FixedOffset::east_opt(-32400).unwrap());
-    /// assert_eq!(IbTimeZone::Kwajalein.fix(), FixedOffset::east_opt(-43200).unwrap());
-    /// assert_eq!(IbTimeZone::Libya.fix(), FixedOffset::east_opt(-7200).unwrap());
-    /// assert_eq!(IbTimeZone::Met.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::Mst7Mdt.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::MexicoBajanorte.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::MexicoGeneral.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::Nz.fix(), FixedOffset::east_opt(-43200).unwrap());
-    /// assert_eq!(IbTimeZone::NzChat.fix(), FixedOffset::east_opt(-45900).unwrap());
-    /// assert_eq!(IbTimeZone::Navajo.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::Prc.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::Pst8Pdt.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::PacificApia.fix(), FixedOffset::east_opt(-46800).unwrap());
-    /// assert_eq!(IbTimeZone::PacificAuckland.fix(), FixedOffset::east_opt(-43200).unwrap());
-    /// assert_eq!(IbTimeZone::PacificBougainville.fix(), FixedOffset::east_opt(-39600).unwrap());
-    /// assert_eq!(IbTimeZone::PacificChatham.fix(), FixedOffset::east_opt(-45900).unwrap());
-    /// assert_eq!(IbTimeZone::PacificChuuk.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::PacificEaster.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::PacificEfate.fix(), FixedOffset::east_opt(-39600).unwrap());
-    /// assert_eq!(IbTimeZone::PacificEnderbury.fix(), FixedOffset::east_opt(-46800).unwrap());
-    /// assert_eq!(IbTimeZone::PacificFiji.fix(), FixedOffset::east_opt(-43200).unwrap());
-    /// assert_eq!(IbTimeZone::PacificFunafuti.fix(), FixedOffset::east_opt(-43200).unwrap());
-    /// assert_eq!(IbTimeZone::PacificGalapagos.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::PacificGambier.fix(), FixedOffset::east_opt(-32400).unwrap());
-    /// assert_eq!(IbTimeZone::PacificGuadalcanal.fix(), FixedOffset::east_opt(-39600).unwrap());
-    /// assert_eq!(IbTimeZone::PacificGuam.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::PacificHonolulu.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::PacificJohnston.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::PacificKanton.fix(), FixedOffset::east_opt(-46800).unwrap());
-    /// assert_eq!(IbTimeZone::PacificKiritimati.fix(), FixedOffset::east_opt(-50400).unwrap());
-    /// assert_eq!(IbTimeZone::PacificKosrae.fix(), FixedOffset::east_opt(-39600).unwrap());
-    /// assert_eq!(IbTimeZone::PacificKwajalein.fix(), FixedOffset::east_opt(-43200).unwrap());
-    /// assert_eq!(IbTimeZone::PacificMajuro.fix(), FixedOffset::east_opt(-43200).unwrap());
-    /// assert_eq!(IbTimeZone::PacificMarquesas.fix(), FixedOffset::east_opt(-34200).unwrap());
-    /// assert_eq!(IbTimeZone::PacificMidway.fix(), FixedOffset::east_opt(-39600).unwrap());
-    /// assert_eq!(IbTimeZone::PacificNauru.fix(), FixedOffset::east_opt(-43200).unwrap());
-    /// assert_eq!(IbTimeZone::PacificNiue.fix(), FixedOffset::east_opt(-39600).unwrap());
-    /// assert_eq!(IbTimeZone::PacificNorfolk.fix(), FixedOffset::east_opt(-39600).unwrap());
-    /// assert_eq!(IbTimeZone::PacificNoumea.fix(), FixedOffset::east_opt(-39600).unwrap());
-    /// assert_eq!(IbTimeZone::PacificPagoPago.fix(), FixedOffset::east_opt(-39600).unwrap());
-    /// assert_eq!(IbTimeZone::PacificPalau.fix(), FixedOffset::east_opt(-32400).unwrap());
-    /// assert_eq!(IbTimeZone::PacificPitcairn.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::PacificPohnpei.fix(), FixedOffset::east_opt(-39600).unwrap());
-    /// assert_eq!(IbTimeZone::PacificPortMoresby.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::PacificRarotonga.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::PacificSaipan.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::PacificSamoa.fix(), FixedOffset::east_opt(-39600).unwrap());
-    /// assert_eq!(IbTimeZone::PacificTahiti.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::PacificTarawa.fix(), FixedOffset::east_opt(-43200).unwrap());
-    /// assert_eq!(IbTimeZone::PacificTongatapu.fix(), FixedOffset::east_opt(-46800).unwrap());
-    /// assert_eq!(IbTimeZone::PacificWallis.fix(), FixedOffset::east_opt(-43200).unwrap());
-    /// assert_eq!(IbTimeZone::PacificYap.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::Poland.fix(), FixedOffset::east_opt(-3600).unwrap());
-    /// assert_eq!(IbTimeZone::Portugal.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::Rok.fix(), FixedOffset::east_opt(-32400).unwrap());
-    /// assert_eq!(IbTimeZone::Singapore.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::Turkey.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::Uct.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::UsAlaska.fix(), FixedOffset::east_opt(-32400).unwrap());
-    /// assert_eq!(IbTimeZone::UsAleutian.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::UsArizona.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::UsCentral.fix(), FixedOffset::east_opt(-21600).unwrap());
-    /// assert_eq!(IbTimeZone::UsEastIndiana.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::UsEastern.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::UsHawail.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::UsMountain.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// assert_eq!(IbTimeZone::UsPacific.fix(), FixedOffset::east_opt(-28800).unwrap());
-    /// assert_eq!(IbTimeZone::UsSamoa.fix(), FixedOffset::east_opt(-39600).unwrap());
-    /// assert_eq!(IbTimeZone::Universal.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::WSu.fix(), FixedOffset::east_opt(-10800).unwrap());
-    /// assert_eq!(IbTimeZone::Wet.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::Zulu.fix(), FixedOffset::east_opt(0).unwrap());
-    /// assert_eq!(IbTimeZone::Est.fix(), FixedOffset::east_opt(-18000).unwrap());
-    /// assert_eq!(IbTimeZone::Hst.fix(), FixedOffset::east_opt(-36000).unwrap());
-    /// assert_eq!(IbTimeZone::Mst.fix(), FixedOffset::east_opt(-25200).unwrap());
-    /// ```
+    #[allow(clippy::unwrap_used, clippy::too_many_lines)]
     fn fix(&self) -> FixedOffset {
         match self {
-            Self::AfricaAbidjan => FixedOffset::east_opt(0),
-            Self::AfricaAccra => FixedOffset::east_opt(0),
-            Self::AfricaAddisAbaba => FixedOffset::east_opt(-10800),
-            Self::AfricaAlgiers => FixedOffset::east_opt(-3600),
-            Self::AfricaAsmara => FixedOffset::east_opt(-10800),
-            Self::AfricaAsmera => FixedOffset::east_opt(-10800),
-            Self::AfricaBamako => FixedOffset::east_opt(0),
-            Self::AfricaBangui => FixedOffset::east_opt(-3600),
-            Self::AfricaBanjul => FixedOffset::east_opt(0),
-            Self::AfricaBissau => FixedOffset::east_opt(0),
-            Self::AfricaBlantyre => FixedOffset::east_opt(-7200),
-            Self::AfricaBrazzaville => FixedOffset::east_opt(-3600),
-            Self::AfricaBujumbura => FixedOffset::east_opt(-7200),
-            Self::AfricaCairo => FixedOffset::east_opt(-7200),
-            Self::AfricaCasablanca => FixedOffset::east_opt(0),
-            Self::AfricaCeuta => FixedOffset::east_opt(-3600),
-            Self::AfricaConakry => FixedOffset::east_opt(0),
-            Self::AfricaDakar => FixedOffset::east_opt(0),
-            Self::AfricaDarEsSalaam => FixedOffset::east_opt(-10800),
-            Self::AfricaDjibouti => FixedOffset::east_opt(-10800),
-            Self::AfricaDouala => FixedOffset::east_opt(-3600),
-            Self::AfricaElAaiun => FixedOffset::east_opt(0),
-            Self::AfricaFreetown => FixedOffset::east_opt(0),
-            Self::AfricaGaborone => FixedOffset::east_opt(-7200),
-            Self::AfricaHarare => FixedOffset::east_opt(-7200),
-            Self::AfricaJohannesburg => FixedOffset::east_opt(-7200),
-            Self::AfricaJuba => FixedOffset::east_opt(-7200),
-            Self::AfricaKampala => FixedOffset::east_opt(-10800),
-            Self::AfricaKhartoum => FixedOffset::east_opt(-7200),
-            Self::AfricaKigali => FixedOffset::east_opt(-7200),
-            Self::AfricaKinshasa => FixedOffset::east_opt(-3600),
-            Self::AfricaLagos => FixedOffset::east_opt(-3600),
-            Self::AfricaLibreville => FixedOffset::east_opt(-3600),
-            Self::AfricaLome => FixedOffset::east_opt(0),
-            Self::AfricaLuanda => FixedOffset::east_opt(-3600),
-            Self::AfricaLubumbashi => FixedOffset::east_opt(-7200),
-            Self::AfricaLusaka => FixedOffset::east_opt(-7200),
-            Self::AfricaMalabo => FixedOffset::east_opt(-3600),
-            Self::AfricaMaputo => FixedOffset::east_opt(-7200),
-            Self::AfricaMaseru => FixedOffset::east_opt(-7200),
-            Self::AfricaMbabane => FixedOffset::east_opt(-7200),
-            Self::AfricaMogadishu => FixedOffset::east_opt(-10800),
-            Self::AfricaMonrovia => FixedOffset::east_opt(0),
-            Self::AfricaNairobi => FixedOffset::east_opt(-10800),
-            Self::AfricaNdjamena => FixedOffset::east_opt(-3600),
-            Self::AfricaNiamey => FixedOffset::east_opt(-3600),
-            Self::AfricaNouakchott => FixedOffset::east_opt(0),
-            Self::AfricaOuagadougou => FixedOffset::east_opt(0),
-            Self::AfricaPortoNovo => FixedOffset::east_opt(-3600),
-            Self::AfricaSaoTome => FixedOffset::east_opt(0),
-            Self::AfricaTimbuktu => FixedOffset::east_opt(0),
-            Self::AfricaTripoli => FixedOffset::east_opt(-7200),
-            Self::AfricaTunis => FixedOffset::east_opt(-3600),
-            Self::AfricaWindhoek => FixedOffset::east_opt(-3600),
-            Self::AmericaAdak => FixedOffset::east_opt(-36000),
-            Self::AmericaAnchorage => FixedOffset::east_opt(-32400),
-            Self::AmericaAnguilla => FixedOffset::east_opt(-14400),
-            Self::AmericaAntigua => FixedOffset::east_opt(-14400),
-            Self::AmericaAraguaina => FixedOffset::east_opt(-10800),
-            Self::AmericaArgentinaBuenosAires => FixedOffset::east_opt(-10800),
-            Self::AmericaArgentinaCatamarca => FixedOffset::east_opt(-10800),
-            Self::AmericaArgentinaCordoba => FixedOffset::east_opt(-10800),
-            Self::AmericaArgentinaJujuy => FixedOffset::east_opt(-10800),
-            Self::AmericaArgentinaLaRioja => FixedOffset::east_opt(-10800),
-            Self::AmericaArgentinaMendoza => FixedOffset::east_opt(-10800),
-            Self::AmericaArgentinaRioGallegos => FixedOffset::east_opt(-10800),
-            Self::AmericaArgentinaSalta => FixedOffset::east_opt(-10800),
-            Self::AmericaArgentinaSanJuan => FixedOffset::east_opt(-10800),
-            Self::AmericaArgentinaSanLuis => FixedOffset::east_opt(-10800),
-            Self::AmericaArgentinaTucuman => FixedOffset::east_opt(-10800),
-            Self::AmericaArgentinaUshuaia => FixedOffset::east_opt(-10800),
-            Self::AmericaAruba => FixedOffset::east_opt(-14400),
-            Self::AmericaAsuncion => FixedOffset::east_opt(-14400),
-            Self::AmericaAtikokan => FixedOffset::east_opt(-18000),
-            Self::AmericaAtka => FixedOffset::east_opt(-36000),
-            Self::AmericaBahia => FixedOffset::east_opt(-10800),
-            Self::AmericaBahiaBanderas => FixedOffset::east_opt(-21600),
-            Self::AmericaBarbados => FixedOffset::east_opt(-14400),
-            Self::AmericaBelem => FixedOffset::east_opt(-10800),
-            Self::AmericaBelize => FixedOffset::east_opt(-21600),
-            Self::AmericaBlancSablon => FixedOffset::east_opt(-14400),
-            Self::AmericaBoaVista => FixedOffset::east_opt(-14400),
-            Self::AmericaBogota => FixedOffset::east_opt(-18000),
-            Self::AmericaBoise => FixedOffset::east_opt(-25200),
-            Self::AmericaBuenosAires => FixedOffset::east_opt(-10800),
-            Self::AmericaCambridgeBay => FixedOffset::east_opt(-25200),
-            Self::AmericaCampoGrande => FixedOffset::east_opt(-14400),
-            Self::AmericaCancun => FixedOffset::east_opt(-18000),
-            Self::AmericaCaracas => FixedOffset::east_opt(-14400),
-            Self::AmericaCayenne => FixedOffset::east_opt(-10800),
-            Self::AmericaCayman => FixedOffset::east_opt(-18000),
-            Self::AmericaChicago => FixedOffset::east_opt(-21600),
-            Self::AmericaChihuahua => FixedOffset::east_opt(-25200),
-            Self::AmericaCoralHarbour => FixedOffset::east_opt(-18000),
-            Self::AmericaCordoba => FixedOffset::east_opt(-10800),
-            Self::AmericaCostaRica => FixedOffset::east_opt(-21600),
-            Self::AmericaCreston => FixedOffset::east_opt(-25200),
-            Self::AmericaCuiaba => FixedOffset::east_opt(-14400),
-            Self::AmericaCuracao => FixedOffset::east_opt(-14400),
-            Self::AmericaDanmarkshavn => FixedOffset::east_opt(0),
-            Self::AmericaDawson => FixedOffset::east_opt(-25200),
-            Self::AmericaDawsonCreek => FixedOffset::east_opt(-25200),
-            Self::AmericaDenver => FixedOffset::east_opt(-25200),
-            Self::AmericaDetroit => FixedOffset::east_opt(-18000),
-            Self::AmericaDominica => FixedOffset::east_opt(-14400),
-            Self::AmericaEdmonton => FixedOffset::east_opt(-25200),
-            Self::AmericaEirunepe => FixedOffset::east_opt(-18000),
-            Self::AmericaElSalvador => FixedOffset::east_opt(-21600),
-            Self::AmericaEnsenada => FixedOffset::east_opt(-28800),
-            Self::AmericaFortNelson => FixedOffset::east_opt(-25200),
-            Self::AmericaFortWayne => FixedOffset::east_opt(-18000),
-            Self::AmericaFortaleza => FixedOffset::east_opt(-10800),
-            Self::AmericaGlaceBay => FixedOffset::east_opt(-14400),
-            Self::AmericaGodthab => FixedOffset::east_opt(-10800),
-            Self::AmericaGooseBay => FixedOffset::east_opt(-14400),
-            Self::AmericaGrandTurk => FixedOffset::east_opt(-18000),
-            Self::AmericaGrenada => FixedOffset::east_opt(-14400),
-            Self::AmericaGuadeloupe => FixedOffset::east_opt(-14400),
-            Self::AmericaGuatemala => FixedOffset::east_opt(-21600),
-            Self::AmericaGuayaquil => FixedOffset::east_opt(-18000),
-            Self::AmericaGuyana => FixedOffset::east_opt(-14400),
-            Self::AmericaHalifax => FixedOffset::east_opt(-14400),
-            Self::AmericaHermosillo => FixedOffset::east_opt(-25200),
-            Self::AmericaIndianaIndianapolis => FixedOffset::east_opt(-18000),
-            Self::AmericaIndianaMarengo => FixedOffset::east_opt(-18000),
-            Self::AmericaIndianaPetersburg => FixedOffset::east_opt(-18000),
-            Self::AmericaIndianaTellCity => FixedOffset::east_opt(-21600),
-            Self::AmericaIndianaVevay => FixedOffset::east_opt(-18000),
-            Self::AmericaIndianaVincennes => FixedOffset::east_opt(-18000),
-            Self::AmericaIndianaWinamac => FixedOffset::east_opt(-18000),
-            Self::AmericaIndianapolis => FixedOffset::east_opt(-18000),
-            Self::AmericaInuvik => FixedOffset::east_opt(-25200),
-            Self::AmericaIqaluit => FixedOffset::east_opt(-18000),
-            Self::AmericaJamaica => FixedOffset::east_opt(-18000),
-            Self::AmericaJuneau => FixedOffset::east_opt(-32400),
-            Self::AmericaKentuckyLouisville => FixedOffset::east_opt(-18000),
-            Self::AmericaKentuckyMonticello => FixedOffset::east_opt(-18000),
-            Self::AmericaKralendijk => FixedOffset::east_opt(-14400),
-            Self::AmericaLaPaz => FixedOffset::east_opt(-14400),
-            Self::AmericaLima => FixedOffset::east_opt(-18000),
-            Self::AmericaLosAngeles => FixedOffset::east_opt(-28800),
-            Self::AmericaLouisville => FixedOffset::east_opt(-18000),
-            Self::AmericaLowerPrinces => FixedOffset::east_opt(-14400),
-            Self::AmericaMaceio => FixedOffset::east_opt(-10800),
-            Self::AmericaManagua => FixedOffset::east_opt(-21600),
-            Self::AmericaManaus => FixedOffset::east_opt(-14400),
-            Self::AmericaMarigot => FixedOffset::east_opt(-14400),
-            Self::AmericaMartinique => FixedOffset::east_opt(-14400),
-            Self::AmericaMatamoros => FixedOffset::east_opt(-21600),
-            Self::AmericaMazatlan => FixedOffset::east_opt(-25200),
-            Self::AmericaMenominee => FixedOffset::east_opt(-21600),
-            Self::AmericaMerida => FixedOffset::east_opt(-21600),
-            Self::AmericaMetlakatla => FixedOffset::east_opt(-32400),
-            Self::AmericaMexicoCity => FixedOffset::east_opt(-21600),
-            Self::AmericaMiquelon => FixedOffset::east_opt(-10800),
-            Self::AmericaMoncton => FixedOffset::east_opt(-14400),
-            Self::AmericaMonterrey => FixedOffset::east_opt(-21600),
-            Self::AmericaMontevideo => FixedOffset::east_opt(-10800),
-            Self::AmericaMontreal => FixedOffset::east_opt(-18000),
-            Self::AmericaMontserrat => FixedOffset::east_opt(-14400),
-            Self::AmericaNassau => FixedOffset::east_opt(-18000),
-            Self::AmericaNewYork => FixedOffset::east_opt(-18000),
-            Self::AmericaNipigon => FixedOffset::east_opt(-18000),
-            Self::AmericaNome => FixedOffset::east_opt(-32400),
-            Self::AmericaNoronha => FixedOffset::east_opt(-7200),
-            Self::AmericaNorthDakotaBeulah => FixedOffset::east_opt(-21600),
-            Self::AmericaNorthDakotaCenter => FixedOffset::east_opt(-21600),
-            Self::AmericaNorthDakotaNewSalem => FixedOffset::east_opt(-21600),
-            Self::AmericaNuuk => FixedOffset::east_opt(-10800),
-            Self::AmericaOjinaga => FixedOffset::east_opt(-25200),
-            Self::AmericaPanama => FixedOffset::east_opt(-18000),
-            Self::AmericaPangnirtung => FixedOffset::east_opt(-18000),
-            Self::AmericaParamaribo => FixedOffset::east_opt(-10800),
-            Self::AmericaPhoenix => FixedOffset::east_opt(-25200),
-            Self::AmericaPortAuPrince => FixedOffset::east_opt(-18000),
-            Self::AmericaPortOfSpain => FixedOffset::east_opt(-14400),
-            Self::AmericaPortoAcre => FixedOffset::east_opt(-18000),
-            Self::AmericaPortoVelho => FixedOffset::east_opt(-14400),
-            Self::AmericaPuertoRico => FixedOffset::east_opt(-14400),
-            Self::AmericaPuntaArenas => FixedOffset::east_opt(-10800),
-            Self::AmericaRainyRiver => FixedOffset::east_opt(-21600),
-            Self::AmericaRankinInlet => FixedOffset::east_opt(-21600),
-            Self::AmericaRecife => FixedOffset::east_opt(-10800),
-            Self::AmericaRegina => FixedOffset::east_opt(-21600),
-            Self::AmericaResolute => FixedOffset::east_opt(-21600),
-            Self::AmericaRioBranco => FixedOffset::east_opt(-18000),
-            Self::AmericaRosario => FixedOffset::east_opt(-10800),
-            Self::AmericaSantaIsabel => FixedOffset::east_opt(-28800),
-            Self::AmericaSantarem => FixedOffset::east_opt(-10800),
-            Self::AmericaSantiago => FixedOffset::east_opt(-14400),
-            Self::AmericaSantoDomingo => FixedOffset::east_opt(-14400),
-            Self::AmericaSaoPaulo => FixedOffset::east_opt(-10800),
-            Self::AmericaScoresbysund => FixedOffset::east_opt(-3600),
-            Self::AmericaShiprock => FixedOffset::east_opt(-25200),
-            Self::AmericaSitka => FixedOffset::east_opt(-32400),
-            Self::AmericaStBarthelemy => FixedOffset::east_opt(-14400),
-            Self::AmericaStJohns => FixedOffset::east_opt(-12600),
-            Self::AmericaStKitts => FixedOffset::east_opt(-14400),
-            Self::AmericaStLucia => FixedOffset::east_opt(-14400),
-            Self::AmericaStThomas => FixedOffset::east_opt(-14400),
-            Self::AmericaStVincent => FixedOffset::east_opt(-14400),
-            Self::AmericaSwiftCurrent => FixedOffset::east_opt(-21600),
-            Self::AmericaTegucigalpa => FixedOffset::east_opt(-21600),
-            Self::AmericaThule => FixedOffset::east_opt(-14400),
-            Self::AmericaThunderBay => FixedOffset::east_opt(-18000),
-            Self::AmericaTijuana => FixedOffset::east_opt(-28800),
-            Self::AmericaToronto => FixedOffset::east_opt(-18000),
-            Self::AmericaTortola => FixedOffset::east_opt(-14400),
-            Self::AmericaVancouver => FixedOffset::east_opt(-28800),
-            Self::AmericaVirgin => FixedOffset::east_opt(-14400),
-            Self::AmericaWhitehorse => FixedOffset::east_opt(-25200),
-            Self::AmericaWinnipeg => FixedOffset::east_opt(-21600),
-            Self::AmericaYakutat => FixedOffset::east_opt(-32400),
-            Self::AmericaYellowknife => FixedOffset::east_opt(-25200),
-            Self::AntarcticaCasey => FixedOffset::east_opt(-39600),
-            Self::AntarcticaDavis => FixedOffset::east_opt(-25200),
-            Self::AntarcticaDumontdurville => FixedOffset::east_opt(-36000),
-            Self::AntarcticaMacquarie => FixedOffset::east_opt(-36000),
-            Self::AntarcticaMawson => FixedOffset::east_opt(-18000),
-            Self::AntarcticaMcmurdo => FixedOffset::east_opt(-43200),
-            Self::AntarcticaPalmer => FixedOffset::east_opt(-10800),
-            Self::AntarcticaRothera => FixedOffset::east_opt(-10800),
-            Self::AntarcticaSyowa => FixedOffset::east_opt(-10800),
-            Self::AntarcticaVostok => FixedOffset::east_opt(-21600),
-            Self::ArcticLongyearbyen => FixedOffset::east_opt(-3600),
-            Self::AsiaAden => FixedOffset::east_opt(-10800),
-            Self::AsiaAlmaty => FixedOffset::east_opt(-21600),
-            Self::AsiaAmman => FixedOffset::east_opt(-7200),
-            Self::AsiaAnadyr => FixedOffset::east_opt(-43200),
-            Self::AsiaAqtau => FixedOffset::east_opt(-18000),
-            Self::AsiaAqtobe => FixedOffset::east_opt(-18000),
-            Self::AsiaAshgabat => FixedOffset::east_opt(-18000),
-            Self::AsiaAshkhabad => FixedOffset::east_opt(-18000),
-            Self::AsiaAtyrau => FixedOffset::east_opt(-18000),
-            Self::AsiaBaghdad => FixedOffset::east_opt(-10800),
-            Self::AsiaBahrain => FixedOffset::east_opt(-10800),
-            Self::AsiaBaku => FixedOffset::east_opt(-14400),
-            Self::AsiaBangkok => FixedOffset::east_opt(-25200),
-            Self::AsiaBarnaul => FixedOffset::east_opt(-25200),
-            Self::AsiaBeirut => FixedOffset::east_opt(-7200),
-            Self::AsiaBishkek => FixedOffset::east_opt(-21600),
-            Self::AsiaBrunei => FixedOffset::east_opt(-28800),
-            Self::AsiaCalcutta => FixedOffset::east_opt(-19800),
-            Self::AsiaChita => FixedOffset::east_opt(-32400),
-            Self::AsiaChoibalsan => FixedOffset::east_opt(-28800),
-            Self::AsiaChongqing => FixedOffset::east_opt(-28800),
-            Self::AsiaChungking => FixedOffset::east_opt(-28800),
-            Self::AsiaColombo => FixedOffset::east_opt(-19800),
-            Self::AsiaDacca => FixedOffset::east_opt(-21600),
-            Self::AsiaDamascus => FixedOffset::east_opt(-7200),
-            Self::AsiaDhaka => FixedOffset::east_opt(-21600),
-            Self::AsiaDili => FixedOffset::east_opt(-32400),
-            Self::AsiaDubai => FixedOffset::east_opt(-14400),
-            Self::AsiaDushanbe => FixedOffset::east_opt(-18000),
-            Self::AsiaFamagusta => FixedOffset::east_opt(-7200),
-            Self::AsiaGaza => FixedOffset::east_opt(-7200),
-            Self::AsiaHarbin => FixedOffset::east_opt(-28800),
-            Self::AsiaHebron => FixedOffset::east_opt(-7200),
-            Self::AsiaHoChiMinh => FixedOffset::east_opt(-25200),
-            Self::AsiaHongKong => FixedOffset::east_opt(-28800),
-            Self::AsiaHovd => FixedOffset::east_opt(-25200),
-            Self::AsiaIrkutsk => FixedOffset::east_opt(-28800),
-            Self::AsiaIstanbul => FixedOffset::east_opt(-10800),
-            Self::AsiaJakarta => FixedOffset::east_opt(-25200),
-            Self::AsiaJayapura => FixedOffset::east_opt(-32400),
-            Self::AsiaJerusalem => FixedOffset::east_opt(-7200),
-            Self::AsiaKabul => FixedOffset::east_opt(-16200),
-            Self::AsiaKamchatka => FixedOffset::east_opt(-43200),
-            Self::AsiaKarachi => FixedOffset::east_opt(-18000),
-            Self::AsiaKashgar => FixedOffset::east_opt(-21600),
-            Self::AsiaKathmandu => FixedOffset::east_opt(-20700),
-            Self::AsiaKhandyga => FixedOffset::east_opt(-32400),
-            Self::AsiaKolkata => FixedOffset::east_opt(-19800),
-            Self::AsiaKrasnoyarsk => FixedOffset::east_opt(-25200),
-            Self::AsiaKualaLumpur => FixedOffset::east_opt(-28800),
-            Self::AsiaKuching => FixedOffset::east_opt(-28800),
-            Self::AsiaKuwait => FixedOffset::east_opt(-10800),
-            Self::AsiaMacao => FixedOffset::east_opt(-28800),
-            Self::AsiaMacau => FixedOffset::east_opt(-28800),
-            Self::AsiaMagadan => FixedOffset::east_opt(-39600),
-            Self::AsiaMakassar => FixedOffset::east_opt(-28800),
-            Self::AsiaManila => FixedOffset::east_opt(-28800),
-            Self::AsiaMuscat => FixedOffset::east_opt(-14400),
-            Self::AsiaNicosia => FixedOffset::east_opt(-7200),
-            Self::AsiaNovokuznetsk => FixedOffset::east_opt(-25200),
-            Self::AsiaNovosibirsk => FixedOffset::east_opt(-25200),
-            Self::AsiaOmsk => FixedOffset::east_opt(-21600),
-            Self::AsiaOral => FixedOffset::east_opt(-18000),
-            Self::AsiaPhnomPenh => FixedOffset::east_opt(-25200),
-            Self::AsiaPontianak => FixedOffset::east_opt(-25200),
-            Self::AsiaPyongyang => FixedOffset::east_opt(-32400),
-            Self::AsiaQatar => FixedOffset::east_opt(-10800),
-            Self::AsiaQostanay => FixedOffset::east_opt(-21600),
-            Self::AsiaQyzylorda => FixedOffset::east_opt(-18000),
-            Self::AsiaRangoon => FixedOffset::east_opt(-23400),
-            Self::AsiaRiyadh => FixedOffset::east_opt(-10800),
-            Self::AsiaSaigon => FixedOffset::east_opt(-25200),
-            Self::AsiaSakhalin => FixedOffset::east_opt(-39600),
-            Self::AsiaSamarkand => FixedOffset::east_opt(-18000),
-            Self::AsiaSeoul => FixedOffset::east_opt(-32400),
-            Self::AsiaShanghai => FixedOffset::east_opt(-28800),
-            Self::AsiaSingapore => FixedOffset::east_opt(-28800),
-            Self::AsiaSrednekolymsk => FixedOffset::east_opt(-39600),
-            Self::AsiaTaipei => FixedOffset::east_opt(-28800),
-            Self::AsiaTashkent => FixedOffset::east_opt(-18000),
-            Self::AsiaTbilisi => FixedOffset::east_opt(-14400),
-            Self::AsiaTehran => FixedOffset::east_opt(-12600),
-            Self::AsiaTelAviv => FixedOffset::east_opt(-7200),
-            Self::AsiaThimbu => FixedOffset::east_opt(-21600),
-            Self::AsiaThimphu => FixedOffset::east_opt(-21600),
-            Self::AsiaTokyo => FixedOffset::east_opt(-32400),
-            Self::AsiaTomsk => FixedOffset::east_opt(-25200),
-            Self::AsiaUjungPandang => FixedOffset::east_opt(-28800),
-            Self::AsiaUlaanbaatar => FixedOffset::east_opt(-28800),
-            Self::AsiaUrumqi => FixedOffset::east_opt(-21600),
-            Self::AsiaUstNera => FixedOffset::east_opt(-36000),
-            Self::AsiaVientiane => FixedOffset::east_opt(-25200),
-            Self::AsiaVladivostok => FixedOffset::east_opt(-36000),
-            Self::AsiaYangon => FixedOffset::east_opt(-23400),
-            Self::AsiaYekaterinburg => FixedOffset::east_opt(-18000),
-            Self::AsiaYerevan => FixedOffset::east_opt(-14400),
-            Self::AtlanticAzores => FixedOffset::east_opt(-3600),
-            Self::AtlanticBermuda => FixedOffset::east_opt(-14400),
-            Self::AtlanticCanary => FixedOffset::east_opt(0),
-            Self::AtlanticCapeVerde => FixedOffset::east_opt(-3600),
-            Self::AtlanticFaeroe => FixedOffset::east_opt(0),
-            Self::AtlanticFaroe => FixedOffset::east_opt(0),
-            Self::AtlanticJanMayen => FixedOffset::east_opt(-3600),
-            Self::AtlanticMadeira => FixedOffset::east_opt(0),
-            Self::AtlanticReykjavik => FixedOffset::east_opt(0),
-            Self::AtlanticSouthGeorgia => FixedOffset::east_opt(-7200),
-            Self::AtlanticStHelena => FixedOffset::east_opt(0),
-            Self::AtlanticStanley => FixedOffset::east_opt(-10800),
-            Self::AustraliaAct => FixedOffset::east_opt(-36000),
-            Self::AustraliaAdelaide => FixedOffset::east_opt(-34200),
-            Self::AustraliaBrisbane => FixedOffset::east_opt(-36000),
-            Self::AustraliaBrokenHill => FixedOffset::east_opt(-34200),
-            Self::AustraliaCanberra => FixedOffset::east_opt(-36000),
-            Self::AustraliaCurrie => FixedOffset::east_opt(-36000),
-            Self::AustraliaDarwin => FixedOffset::east_opt(-34200),
-            Self::AustraliaEucla => FixedOffset::east_opt(-31500),
-            Self::AustraliaHobart => FixedOffset::east_opt(-36000),
-            Self::AustraliaLhi => FixedOffset::east_opt(-37800),
-            Self::AustraliaLindeman => FixedOffset::east_opt(-36000),
-            Self::AustraliaLordHowe => FixedOffset::east_opt(-37800),
-            Self::AustraliaMelbourne => FixedOffset::east_opt(-36000),
-            Self::AustraliaNsw => FixedOffset::east_opt(-36000),
-            Self::AustraliaNorth => FixedOffset::east_opt(-34200),
-            Self::AustraliaPerth => FixedOffset::east_opt(-28800),
-            Self::AustraliaQueensland => FixedOffset::east_opt(-36000),
-            Self::AustraliaSouth => FixedOffset::east_opt(-34200),
-            Self::AustraliaSydney => FixedOffset::east_opt(-36000),
-            Self::AustraliaTasmania => FixedOffset::east_opt(-36000),
-            Self::AustraliaVictoria => FixedOffset::east_opt(-36000),
-            Self::AustraliaWest => FixedOffset::east_opt(-28800),
-            Self::BrazilAcre => FixedOffset::east_opt(-18000),
-            Self::BrazilDenoronha => FixedOffset::east_opt(-7200),
-            Self::BrazilEast => FixedOffset::east_opt(-10800),
-            Self::BrazilWest => FixedOffset::east_opt(-14400),
-            Self::Cet => FixedOffset::east_opt(-3600),
-            Self::Cst6Cdt => FixedOffset::east_opt(-21600),
-            Self::CanadaAtlantic => FixedOffset::east_opt(-14400),
-            Self::CanadaCentral => FixedOffset::east_opt(-21600),
-            Self::CanadaEastern => FixedOffset::east_opt(-18000),
-            Self::CanadaMountain => FixedOffset::east_opt(-25200),
-            Self::CanadaPacific => FixedOffset::east_opt(-28800),
-            Self::CanadaSaskatchewan => FixedOffset::east_opt(-21600),
-            Self::CanadaYukon => FixedOffset::east_opt(-25200),
-            Self::ChileContinental => FixedOffset::east_opt(-14400),
-            Self::ChileEasterlsland => FixedOffset::east_opt(-21600),
-            Self::Eet => FixedOffset::east_opt(-7200),
-            Self::Est5Edt => FixedOffset::east_opt(-18000),
-            Self::Egypt => FixedOffset::east_opt(-7200),
-            Self::Eire => FixedOffset::east_opt(0),
-            Self::EuropeAmsterdam => FixedOffset::east_opt(-3600),
-            Self::EuropeAndorra => FixedOffset::east_opt(-3600),
-            Self::EuropeAstrakhan => FixedOffset::east_opt(-14400),
-            Self::EuropeAthens => FixedOffset::east_opt(-7200),
-            Self::EuropeBelfast => FixedOffset::east_opt(0),
-            Self::EuropeBelgrade => FixedOffset::east_opt(-3600),
-            Self::EuropeBerlin => FixedOffset::east_opt(-3600),
-            Self::EuropeBratislava => FixedOffset::east_opt(-3600),
-            Self::EuropeBrussels => FixedOffset::east_opt(-3600),
-            Self::EuropeBucharest => FixedOffset::east_opt(-7200),
-            Self::EuropeBudapest => FixedOffset::east_opt(-3600),
-            Self::EuropeBusingen => FixedOffset::east_opt(-3600),
-            Self::EuropeChisinau => FixedOffset::east_opt(-7200),
-            Self::EuropeCopenhagen => FixedOffset::east_opt(-3600),
-            Self::EuropeDublin => FixedOffset::east_opt(0),
-            Self::EuropeGibraltar => FixedOffset::east_opt(-3600),
-            Self::EuropeGuernsey => FixedOffset::east_opt(0),
-            Self::EuropeHelsinki => FixedOffset::east_opt(-7200),
-            Self::EuropeIsleOfMan => FixedOffset::east_opt(0),
-            Self::EuropeIstanbul => FixedOffset::east_opt(-10800),
-            Self::EuropeJersey => FixedOffset::east_opt(0),
-            Self::EuropeKaliningrad => FixedOffset::east_opt(-7200),
-            Self::EuropeKiev => FixedOffset::east_opt(-7200),
-            Self::EuropeKirov => FixedOffset::east_opt(-10800),
-            Self::EuropeKyiv => FixedOffset::east_opt(-7200),
-            Self::EuropeLisbon => FixedOffset::east_opt(0),
-            Self::EuropeLjubljana => FixedOffset::east_opt(-3600),
-            Self::EuropeLondon => FixedOffset::east_opt(0),
-            Self::EuropeLuxembourg => FixedOffset::east_opt(-3600),
-            Self::EuropeMadrid => FixedOffset::east_opt(-3600),
-            Self::EuropeMalta => FixedOffset::east_opt(-3600),
-            Self::EuropeMariehamn => FixedOffset::east_opt(-7200),
-            Self::EuropeMinsk => FixedOffset::east_opt(-10800),
-            Self::EuropeMonaco => FixedOffset::east_opt(-3600),
-            Self::EuropeMoscow => FixedOffset::east_opt(-10800),
-            Self::EuropeNicosia => FixedOffset::east_opt(-7200),
-            Self::EuropeOslo => FixedOffset::east_opt(-3600),
-            Self::EuropeParis => FixedOffset::east_opt(-3600),
-            Self::EuropePodgorica => FixedOffset::east_opt(-3600),
-            Self::EuropePrague => FixedOffset::east_opt(-3600),
-            Self::EuropeRiga => FixedOffset::east_opt(-7200),
-            Self::EuropeRome => FixedOffset::east_opt(-3600),
-            Self::EuropeSamara => FixedOffset::east_opt(-14400),
-            Self::EuropeSanMarino => FixedOffset::east_opt(-3600),
-            Self::EuropeSarajevo => FixedOffset::east_opt(-3600),
-            Self::EuropeSaratov => FixedOffset::east_opt(-14400),
-            Self::EuropeSimferopol => FixedOffset::east_opt(-10800),
-            Self::EuropeSkopje => FixedOffset::east_opt(-3600),
-            Self::EuropeSofia => FixedOffset::east_opt(-7200),
-            Self::EuropeStockholm => FixedOffset::east_opt(-3600),
-            Self::EuropeTallinn => FixedOffset::east_opt(-7200),
-            Self::EuropeTirane => FixedOffset::east_opt(-3600),
-            Self::EuropeUlyanovsk => FixedOffset::east_opt(-14400),
-            Self::EuropeUzhgorod => FixedOffset::east_opt(-7200),
-            Self::EuropeVaduz => FixedOffset::east_opt(-3600),
-            Self::EuropeVatican => FixedOffset::east_opt(-3600),
-            Self::EuropeVienna => FixedOffset::east_opt(-3600),
-            Self::EuropeVilnius => FixedOffset::east_opt(-7200),
-            Self::EuropeVolgograd => FixedOffset::east_opt(-10800),
-            Self::EuropeWarsaw => FixedOffset::east_opt(-3600),
-            Self::EuropeZagreb => FixedOffset::east_opt(-3600),
-            Self::EuropeZaporozhye => FixedOffset::east_opt(-7200),
-            Self::EuropeZurich => FixedOffset::east_opt(-3600),
-            Self::Gb => FixedOffset::east_opt(0),
-            Self::GbEire => FixedOffset::east_opt(0),
-            Self::Greenwich => FixedOffset::east_opt(0),
-            Self::Hongkong => FixedOffset::east_opt(-28800),
-            Self::Iceland => FixedOffset::east_opt(0),
-            Self::IndianAntananarivo => FixedOffset::east_opt(-10800),
-            Self::IndianChagos => FixedOffset::east_opt(-21600),
-            Self::IndianChristmas => FixedOffset::east_opt(-25200),
-            Self::IndianCocos => FixedOffset::east_opt(-23400),
-            Self::IndianComoro => FixedOffset::east_opt(-10800),
-            Self::IndianKerguelen => FixedOffset::east_opt(-18000),
-            Self::IndianMahe => FixedOffset::east_opt(-14400),
-            Self::IndianMaldives => FixedOffset::east_opt(-18000),
-            Self::IndianMauritius => FixedOffset::east_opt(-14400),
-            Self::IndianMayotte => FixedOffset::east_opt(-10800),
-            Self::IndianReunion => FixedOffset::east_opt(-14400),
-            Self::Israel => FixedOffset::east_opt(-7200),
-            Self::Jamaica => FixedOffset::east_opt(-18000),
-            Self::Japan => FixedOffset::east_opt(-32400),
-            Self::Kwajalein => FixedOffset::east_opt(-43200),
-            Self::Libya => FixedOffset::east_opt(-7200),
-            Self::Met => FixedOffset::east_opt(-3600),
-            Self::Mst7Mdt => FixedOffset::east_opt(-25200),
-            Self::MexicoBajanorte => FixedOffset::east_opt(-28800),
-            Self::MexicoGeneral => FixedOffset::east_opt(-21600),
-            Self::Nz => FixedOffset::east_opt(-43200),
-            Self::NzChat => FixedOffset::east_opt(-45900),
-            Self::Navajo => FixedOffset::east_opt(-25200),
-            Self::Prc => FixedOffset::east_opt(-28800),
-            Self::Pst8Pdt => FixedOffset::east_opt(-28800),
-            Self::PacificApia => FixedOffset::east_opt(-46800),
-            Self::PacificAuckland => FixedOffset::east_opt(-43200),
-            Self::PacificBougainville => FixedOffset::east_opt(-39600),
-            Self::PacificChatham => FixedOffset::east_opt(-45900),
-            Self::PacificChuuk => FixedOffset::east_opt(-36000),
-            Self::PacificEaster => FixedOffset::east_opt(-21600),
-            Self::PacificEfate => FixedOffset::east_opt(-39600),
-            Self::PacificEnderbury => FixedOffset::east_opt(-46800),
-            Self::PacificFiji => FixedOffset::east_opt(-43200),
-            Self::PacificFunafuti => FixedOffset::east_opt(-43200),
-            Self::PacificGalapagos => FixedOffset::east_opt(-21600),
-            Self::PacificGambier => FixedOffset::east_opt(-32400),
-            Self::PacificGuadalcanal => FixedOffset::east_opt(-39600),
-            Self::PacificGuam => FixedOffset::east_opt(-36000),
-            Self::PacificHonolulu => FixedOffset::east_opt(-36000),
-            Self::PacificJohnston => FixedOffset::east_opt(-36000),
-            Self::PacificKanton => FixedOffset::east_opt(-46800),
-            Self::PacificKiritimati => FixedOffset::east_opt(-50400),
-            Self::PacificKosrae => FixedOffset::east_opt(-39600),
-            Self::PacificKwajalein => FixedOffset::east_opt(-43200),
-            Self::PacificMajuro => FixedOffset::east_opt(-43200),
-            Self::PacificMarquesas => FixedOffset::east_opt(-34200),
-            Self::PacificMidway => FixedOffset::east_opt(-39600),
-            Self::PacificNauru => FixedOffset::east_opt(-43200),
-            Self::PacificNiue => FixedOffset::east_opt(-39600),
-            Self::PacificNorfolk => FixedOffset::east_opt(-39600),
-            Self::PacificNoumea => FixedOffset::east_opt(-39600),
-            Self::PacificPagoPago => FixedOffset::east_opt(-39600),
-            Self::PacificPalau => FixedOffset::east_opt(-32400),
-            Self::PacificPitcairn => FixedOffset::east_opt(-28800),
-            Self::PacificPohnpei => FixedOffset::east_opt(-39600),
-            Self::PacificPortMoresby => FixedOffset::east_opt(-36000),
-            Self::PacificRarotonga => FixedOffset::east_opt(-36000),
-            Self::PacificSaipan => FixedOffset::east_opt(-36000),
-            Self::PacificSamoa => FixedOffset::east_opt(-39600),
-            Self::PacificTahiti => FixedOffset::east_opt(-36000),
-            Self::PacificTarawa => FixedOffset::east_opt(-43200),
-            Self::PacificTongatapu => FixedOffset::east_opt(-46800),
-            Self::PacificWallis => FixedOffset::east_opt(-43200),
-            Self::PacificYap => FixedOffset::east_opt(-36000),
-            Self::Poland => FixedOffset::east_opt(-3600),
-            Self::Portugal => FixedOffset::east_opt(0),
-            Self::Rok => FixedOffset::east_opt(-32400),
-            Self::Singapore => FixedOffset::east_opt(-28800),
-            Self::Turkey => FixedOffset::east_opt(-10800),
-            Self::Uct => FixedOffset::east_opt(0),
-            Self::UsAlaska => FixedOffset::east_opt(-32400),
-            Self::UsAleutian => FixedOffset::east_opt(-36000),
-            Self::UsArizona => FixedOffset::east_opt(-25200),
-            Self::UsCentral => FixedOffset::east_opt(-21600),
-            Self::UsEastIndiana => FixedOffset::east_opt(-18000),
-            Self::UsEastern => FixedOffset::east_opt(-18000),
-            Self::UsHawail => FixedOffset::east_opt(-36000),
-            Self::UsMountain => FixedOffset::east_opt(-25200),
-            Self::UsPacific => FixedOffset::east_opt(-28800),
-            Self::UsSamoa => FixedOffset::east_opt(-39600),
-            Self::Universal => FixedOffset::east_opt(0),
-            Self::WSu => FixedOffset::east_opt(-10800),
-            Self::Wet => FixedOffset::east_opt(0),
-            Self::Zulu => FixedOffset::east_opt(0),
-            Self::Est => FixedOffset::east_opt(-18000),
-            Self::Hst => FixedOffset::east_opt(-36000),
-            Self::Mst => FixedOffset::east_opt(-25200),
-        }.unwrap()
+            Self::AfricaAbidjan
+            | Self::AfricaAccra
+            | Self::AfricaBamako
+            | Self::AfricaBanjul
+            | Self::AfricaBissau
+            | Self::AfricaCasablanca
+            | Self::AfricaConakry
+            | Self::AfricaDakar
+            | Self::AfricaElAaiun
+            | Self::AfricaFreetown
+            | Self::AfricaLome
+            | Self::AfricaMonrovia
+            | Self::AfricaNouakchott
+            | Self::AfricaOuagadougou
+            | Self::AfricaSaoTome
+            | Self::AfricaTimbuktu
+            | Self::AmericaDanmarkshavn
+            | Self::AtlanticCanary
+            | Self::AtlanticFaeroe
+            | Self::AtlanticFaroe
+            | Self::AtlanticMadeira
+            | Self::AtlanticReykjavik
+            | Self::AtlanticStHelena
+            | Self::Eire
+            | Self::EuropeBelfast
+            | Self::EuropeDublin
+            | Self::EuropeGuernsey
+            | Self::EuropeIsleOfMan
+            | Self::EuropeJersey
+            | Self::EuropeLisbon
+            | Self::EuropeLondon
+            | Self::Gb
+            | Self::GbEire
+            | Self::Greenwich
+            | Self::Iceland
+            | Self::Portugal
+            | Self::Uct
+            | Self::Universal
+            | Self::Wet
+            | Self::Zulu => FixedOffset::east_opt(0),
+            Self::AfricaAddisAbaba
+            | Self::AfricaAsmara
+            | Self::AfricaAsmera
+            | Self::AfricaDarEsSalaam
+            | Self::AfricaDjibouti
+            | Self::AfricaKampala
+            | Self::AfricaMogadishu
+            | Self::AfricaNairobi
+            | Self::AntarcticaSyowa
+            | Self::AsiaAden
+            | Self::AsiaBaghdad
+            | Self::AsiaBahrain
+            | Self::AsiaIstanbul
+            | Self::AsiaKuwait
+            | Self::AsiaQatar
+            | Self::AsiaRiyadh
+            | Self::EuropeIstanbul
+            | Self::EuropeKirov
+            | Self::EuropeMinsk
+            | Self::EuropeMoscow
+            | Self::EuropeSimferopol
+            | Self::EuropeVolgograd
+            | Self::IndianAntananarivo
+            | Self::IndianComoro
+            | Self::IndianMayotte
+            | Self::Turkey
+            | Self::WSu => FixedOffset::east_opt(10800),
+            Self::AfricaAlgiers
+            | Self::AfricaBangui
+            | Self::AfricaBrazzaville
+            | Self::AfricaCeuta
+            | Self::AfricaDouala
+            | Self::AfricaKinshasa
+            | Self::AfricaLagos
+            | Self::AfricaLibreville
+            | Self::AfricaLuanda
+            | Self::AfricaMalabo
+            | Self::AfricaNdjamena
+            | Self::AfricaNiamey
+            | Self::AfricaPortoNovo
+            | Self::AfricaTunis
+            | Self::AfricaWindhoek
+            | Self::ArcticLongyearbyen
+            | Self::AtlanticJanMayen
+            | Self::Cet
+            | Self::EuropeAmsterdam
+            | Self::EuropeAndorra
+            | Self::EuropeBelgrade
+            | Self::EuropeBerlin
+            | Self::EuropeBratislava
+            | Self::EuropeBrussels
+            | Self::EuropeBudapest
+            | Self::EuropeBusingen
+            | Self::EuropeCopenhagen
+            | Self::EuropeGibraltar
+            | Self::EuropeLjubljana
+            | Self::EuropeLuxembourg
+            | Self::EuropeMadrid
+            | Self::EuropeMalta
+            | Self::EuropeMonaco
+            | Self::EuropeOslo
+            | Self::EuropeParis
+            | Self::EuropePodgorica
+            | Self::EuropePrague
+            | Self::EuropeRome
+            | Self::EuropeSanMarino
+            | Self::EuropeSarajevo
+            | Self::EuropeSkopje
+            | Self::EuropeStockholm
+            | Self::EuropeTirane
+            | Self::EuropeVaduz
+            | Self::EuropeVatican
+            | Self::EuropeVienna
+            | Self::EuropeWarsaw
+            | Self::EuropeZagreb
+            | Self::EuropeZurich
+            | Self::Met
+            | Self::Poland => FixedOffset::east_opt(3600),
+            Self::AfricaBlantyre
+            | Self::AfricaBujumbura
+            | Self::AfricaCairo
+            | Self::AfricaGaborone
+            | Self::AfricaHarare
+            | Self::AfricaJohannesburg
+            | Self::AfricaJuba
+            | Self::AfricaKhartoum
+            | Self::AfricaKigali
+            | Self::AfricaLubumbashi
+            | Self::AfricaLusaka
+            | Self::AfricaMaputo
+            | Self::AfricaMaseru
+            | Self::AfricaMbabane
+            | Self::AfricaTripoli
+            | Self::AsiaAmman
+            | Self::AsiaBeirut
+            | Self::AsiaDamascus
+            | Self::AsiaFamagusta
+            | Self::AsiaGaza
+            | Self::AsiaHebron
+            | Self::AsiaJerusalem
+            | Self::AsiaNicosia
+            | Self::AsiaTelAviv
+            | Self::Eet
+            | Self::Egypt
+            | Self::EuropeAthens
+            | Self::EuropeBucharest
+            | Self::EuropeChisinau
+            | Self::EuropeHelsinki
+            | Self::EuropeKaliningrad
+            | Self::EuropeKiev
+            | Self::EuropeKyiv
+            | Self::EuropeMariehamn
+            | Self::EuropeNicosia
+            | Self::EuropeRiga
+            | Self::EuropeSofia
+            | Self::EuropeTallinn
+            | Self::EuropeUzhgorod
+            | Self::EuropeVilnius
+            | Self::EuropeZaporozhye
+            | Self::Israel
+            | Self::Libya => FixedOffset::east_opt(7200),
+            Self::AmericaAdak
+            | Self::AmericaAtka
+            | Self::PacificHonolulu
+            | Self::PacificJohnston
+            | Self::PacificRarotonga
+            | Self::PacificTahiti
+            | Self::UsAleutian
+            | Self::UsHawail
+            | Self::Hst => FixedOffset::east_opt(-36000),
+            Self::AmericaAnchorage
+            | Self::AmericaJuneau
+            | Self::AmericaMetlakatla
+            | Self::AmericaNome
+            | Self::AmericaSitka
+            | Self::AmericaYakutat
+            | Self::PacificGambier
+            | Self::UsAlaska => FixedOffset::east_opt(-32400),
+            Self::AmericaAnguilla
+            | Self::AmericaAntigua
+            | Self::AmericaAruba
+            | Self::AmericaAsuncion
+            | Self::AmericaBarbados
+            | Self::AmericaBlancSablon
+            | Self::AmericaBoaVista
+            | Self::AmericaCampoGrande
+            | Self::AmericaCaracas
+            | Self::AmericaCuiaba
+            | Self::AmericaCuracao
+            | Self::AmericaDominica
+            | Self::AmericaGlaceBay
+            | Self::AmericaGooseBay
+            | Self::AmericaGrenada
+            | Self::AmericaGuadeloupe
+            | Self::AmericaGuyana
+            | Self::AmericaHalifax
+            | Self::AmericaKralendijk
+            | Self::AmericaLaPaz
+            | Self::AmericaLowerPrinces
+            | Self::AmericaManaus
+            | Self::AmericaMarigot
+            | Self::AmericaMartinique
+            | Self::AmericaMoncton
+            | Self::AmericaMontserrat
+            | Self::AmericaPortOfSpain
+            | Self::AmericaPortoVelho
+            | Self::AmericaPuertoRico
+            | Self::AmericaSantiago
+            | Self::AmericaSantoDomingo
+            | Self::AmericaStBarthelemy
+            | Self::AmericaStKitts
+            | Self::AmericaStLucia
+            | Self::AmericaStThomas
+            | Self::AmericaStVincent
+            | Self::AmericaThule
+            | Self::AmericaTortola
+            | Self::AmericaVirgin
+            | Self::AtlanticBermuda
+            | Self::BrazilWest
+            | Self::CanadaAtlantic
+            | Self::ChileContinental => FixedOffset::east_opt(-14400),
+            Self::AmericaAraguaina
+            | Self::AmericaArgentinaBuenosAires
+            | Self::AmericaArgentinaCatamarca
+            | Self::AmericaArgentinaCordoba
+            | Self::AmericaArgentinaJujuy
+            | Self::AmericaArgentinaLaRioja
+            | Self::AmericaArgentinaMendoza
+            | Self::AmericaArgentinaRioGallegos
+            | Self::AmericaArgentinaSalta
+            | Self::AmericaArgentinaSanJuan
+            | Self::AmericaArgentinaSanLuis
+            | Self::AmericaArgentinaTucuman
+            | Self::AmericaArgentinaUshuaia
+            | Self::AmericaBahia
+            | Self::AmericaBelem
+            | Self::AmericaBuenosAires
+            | Self::AmericaCayenne
+            | Self::AmericaCordoba
+            | Self::AmericaFortaleza
+            | Self::AmericaGodthab
+            | Self::AmericaMaceio
+            | Self::AmericaMiquelon
+            | Self::AmericaMontevideo
+            | Self::AmericaNuuk
+            | Self::AmericaParamaribo
+            | Self::AmericaPuntaArenas
+            | Self::AmericaRecife
+            | Self::AmericaRosario
+            | Self::AmericaSantarem
+            | Self::AmericaSaoPaulo
+            | Self::AntarcticaPalmer
+            | Self::AntarcticaRothera
+            | Self::AtlanticStanley
+            | Self::BrazilEast => FixedOffset::east_opt(-10800),
+            Self::AmericaAtikokan
+            | Self::AmericaBogota
+            | Self::AmericaCancun
+            | Self::AmericaCayman
+            | Self::AmericaCoralHarbour
+            | Self::AmericaDetroit
+            | Self::AmericaEirunepe
+            | Self::AmericaFortWayne
+            | Self::AmericaGrandTurk
+            | Self::AmericaGuayaquil
+            | Self::AmericaIndianaIndianapolis
+            | Self::AmericaIndianaMarengo
+            | Self::AmericaIndianaPetersburg
+            | Self::AmericaIndianaVevay
+            | Self::AmericaIndianaVincennes
+            | Self::AmericaIndianaWinamac
+            | Self::AmericaIndianapolis
+            | Self::AmericaIqaluit
+            | Self::AmericaJamaica
+            | Self::AmericaKentuckyLouisville
+            | Self::AmericaKentuckyMonticello
+            | Self::AmericaLima
+            | Self::AmericaLouisville
+            | Self::AmericaMontreal
+            | Self::AmericaNassau
+            | Self::AmericaNewYork
+            | Self::AmericaNipigon
+            | Self::AmericaPanama
+            | Self::AmericaPangnirtung
+            | Self::AmericaPortAuPrince
+            | Self::AmericaPortoAcre
+            | Self::AmericaRioBranco
+            | Self::AmericaThunderBay
+            | Self::AmericaToronto
+            | Self::BrazilAcre
+            | Self::CanadaEastern
+            | Self::Est5Edt
+            | Self::Jamaica
+            | Self::UsEastIndiana
+            | Self::UsEastern
+            | Self::Est => FixedOffset::east_opt(-18000),
+            Self::AmericaBahiaBanderas
+            | Self::AmericaBelize
+            | Self::AmericaChicago
+            | Self::AmericaCostaRica
+            | Self::AmericaElSalvador
+            | Self::AmericaGuatemala
+            | Self::AmericaIndianaTellCity
+            | Self::AmericaManagua
+            | Self::AmericaMatamoros
+            | Self::AmericaMenominee
+            | Self::AmericaMerida
+            | Self::AmericaMexicoCity
+            | Self::AmericaMonterrey
+            | Self::AmericaNorthDakotaBeulah
+            | Self::AmericaNorthDakotaCenter
+            | Self::AmericaNorthDakotaNewSalem
+            | Self::AmericaRainyRiver
+            | Self::AmericaRankinInlet
+            | Self::AmericaRegina
+            | Self::AmericaResolute
+            | Self::AmericaSwiftCurrent
+            | Self::AmericaTegucigalpa
+            | Self::AmericaWinnipeg
+            | Self::Cst6Cdt
+            | Self::CanadaCentral
+            | Self::CanadaSaskatchewan
+            | Self::ChileEasterlsland
+            | Self::MexicoGeneral
+            | Self::PacificEaster
+            | Self::PacificGalapagos
+            | Self::UsCentral => FixedOffset::east_opt(-21600),
+            Self::AmericaBoise
+            | Self::AmericaCambridgeBay
+            | Self::AmericaChihuahua
+            | Self::AmericaCreston
+            | Self::AmericaDawson
+            | Self::AmericaDawsonCreek
+            | Self::AmericaDenver
+            | Self::AmericaEdmonton
+            | Self::AmericaFortNelson
+            | Self::AmericaHermosillo
+            | Self::AmericaInuvik
+            | Self::AmericaMazatlan
+            | Self::AmericaOjinaga
+            | Self::AmericaPhoenix
+            | Self::AmericaShiprock
+            | Self::AmericaWhitehorse
+            | Self::AmericaYellowknife
+            | Self::CanadaMountain
+            | Self::CanadaYukon
+            | Self::Mst7Mdt
+            | Self::Navajo
+            | Self::UsArizona
+            | Self::UsMountain
+            | Self::Mst => FixedOffset::east_opt(-25200),
+            Self::AmericaEnsenada
+            | Self::AmericaLosAngeles
+            | Self::AmericaSantaIsabel
+            | Self::AmericaTijuana
+            | Self::AmericaVancouver
+            | Self::CanadaPacific
+            | Self::MexicoBajanorte
+            | Self::Pst8Pdt
+            | Self::PacificPitcairn
+            | Self::UsPacific => FixedOffset::east_opt(-28800),
+            Self::AmericaNoronha | Self::AtlanticSouthGeorgia | Self::BrazilDenoronha => {
+                FixedOffset::east_opt(-7200)
+            }
+            Self::AmericaScoresbysund | Self::AtlanticAzores | Self::AtlanticCapeVerde => {
+                FixedOffset::east_opt(-3600)
+            }
+            Self::AmericaStJohns => FixedOffset::east_opt(-9000),
+            Self::AntarcticaCasey
+            | Self::AsiaMagadan
+            | Self::AsiaSakhalin
+            | Self::AsiaSrednekolymsk
+            | Self::PacificBougainville
+            | Self::PacificEfate
+            | Self::PacificGuadalcanal
+            | Self::PacificKosrae
+            | Self::PacificNorfolk
+            | Self::PacificNoumea
+            | Self::PacificPohnpei => FixedOffset::east_opt(39600),
+            Self::AntarcticaDavis
+            | Self::AsiaBangkok
+            | Self::AsiaBarnaul
+            | Self::AsiaHoChiMinh
+            | Self::AsiaHovd
+            | Self::AsiaJakarta
+            | Self::AsiaKrasnoyarsk
+            | Self::AsiaNovokuznetsk
+            | Self::AsiaNovosibirsk
+            | Self::AsiaPhnomPenh
+            | Self::AsiaPontianak
+            | Self::AsiaSaigon
+            | Self::AsiaTomsk
+            | Self::AsiaVientiane
+            | Self::IndianChristmas => FixedOffset::east_opt(25200),
+            Self::AntarcticaDumontdurville
+            | Self::AntarcticaMacquarie
+            | Self::AsiaUstNera
+            | Self::AsiaVladivostok
+            | Self::AustraliaAct
+            | Self::AustraliaBrisbane
+            | Self::AustraliaCanberra
+            | Self::AustraliaCurrie
+            | Self::AustraliaHobart
+            | Self::AustraliaLindeman
+            | Self::AustraliaMelbourne
+            | Self::AustraliaNsw
+            | Self::AustraliaQueensland
+            | Self::AustraliaSydney
+            | Self::AustraliaTasmania
+            | Self::AustraliaVictoria
+            | Self::PacificChuuk
+            | Self::PacificGuam
+            | Self::PacificPortMoresby
+            | Self::PacificSaipan
+            | Self::PacificYap => FixedOffset::east_opt(36000),
+            Self::AntarcticaMawson
+            | Self::AsiaAqtau
+            | Self::AsiaAqtobe
+            | Self::AsiaAshgabat
+            | Self::AsiaAshkhabad
+            | Self::AsiaAtyrau
+            | Self::AsiaDushanbe
+            | Self::AsiaKarachi
+            | Self::AsiaOral
+            | Self::AsiaQyzylorda
+            | Self::AsiaSamarkand
+            | Self::AsiaTashkent
+            | Self::AsiaYekaterinburg
+            | Self::IndianKerguelen
+            | Self::IndianMaldives => FixedOffset::east_opt(18000),
+            Self::AntarcticaMcmurdo
+            | Self::AsiaAnadyr
+            | Self::AsiaKamchatka
+            | Self::Kwajalein
+            | Self::Nz
+            | Self::PacificAuckland
+            | Self::PacificFiji
+            | Self::PacificFunafuti
+            | Self::PacificKwajalein
+            | Self::PacificMajuro
+            | Self::PacificNauru
+            | Self::PacificTarawa
+            | Self::PacificWallis => FixedOffset::east_opt(43200),
+            Self::AntarcticaVostok
+            | Self::AsiaAlmaty
+            | Self::AsiaBishkek
+            | Self::AsiaDacca
+            | Self::AsiaDhaka
+            | Self::AsiaKashgar
+            | Self::AsiaOmsk
+            | Self::AsiaQostanay
+            | Self::AsiaThimbu
+            | Self::AsiaThimphu
+            | Self::AsiaUrumqi
+            | Self::IndianChagos => FixedOffset::east_opt(21600),
+            Self::AsiaBaku
+            | Self::AsiaDubai
+            | Self::AsiaMuscat
+            | Self::AsiaTbilisi
+            | Self::AsiaYerevan
+            | Self::EuropeAstrakhan
+            | Self::EuropeSamara
+            | Self::EuropeSaratov
+            | Self::EuropeUlyanovsk
+            | Self::IndianMahe
+            | Self::IndianMauritius
+            | Self::IndianReunion => FixedOffset::east_opt(14400),
+            Self::AsiaBrunei
+            | Self::AsiaChoibalsan
+            | Self::AsiaChongqing
+            | Self::AsiaChungking
+            | Self::AsiaHarbin
+            | Self::AsiaHongKong
+            | Self::AsiaIrkutsk
+            | Self::AsiaKualaLumpur
+            | Self::AsiaKuching
+            | Self::AsiaMacao
+            | Self::AsiaMacau
+            | Self::AsiaMakassar
+            | Self::AsiaManila
+            | Self::AsiaShanghai
+            | Self::AsiaSingapore
+            | Self::AsiaTaipei
+            | Self::AsiaUjungPandang
+            | Self::AsiaUlaanbaatar
+            | Self::AustraliaPerth
+            | Self::AustraliaWest
+            | Self::Hongkong
+            | Self::Prc
+            | Self::Singapore => FixedOffset::east_opt(28800),
+            Self::AsiaCalcutta | Self::AsiaColombo | Self::AsiaKolkata => {
+                FixedOffset::east_opt(19800)
+            }
+            Self::AsiaChita
+            | Self::AsiaDili
+            | Self::AsiaJayapura
+            | Self::AsiaKhandyga
+            | Self::AsiaPyongyang
+            | Self::AsiaSeoul
+            | Self::AsiaTokyo
+            | Self::Japan
+            | Self::PacificPalau
+            | Self::Rok => FixedOffset::east_opt(32400),
+            Self::AsiaKabul => FixedOffset::east_opt(16200),
+            Self::AsiaKathmandu => FixedOffset::east_opt(20700),
+            Self::AsiaRangoon | Self::AsiaYangon | Self::IndianCocos => {
+                FixedOffset::east_opt(23400)
+            }
+            Self::AsiaTehran => FixedOffset::east_opt(12600),
+            Self::AustraliaAdelaide
+            | Self::AustraliaBrokenHill
+            | Self::AustraliaDarwin
+            | Self::AustraliaNorth
+            | Self::AustraliaSouth => FixedOffset::east_opt(34200),
+            Self::AustraliaEucla => FixedOffset::east_opt(31500),
+            Self::AustraliaLhi | Self::AustraliaLordHowe => FixedOffset::east_opt(37800),
+            Self::NzChat | Self::PacificChatham => FixedOffset::east_opt(45900),
+            Self::PacificApia
+            | Self::PacificEnderbury
+            | Self::PacificKanton
+            | Self::PacificTongatapu => FixedOffset::east_opt(46800),
+            Self::PacificKiritimati => FixedOffset::east_opt(50400),
+            Self::PacificMarquesas => FixedOffset::east_opt(-30600),
+            Self::PacificMidway
+            | Self::PacificNiue
+            | Self::PacificPagoPago
+            | Self::PacificSamoa
+            | Self::UsSamoa => FixedOffset::east_opt(-39600),
+        }
+        .unwrap()
     }
 }
 
@@ -1618,19 +1083,19 @@ impl TimeZone for IbTimeZone {
     }
 
     fn offset_from_local_date(&self, _local: &NaiveDate) -> LocalResult<Self::Offset> {
-        LocalResult::None
+        LocalResult::Single(*self)
     }
 
     fn offset_from_local_datetime(&self, _local: &NaiveDateTime) -> LocalResult<Self::Offset> {
-        LocalResult::None
+        LocalResult::Single(*self)
     }
 
     fn offset_from_utc_date(&self, _utc: &NaiveDate) -> Self::Offset {
-        Self::Universal
+        *self
     }
 
     fn offset_from_utc_datetime(&self, _utc: &NaiveDateTime) -> Self::Offset {
-        Self::Universal
+        *self
     }
 }
 
@@ -1642,6 +1107,8 @@ impl From<IbTimeZone> for FixedOffset {
 
 impl std::str::FromStr for IbTimeZone {
     type Err = InvalidTimeZone;
+
+    #[allow(clippy::too_many_lines)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
             "Africa/Abidjan" => Self::AfricaAbidjan,
@@ -2180,7 +1647,7 @@ impl std::str::FromStr for IbTimeZone {
 }
 
 #[derive(Debug, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-/// An error from attempting to parse an ['IbTimeZone']
+/// An error from attempting to parse an [`IbTimeZone`]
 pub struct InvalidTimeZone(String);
 
 impl std::fmt::Display for InvalidTimeZone {
@@ -2232,11 +1699,6 @@ impl std::error::Error for InvalidTimeZone {}
 //     -14400 => Self::AmericaAntigua,
 //     _ => Self::Unrecognized(*offset),
 // }
-
-
-
-
-
 
 // (UTC 00:00) Africa/Abidjan
 // (UTC 00:00) Africa/Accra

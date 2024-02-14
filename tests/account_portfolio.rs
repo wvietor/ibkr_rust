@@ -146,7 +146,7 @@ impl RemoteInitializer for PnlInitializer {
     ) -> impl Future<Output = Self::Wrap<'_>> + Send {
         async {
             let id = client
-                .req_pnl(client.get_managed_accounts().iter().next().unwrap().clone())
+                .req_pnl(&client.get_managed_accounts().iter().next().unwrap().clone())
                 .await
                 .unwrap();
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;

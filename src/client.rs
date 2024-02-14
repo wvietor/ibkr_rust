@@ -22,6 +22,7 @@ use crate::{
     order::{Executable, Order},
     payload::ExchangeId,
     reader::Reader,
+    timezone,
 };
 
 // ======================================
@@ -241,18 +242,15 @@ impl Builder {
             "%Y%m%d %T",
         )
         .with_context(|| "Failed to parse connection time")?;
-        let conn_time = conn_time
-            .and_local_timezone(tz.trim().parse::<crate::timezone::IbTimeZone>().map_err(|e| {
-                anyhow::anyhow!(
-                    "Failed to parse timezone in connection time: {:?}",
-                    e
-                )
-            })?)
-            .single()
-            .ok_or(anyhow::anyhow!(
-                "Failed to find unique timezone in connection time."
-            ))?
-            .to_utc();
+        let conn_time =
+            conn_time
+                .and_local_timezone(tz.trim().parse::<crate::timezone::IbTimeZone>().map_err(
+                    |e| anyhow::anyhow!("Failed to parse timezone in connection time: {:?}", e),
+                )?)
+                .single()
+                .ok_or(anyhow::anyhow!(
+                    "Failed to find unique timezone in connection time."
+                ))?;
 
         let mut client = Client {
             mode,
@@ -1151,7 +1149,7 @@ pub struct Client<C: indicators::Status> {
     address: std::net::Ipv4Addr,
     client_id: i64,
     server_version: u32,
-    conn_time: chrono::DateTime<chrono::Utc>,
+    conn_time: chrono::DateTime<timezone::IbTimeZone>,
     writer: Writer,
     status: C,
 }
@@ -1200,7 +1198,7 @@ impl<S: indicators::Status> Client<S> {
 
     #[inline]
     /// Return the time at which the client successfully connected.
-    pub const fn get_conn_time(&self) -> chrono::DateTime<chrono::Utc> {
+    pub const fn get_conn_time(&self) -> chrono::DateTime<timezone::IbTimeZone> {
         self.conn_time
     }
 
