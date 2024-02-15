@@ -1,5 +1,4 @@
-use chrono::{FixedOffset, LocalResult, NaiveDate, NaiveDateTime, Offset, TimeZone};
-use std::fmt::Formatter;
+use chrono::{FixedOffset, LocalResult, NaiveDate, NaiveDateTime, Offset, ParseError, TimeZone};
 
 #[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -1648,10 +1647,16 @@ impl std::str::FromStr for IbTimeZone {
 
 #[derive(Debug, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 /// An error from attempting to parse an [`IbTimeZone`]
-pub struct InvalidTimeZone(String);
+pub struct InvalidTimeZone(pub String);
+
+impl From<ParseError> for InvalidTimeZone {
+    fn from(value: ParseError) -> Self {
+        Self(format!("{value}"))
+    }
+}
 
 impl std::fmt::Display for InvalidTimeZone {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Invalid time zone encountered: {}", self.0)
     }
 }
