@@ -46,15 +46,15 @@ struct Config {
 
 impl Config {
     #[inline]
-    fn new(path: &str) -> anyhow::Result<Self> {
+    fn new(path: &std::path::Path) -> anyhow::Result<Self> {
         toml::from_str(
             std::fs::read_to_string(path)
-                .with_context(|| format!("Invalid config file at path {path}"))?
+                .with_context(|| format!("Invalid config file at path {}", path.display()))?
                 .as_str(),
         )
         .with_context(|| {
             format!(
-                "Invalid TOML file at path {path}.\n
+                "Invalid TOML file at path {}.\n
         # =========================\n
         # === config.toml Usage ===\n
         # =========================\n
@@ -65,7 +65,8 @@ impl Config {
         tws_paper: u16\n
         \n
         gateway_live: u16\n
-        gateway_paper: u16\n"
+        gateway_paper: u16\n",
+                path.display()
             )
         })
     }
@@ -163,8 +164,12 @@ impl Builder {
     ///
     /// # Errors
     /// Returns any error encountered while reading and parsing the config file.
-    pub fn from_config_file(mode: Mode, host: Host, path: Option<&str>) -> anyhow::Result<Self> {
-        let config = Config::new(path.unwrap_or("./config.toml"))?;
+    pub fn from_config_file(
+        mode: Mode,
+        host: Host,
+        path: Option<&std::path::Path>,
+    ) -> anyhow::Result<Self> {
+        let config = Config::new(path.unwrap_or(std::path::Path::new("./config.toml")))?;
         Ok(Self(Inner::ConfigFile { mode, host, config }))
     }
 
