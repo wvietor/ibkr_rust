@@ -1633,7 +1633,7 @@ impl std::str::FromStr for IbTimeZone {
             "US/Mountain" => Self::UsMountain,
             "US/Pacific" => Self::UsPacific,
             "US/Samoa" => Self::UsSamoa,
-            "Universal" => Self::Universal,
+            "Universal" | "UTC" => Self::Universal,
             "W-SU" => Self::WSu,
             "WET" => Self::Wet,
             "Zulu" => Self::Zulu,
