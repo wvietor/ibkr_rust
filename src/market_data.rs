@@ -466,7 +466,7 @@ pub mod live_bar {
     /// Re-export of [`updating_historical_bar::Trades`]
     pub type Trades = updating_historical_bar::Trades;
 
-    /// Re-export of [`historical_bar::Midpoint`]
+    /// Re-export of [`updating_historical_bar::Midpoint`]
     pub type Midpoint = updating_historical_bar::Midpoint;
 
     /// Re-export of [`updating_historical_bar::Bid`]

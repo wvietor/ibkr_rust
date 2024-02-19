@@ -225,9 +225,9 @@ pub struct BarCore {
 #[serde(tag = "bar_type")]
 /// A single bar.
 pub enum Bar {
-    /// The ordinary bar data returned from non [`crate::market_data::historical_bar::data_types::Trades`] requests.
+    /// The ordinary bar data returned from non [`crate::market_data::historical_bar::Trades`] requests.
     Ordinary(BarCore),
-    /// The bar data returned from a [`crate::market_data::historical_bar::data_types::Trades`] request.
+    /// The bar data returned from a [`crate::market_data::historical_bar::Trades`] request.
     Trades(Trade),
 }
 
