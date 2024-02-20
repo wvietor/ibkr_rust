@@ -1356,8 +1356,9 @@ impl Client<indicators::Inactive> {
         let con_fut = spawn_temp_contract_thread(temp.clone(), queue, backlog, tx, rx);
 
         let disconnect_token = disconnect_token.unwrap_or_default();
-        let mut wrapper =
-            LocalInitializer::build(init, &mut client, disconnect_token.clone()).await;
+        let (wrapper_expr, loop_expr) =
+            LocalInitializer::build(init, &mut client, disconnect_token.clone());
+        let mut wrapper = wrapper_expr.await;
         temp.cancel();
         drop(temp);
         let (queue, mut tx, mut rx, mut backlog) = con_fut.await?;
@@ -1378,6 +1379,7 @@ impl Client<indicators::Inactive> {
                         tokio::task::yield_now().await;
                     }
                 } => (),
+                () = loop_expr => (),
             }
         }
         drop(wrapper);
@@ -1402,8 +1404,9 @@ impl Client<indicators::Inactive> {
         let break_loop_inner = break_loop.clone();
 
         tokio::spawn(async move {
-            let mut wrapper =
-                RemoteInitializer::build(init, &mut client, break_loop_inner.clone()).await;
+            let (wrapper_expr, loop_expr) =
+                RemoteInitializer::build(init, &mut client, break_loop_inner.clone());
+            let mut wrapper = wrapper_expr.await;
             temp.cancel();
             drop(temp);
             let (queue, mut tx, mut rx, mut backlog) = con_fut.await?;
@@ -1424,6 +1427,7 @@ impl Client<indicators::Inactive> {
                             tokio::task::yield_now().await;
                         }
                     } => (),
+                    () = loop_expr => (),
                 }
             }
             drop(wrapper);
