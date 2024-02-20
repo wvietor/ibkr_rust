@@ -186,6 +186,8 @@ pub trait LocalInitializer {
         client: &mut ActiveClient,
         cancel_loop: CancelToken,
     ) -> impl Future<Output = Self::Wrap<'_>>;
+    /// The entry point for a trading program.
+    fn init(wrap: &mut Self::Wrap) -> impl Future<Output = ()> {}
 }
 
 /// An initializer for a new [`Remote`] wrapper.
@@ -198,6 +200,8 @@ pub trait RemoteInitializer: Send {
         client: &mut ActiveClient,
         cancel_loop: CancelToken,
     ) -> impl Future<Output = Self::Wrap<'_>> + Send;
+    /// The entry point for a trading program.
+    fn init(wrap: &mut Self::Wrap) -> impl Future<Output = ()> {}
 }
 
 impl<I: RemoteInitializer> LocalInitializer for I {
