@@ -176,38 +176,47 @@ pub trait Local {
     }
 }
 
+#[trait_variant::make(RemoteGen: Send)]
+pub trait LocalGen {
+    fn gen(&mut self) -> impl Future<Output = ()>;
+}
+
 /// An initializer for a new [`Local`] wrapper.
 pub trait LocalInitializer {
     /// The wrapper
     type Wrap<'c>: Local;
+    type Gen<'c>: LocalGen;
     /// The method to build the wrapper
     fn build(
         self,
         client: &mut ActiveClient,
         cancel_loop: CancelToken,
-    ) -> impl Future<Output = (Self::Wrap<'_>, impl Future<Output = ()> + Unpin)>;
+    ) -> impl Future<Output = (Self::Wrap<'_>, Self::Gen<'_>)>;
 }
 
 /// An initializer for a new [`Remote`] wrapper.
 pub trait RemoteInitializer: Send {
     /// The wrapper
     type Wrap<'c>: Remote;
+    type Gen<'c>: RemoteGen;
     /// The method to build the wrapper
     fn build(
         self,
         client: &mut ActiveClient,
         cancel_loop: CancelToken,
-    ) -> impl Future<Output = (Self::Wrap<'_>, impl Future<Output = ()> + Send + Unpin)> + Send;
+    ) -> impl Future<Output = (Self::Wrap<'_>, Self::Gen<'_>)> + Send;
 }
 
 impl<I: RemoteInitializer> LocalInitializer for I {
     type Wrap<'c> = <I as RemoteInitializer>::Wrap<'c>;
+    type Gen<'c> = <I as RemoteInitializer>::Gen<'c>;
+
 
     fn build(
         self,
         client: &mut ActiveClient,
         cancel_loop: CancelToken,
-    ) -> impl Future<Output = (Self::Wrap<'_>, impl Future<Output = ()> + Unpin)> {
+    ) -> impl Future<Output = (Self::Wrap<'_>, Self::Gen<'_>)> {
         <I as RemoteInitializer>::build(self, client, cancel_loop)
     }
 }
