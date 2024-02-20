@@ -1365,7 +1365,6 @@ impl Client<indicators::Inactive> {
             decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
         }
         drop(backlog);
-        LocalInitializer::init(&mut wrapper).await;
         loop {
             tokio::select! {
                 () = disconnect_token.cancelled() => {
@@ -1412,7 +1411,6 @@ impl Client<indicators::Inactive> {
                 decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
             }
             drop(backlog);
-            RemoteInitializer::init(&mut wrapper).await;
             loop {
                 tokio::select! {
                     () = break_loop_inner.cancelled() => {
