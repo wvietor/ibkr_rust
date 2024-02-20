@@ -185,7 +185,7 @@ pub trait LocalInitializer {
         self,
         client: &mut ActiveClient,
         cancel_loop: CancelToken,
-    ) -> (impl Future<Output = Self::Wrap<'_>>, impl Future<Output = ()> + Unpin);
+    ) -> impl Future<Output = (Self::Wrap<'_>, impl Future<Output = ()> + Unpin)>;
 }
 
 /// An initializer for a new [`Remote`] wrapper.
@@ -197,7 +197,7 @@ pub trait RemoteInitializer: Send {
         self,
         client: &mut ActiveClient,
         cancel_loop: CancelToken,
-    ) -> (impl Future<Output = Self::Wrap<'_>> + Send, impl Future<Output = ()> + Send + Unpin);
+    ) -> impl Future<Output = (Self::Wrap<'_>, impl Future<Output = ()> + Send + Unpin)> + Send;
 }
 
 impl<I: RemoteInitializer> LocalInitializer for I {
@@ -207,7 +207,7 @@ impl<I: RemoteInitializer> LocalInitializer for I {
         self,
         client: &mut ActiveClient,
         cancel_loop: CancelToken,
-    ) -> (impl Future<Output = Self::Wrap<'_>>, impl Future<Output = ()> + Unpin) {
+    ) -> impl Future<Output = (Self::Wrap<'_>, impl Future<Output = ()> + Unpin)> {
         <I as RemoteInitializer>::build(self, client, cancel_loop)
     }
 }
