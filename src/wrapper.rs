@@ -176,47 +176,60 @@ pub trait Local {
     }
 }
 
-#[trait_variant::make(RemoteGen: Send)]
-pub trait LocalGen {
-    fn gen(&mut self) -> impl Future<Output = ()>;
+#[trait_variant::make(RemoteRecurring: Send)]
+/// A trait with a single method that will be called in the main message loop.
+pub trait LocalRecurring {
+    /// A method that is called in the body of the main message loop. The method is called in
+    /// a [`tokio::select!`] block.  
+    ///
+    /// This method needs to have a .await point, or the entire program will block.
+    /// See [`tokio::task::yield_now`].
+    fn cycle(&mut self) -> impl Future<Output = ()>;
+}
+
+impl RemoteRecurring for () {
+    async fn cycle(&mut self) {
+        tokio::task::yield_now().await;
+    }
 }
 
 /// An initializer for a new [`Local`] wrapper.
 pub trait LocalInitializer {
     /// The wrapper
     type Wrap<'c>: Local;
-    type Gen<'c>: LocalGen;
+    /// The recurring struct, which mediates repeated calls in the main client loop.
+    type Recur<'c>: LocalRecurring;
     /// The method to build the wrapper
     fn build(
         self,
         client: &mut ActiveClient,
         cancel_loop: CancelToken,
-    ) -> impl Future<Output = (Self::Wrap<'_>, Self::Gen<'_>)>;
+    ) -> impl Future<Output = (Self::Wrap<'_>, Self::Recur<'_>)>;
 }
 
 /// An initializer for a new [`Remote`] wrapper.
 pub trait RemoteInitializer: Send {
     /// The wrapper
     type Wrap<'c>: Remote;
-    type Gen<'c>: RemoteGen;
+    /// The recurring struct, which mediates repeated calls in the main client loop.
+    type Recur<'c>: RemoteRecurring;
     /// The method to build the wrapper
     fn build(
         self,
         client: &mut ActiveClient,
         cancel_loop: CancelToken,
-    ) -> impl Future<Output = (Self::Wrap<'_>, Self::Gen<'_>)> + Send;
+    ) -> impl Future<Output = (Self::Wrap<'_>, Self::Recur<'_>)> + Send;
 }
 
 impl<I: RemoteInitializer> LocalInitializer for I {
     type Wrap<'c> = <I as RemoteInitializer>::Wrap<'c>;
-    type Gen<'c> = <I as RemoteInitializer>::Gen<'c>;
-
+    type Recur<'c> = <I as RemoteInitializer>::Recur<'c>;
 
     fn build(
         self,
         client: &mut ActiveClient,
         cancel_loop: CancelToken,
-    ) -> impl Future<Output = (Self::Wrap<'_>, Self::Gen<'_>)> {
+    ) -> impl Future<Output = (Self::Wrap<'_>, Self::Recur<'_>)> {
         <I as RemoteInitializer>::build(self, client, cancel_loop)
     }
 }

@@ -1356,7 +1356,7 @@ impl Client<indicators::Inactive> {
         let con_fut = spawn_temp_contract_thread(temp.clone(), queue, backlog, tx, rx);
 
         let disconnect_token = disconnect_token.unwrap_or_default();
-        let (mut wrapper, mut generator) =
+        let (mut wrapper, mut recur) =
             LocalInitializer::build(init, &mut client, disconnect_token.clone()).await;
         temp.cancel();
         drop(temp);
@@ -1377,11 +1377,11 @@ impl Client<indicators::Inactive> {
                     } else {
                         tokio::task::yield_now().await;
                     }
+                    crate::wrapper::LocalRecurring::cycle(&mut recur).await;
                 } => (),
-                () = crate::wrapper::LocalGen::gen(&mut generator) => (),
             }
         }
-        drop(generator);
+        drop(recur);
         drop(wrapper);
         client.disconnect().await
     }
@@ -1404,13 +1404,13 @@ impl Client<indicators::Inactive> {
         let break_loop_inner = break_loop.clone();
 
         tokio::spawn(async move {
-            let (mut wrapper, mut generator) =
+            let (mut wrapper, mut recur) =
                 RemoteInitializer::build(init, &mut client, break_loop_inner.clone()).await;
             temp.cancel();
             drop(temp);
             let (queue, mut tx, mut rx, mut backlog) = con_fut.await?;
             while let Some(fields) = backlog.pop_front() {
-                decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
+                decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
             }
             drop(backlog);
             loop {
@@ -1425,11 +1425,11 @@ impl Client<indicators::Inactive> {
                         } else {
                             tokio::task::yield_now().await;
                         }
+                        crate::wrapper::RemoteRecurring::cycle(&mut recur).await;
                     } => (),
-                    () = crate::wrapper::RemoteGen::gen(&mut generator) => (),
                 }
             }
-            drop(generator);
+            drop(recur);
             drop(wrapper);
             client.disconnect().await
         });
@@ -1444,7 +1444,46 @@ impl Client<indicators::Inactive> {
     ///
     /// # Returns
     /// An active [`Client`] that can be used to make API requests.
-    pub async fn remote_unlinked<W: Remote + Send + 'static>(
+    pub async fn disaggregated<W: Remote + Send + 'static>(
+        self,
+        mut wrapper: W,
+    ) -> Client<indicators::Active> {
+        let (client, mut tx, mut rx, queue, mut backlog) = self.into_active().await;
+        let c_loop_disconnect = client.status.disconnect.clone();
+
+        while let Some(fields) = backlog.pop_front() {
+            decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
+        }
+        drop(backlog);
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    () = c_loop_disconnect.cancelled() => {println!("Client loop: disconnecting"); break},
+                    () = async {
+                        if let Some(fields) = queue.pop() {
+                            decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
+                        } else {
+                            tokio::task::yield_now().await;
+                        }
+                    } => (),
+                }
+            }
+        });
+
+        client
+    }
+
+    /// Initiates the main message loop and spawns all helper threads to manage the application.
+    ///
+    /// # Arguments
+    /// * `wrapper` - A `Local` wrapper that defines how incoming data from the IBKR trading systems should be handled.
+    ///
+    /// # Returns
+    /// An active [`Client`] that can be used to make API requests.
+    ///
+    /// # Panics
+    /// This function will panic if called from inside `tokio::spawn`.
+    pub async fn disaggregated_local<W: Local + 'static>(
         self,
         mut wrapper: W,
     ) -> Client<indicators::Active> {
@@ -1455,13 +1494,14 @@ impl Client<indicators::Inactive> {
             decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
         }
         drop(backlog);
-        tokio::spawn(async move {
+        let local = tokio::task::LocalSet::new();
+        local.spawn_local(async move {
             loop {
                 tokio::select! {
                     () = c_loop_disconnect.cancelled() => {println!("Client loop: disconnecting"); break},
                     () = async {
                         if let Some(fields) = queue.pop() {
-                            decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
+                            decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
                         } else {
                             tokio::task::yield_now().await;
                         }
