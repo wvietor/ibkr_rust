@@ -139,7 +139,7 @@ pub mod historical_bar {
             S: Serializer,
         {
             match *self {
-                Self::Past(dt) => Some(dt.to_utc().format("%Y%m%d-%T")),
+                Self::Past(dt) => Some(dt.to_utc().format("%Y%m%d-%T").to_string()),
                 Self::Present => None,
             }
             .serialize(serializer)
