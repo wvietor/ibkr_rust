@@ -141,7 +141,7 @@ pub mod historical_bar {
             match *self {
                 Self::Past(dt) => {
                     let a = Some(format!("{} {}", dt.format("%Y%m%d %T"), dt.timezone()));
-                    dbg!(a);
+                    dbg!(&a);
                     a
                 },
                 Self::Present => None,
