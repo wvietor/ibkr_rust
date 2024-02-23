@@ -45,7 +45,7 @@ pub mod historical_bar {
         /// The present moment.
         Present,
         /// Some date and time in the past.
-        Past(chrono::NaiveDateTime),
+        Past(chrono::DateTime<crate::timezone::IbTimeZone>),
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -139,7 +139,7 @@ pub mod historical_bar {
             S: Serializer,
         {
             match *self {
-                Self::Past(dt) => Some(dt.format("%Y%m%d %T").to_string()),
+                Self::Past(dt) => Some(format!("{} {}", dt.format("%Y%m%d %T"), dt.timezone())),
                 Self::Present => None,
             }
             .serialize(serializer)
