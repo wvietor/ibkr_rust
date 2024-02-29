@@ -72,6 +72,8 @@ pub mod timezone;
 /// Contains the definition of the [`wrapper::Local`] and [`wrapper::Remote`] traits. Implementing these traits for a
 /// type allows users to customize callback behavior.
 pub mod wrapper;
+/// Contains an implementation of the [FIGI  alphanumeric identifier](https://www.openfigi.com/about/figi#!) for use in contract specification.
+mod figi;
 
 #[macro_export]
 /// Match across typed variant values
