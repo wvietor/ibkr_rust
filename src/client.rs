@@ -7,7 +7,8 @@ use tokio::net::tcp::OwnedReadHalf;
 use tokio::task::JoinHandle;
 use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
 
-use crate::contract::{ContractId, Security};
+use crate::contract::{ContractId, Query, Security};
+use crate::exchange::Routing;
 use crate::market_data::{
     histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks,
     updating_historical_bar,
@@ -2464,22 +2465,39 @@ impl Client<indicators::Active> {
     #[inline]
     pub(crate) async fn send_contract_query(
         &mut self,
-        contract_id: ContractId,
+        query: Query,
+        routing: Routing,
     ) -> anyhow::Result<()> {
         const VERSION: u8 = 8;
         let req_id = self.get_next_req_id();
         self.status
             .tx
-            .send(ToWrapper::ContractQuery((contract_id, req_id)))
+            .send(ToWrapper::ContractQuery((query, routing, req_id)))
             .await?;
 
-        self.writer.add_body((
-            Out::ReqContractData,
-            VERSION,
-            req_id,
-            contract_id,
-            [None::<()>; 15],
-        ))?;
+        match query {
+            Query::IbContractId(contract_id) => {
+                self.writer.add_body((
+                    Out::ReqContractData,
+                    VERSION,
+                    req_id,
+                    contract_id,
+                    [None::<()>; 16],
+                ))?;
+            }
+            Query::Figi(figi) => {
+                self.writer.add_body((
+                    Out::ReqContractData,
+                    VERSION,
+                    req_id,
+                    [None::<()>; 14],
+                    "FIGI",
+                    figi,
+                    None::<()>,
+                ))?;
+            }
+        }
+
         self.writer.send().await?;
         Ok(())
     }

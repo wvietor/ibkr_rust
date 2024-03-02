@@ -436,6 +436,9 @@ pub enum Primary {
     VirtuFinancialGovernmentBonds,
     #[serde(rename(serialize = "VSE", deserialize = "VSE"))]
     ViennaStockExchange,
+    #[serde(rename(serialize = "VALUE", deserialize = "VALUE"))]
+    /// A holding exchange used for clients to close positions ona contract that is no longer listed
+    Value,
     #[serde(rename(serialize = "WFFX", deserialize = "WFFX"))]
     WellsFargoForex,
     #[serde(rename(serialize = "WSE", deserialize = "WSE"))]
@@ -655,6 +658,7 @@ impl FromStr for Primary {
             "VALUBOND" => Self::KnightValuebondCorporate,
             "VALUBONDG" => Self::KnightValuebondGovernment,
             "VALUBONDM" => Self::MunicipalBondsOnValuebond,
+            "VALUE" => Self::Value,
             "VENTURE" => Self::TsxVentureExchange,
             "VIRTBONDG" => Self::VirtuFinancialGovernmentBonds,
             "VSE" => Self::ViennaStockExchange,

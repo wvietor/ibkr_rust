@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
-use crate::contract::{Contract, ContractId};
+use crate::contract::{Contract, Query};
+use crate::exchange::Routing;
 
 #[derive(Debug, Default, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct InvalidInMsg(pub String);
@@ -371,7 +372,7 @@ pub enum Out {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ToWrapper {
-    ContractQuery((ContractId, i64)),
+    ContractQuery((Query, Routing, i64)),
 }
 
 #[allow(clippy::redundant_pub_crate)]

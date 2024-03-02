@@ -1,6 +1,7 @@
 use chrono::NaiveDate;
 use std::{num::ParseIntError, str::FromStr};
 
+use crate::figi::Figi;
 use crate::{
     currency::Currency,
     exchange::{Primary, Routing},
@@ -269,9 +270,12 @@ impl Security for Contract {
 /// Returns a fully-defined contract that can be used for market data, placing orders, etc.
 pub async fn new<S: Security>(
     client: &mut crate::client::ActiveClient,
-    contract_id: ContractId,
+    query: Query,
+    exchange: Option<Routing>,
 ) -> anyhow::Result<S> {
-    client.send_contract_query(contract_id).await?;
+    client
+        .send_contract_query(query, exchange.unwrap_or(Routing::Smart))
+        .await?;
     match client.recv_contract_query().await? {
         Contract::Forex(fx) => fx.try_into().map_err(|_| ()),
         Contract::Crypto(crypto) => crypto.try_into().map_err(|_| ()),
@@ -281,7 +285,17 @@ pub async fn new<S: Security>(
         Contract::SecOption(opt) => opt.try_into().map_err(|_| ()),
         Contract::Commodity(cmdty) => cmdty.try_into().map_err(|_| ()),
     }
-    .map_err(|()| anyhow::anyhow!("Failed to create contract from {:?}: ", contract_id))
+    .map_err(|()| anyhow::anyhow!("Failed to create contract from {:?}: ", query))
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
+/// A type used to represent a query for a new contract, which can be made by providing either an
+/// IBKR contract ID, or a FIGI.
+pub enum Query {
+    /// An IBKR contract ID with which to make a query.
+    IbContractId(ContractId),
+    /// A FIGI.
+    Figi(Figi),
 }
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]

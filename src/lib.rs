@@ -42,6 +42,8 @@ mod decode;
 /// Contains types related to security exchanges and trading venues available in the API.
 pub mod exchange;
 mod execution;
+/// Contains an implementation of the [FIGI  alphanumeric identifier](https://www.openfigi.com/about/figi#!) for use in contract specification.
+pub mod figi;
 /// Contains modules that each relate to different market data requests. In particular, each module
 /// defines: 1) General types used in a given market data query and 2) Optionally, a private
 /// indicator trait that defines whether a given [`contract::Security`] allows for the data request
@@ -72,8 +74,6 @@ pub mod timezone;
 /// Contains the definition of the [`wrapper::Local`] and [`wrapper::Remote`] traits. Implementing these traits for a
 /// type allows users to customize callback behavior.
 pub mod wrapper;
-/// Contains an implementation of the [FIGI  alphanumeric identifier](https://www.openfigi.com/about/figi#!) for use in contract specification.
-mod figi;
 
 #[macro_export]
 /// Match across typed variant values

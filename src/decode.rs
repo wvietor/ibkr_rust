@@ -760,203 +760,7 @@ pub trait Local: wrapper::Local {
         tx: &mut Tx,
         rx: &mut Rx,
     ) -> impl Future<Output = anyhow::Result<()>> {
-        async move {
-            decode_fields!(
-                fields =>
-                    req_id @ 1: i64,
-                    symbol @ 0: String,
-                    sec_type @ 0: String,
-                    expiration_date @ 0: String,
-                    strike @ 0: f64,
-                    class @ 0: String,
-                    exchange @ 0: Routing,
-                    currency @ 0: Currency,
-                    local_symbol @ 0: String,
-                    trading_class @ 1: String,
-                    contract_id @ 0: ContractId,
-                    min_tick @ 0: f64,
-                    multiplier @ 0: String,
-                    order_types @ 0: String,
-                    valid_exchanges @ 0: String,
-                    underlying_contract_id @ 1: ContractId,
-                    long_name @ 0: String,
-                    primary_exchange @ 0: String,
-                    sector @ 1: String,
-                    security_id_count @ 7: usize
-            );
-
-            let order_types = order_types
-                .split(',')
-                .map(std::borrow::ToOwned::to_owned)
-                .collect();
-            let valid_exchanges = valid_exchanges
-                .split(',')
-                .map(str::parse)
-                .collect::<Result<Vec<Routing>, _>>()
-                .with_context(|| "Invalid exchange in valid_exchanges")?;
-            let security_ids = (0..security_id_count)
-                .map(|_| {
-                    match nth(fields, 0)
-                        .with_context(|| "Expected number of security_ids but none found")?
-                        .to_uppercase()
-                        .as_str()
-                    {
-                        "CUSIP" => Ok(SecurityId::Cusip(
-                            nth(fields, 0).with_context(|| "Expected CUSIP but none found")?,
-                        )),
-                        "SEDOL" => Ok(SecurityId::Sedol(
-                            nth(fields, 0).with_context(|| "Expected SEDOL but none found")?,
-                        )),
-                        "ISIN" => Ok(SecurityId::Isin(
-                            nth(fields, 0).with_context(|| "Expected ISIN but none found")?,
-                        )),
-                        "RIC" => Ok(SecurityId::Ric(
-                            nth(fields, 0).with_context(|| "Expected RIC but none found")?,
-                        )),
-                        _ => Err(anyhow::Error::msg(
-                            "Invalid security_id type found in STK contract_data_msg",
-                        )),
-                    }
-                })
-                .collect::<Result<Vec<SecurityId>, _>>()?;
-
-            if let Ok(ToWrapper::ContractQuery((con_id_client, req_id_client))) = rx.try_recv() {
-                if con_id_client != contract_id {
-                    return Err(anyhow::Error::msg("Unexpected contract ID"));
-                }
-                if req_id_client != req_id {
-                    return Err(anyhow::Error::msg("Unexpected request ID"));
-                }
-                let contract = match sec_type.as_str() {
-                    "STK" => Some(Contract::Stock(Stock {
-                        symbol,
-                        exchange,
-                        currency,
-                        local_symbol,
-                        trading_class,
-                        contract_id,
-                        min_tick,
-                        primary_exchange: primary_exchange
-                            .parse()
-                            .with_context(|| "Invalid exchange in STK primary_exchange")?,
-                        long_name,
-                        sector,
-                        order_types,
-                        valid_exchanges,
-                        security_ids,
-                        stock_type: nth(fields, 5)
-                            .with_context(|| "Expected stock_type but none found")?,
-                    })),
-                    "OPT" => {
-                        let inner = SecOptionInner {
-                            contract_id,
-                            min_tick,
-                            symbol,
-                            exchange,
-                            strike,
-                            multiplier: multiplier
-                                .parse()
-                                .with_context(|| "Invalid multiplier in OPT multiplier")?,
-                            expiration_date: NaiveDate::parse_and_remainder(
-                                expiration_date.as_str(),
-                                "%Y%m%d",
-                            )
-                            .with_context(|| "Invalid date string in OPT expiration_date")?
-                            .0,
-                            underlying_contract_id,
-                            sector,
-                            trading_class,
-                            currency,
-                            local_symbol,
-                            long_name,
-                            order_types,
-                            valid_exchanges,
-                        };
-                        match class.as_str() {
-                            "C" => Some(Contract::SecOption(SecOption::Call(inner))),
-                            "P" => Some(Contract::SecOption(SecOption::Put(inner))),
-                            _ => return Err(anyhow::Error::msg("Unexpected option class")),
-                        }
-                    }
-                    "CRYPTO" => Some(Contract::Crypto(Crypto {
-                        contract_id,
-                        min_tick,
-                        symbol,
-                        trading_class,
-                        currency,
-                        local_symbol,
-                        long_name,
-                        order_types,
-                        valid_exchanges,
-                    })),
-                    "CASH" => Some(Contract::Forex(Forex {
-                        contract_id,
-                        min_tick,
-                        symbol,
-                        exchange,
-                        trading_class,
-                        currency,
-                        local_symbol,
-                        long_name,
-                        order_types,
-                        valid_exchanges,
-                    })),
-                    "IND" => Some(Contract::Index(Index {
-                        contract_id,
-                        min_tick,
-                        symbol,
-                        exchange,
-                        currency,
-                        local_symbol,
-                        long_name,
-                        order_types,
-                        valid_exchanges,
-                    })),
-                    "FUT" => Some(Contract::SecFuture(SecFuture {
-                        contract_id,
-                        min_tick,
-                        symbol,
-                        exchange,
-                        multiplier: multiplier
-                            .parse()
-                            .with_context(|| "Invalid multiplier in FUT multiplier")?,
-                        expiration_date: NaiveDate::parse_and_remainder(
-                            expiration_date.as_str(),
-                            "%Y%m%d",
-                        )
-                        .with_context(|| "Invalid date string in OPT expiration_date")?
-                        .0,
-                        trading_class,
-                        underlying_contract_id,
-                        currency,
-                        local_symbol,
-                        long_name,
-                        order_types,
-                        valid_exchanges,
-                    })),
-                    "CMDTY" => Some(Contract::Commodity(Commodity {
-                        contract_id,
-                        min_tick,
-                        symbol,
-                        exchange,
-                        trading_class,
-                        currency,
-                        local_symbol,
-                        long_name,
-                        order_types,
-                        valid_exchanges,
-                    })),
-                    _ => todo!(),
-                };
-
-                tx.send(ToClient::NewContract(
-                    contract.ok_or_else(|| anyhow::Error::msg("No contract was created"))?,
-                ))
-                .await
-                .with_context(|| "Failure when sending contract")?;
-            }
-            Ok(())
-        }
+        async move { decode_contract_no_wrapper(fields, tx, rx).await }
     }
 
     #[inline]
@@ -2510,7 +2314,7 @@ pub(crate) async fn decode_contract_no_wrapper(
     let valid_exchanges = valid_exchanges
         .split(',')
         .map(str::parse)
-        .collect::<Result<Vec<Routing>, _>>()
+        .collect::<Result<_, _>>()
         .with_context(|| "Invalid exchange in valid_exchanges")?;
     let security_ids = (0..security_id_count)
         .map(|_| {
@@ -2536,14 +2340,21 @@ pub(crate) async fn decode_contract_no_wrapper(
                 )),
             }
         })
-        .collect::<Result<Vec<SecurityId>, _>>()?;
+        .collect::<Result<_, _>>()?;
 
-    if let Ok(ToWrapper::ContractQuery((con_id_client, req_id_client))) = rx.try_recv() {
-        if con_id_client != contract_id {
-            return Err(anyhow::Error::msg("Unexpected contract ID"));
+    if let Ok(ToWrapper::ContractQuery((query_client, routing_client, req_id_client))) =
+        rx.try_recv()
+    {
+        if let crate::contract::Query::IbContractId(con_id_client) = query_client {
+            if con_id_client != contract_id {
+                return Err(anyhow::Error::msg("Unexpected contract ID"));
+            }
         }
         if req_id_client != req_id {
             return Err(anyhow::Error::msg("Unexpected request ID"));
+        }
+        if exchange != routing_client {
+            return Err(anyhow::Error::msg("Unexpected routing exchange"));
         }
         let contract = match sec_type.as_str() {
             "STK" => Some(Contract::Stock(Stock {
