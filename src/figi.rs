@@ -1,9 +1,7 @@
-use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize, Serializer};
 
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 enum Consonant {
     B = 11,
     C = 12,
@@ -29,8 +27,7 @@ enum Consonant {
 }
 
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 enum ConsonantOrNumeric {
     Zero = 0,
     One = 1,
@@ -63,6 +60,78 @@ enum ConsonantOrNumeric {
     X = 33,
     Y = 34,
     Z = 35,
+}
+
+impl From<Consonant> for char {
+    fn from(value: Consonant) -> char {
+        match value {
+            Consonant::B => 'B',
+            Consonant::C => 'C',
+            Consonant::D => 'D',
+            Consonant::F => 'F',
+            Consonant::G => 'G',
+            Consonant::H => 'H',
+            Consonant::J => 'J',
+            Consonant::K => 'K',
+            Consonant::L => 'L',
+            Consonant::M => 'M',
+            Consonant::N => 'N',
+            Consonant::P => 'P',
+            Consonant::Q => 'Q',
+            Consonant::R => 'R',
+            Consonant::S => 'S',
+            Consonant::T => 'T',
+            Consonant::V => 'V',
+            Consonant::W => 'W',
+            Consonant::X => 'X',
+            Consonant::Y => 'Y',
+            Consonant::Z => 'Z',
+        }
+    }
+}
+
+impl From<ConsonantOrNumeric> for char {
+    fn from(value: ConsonantOrNumeric) -> char {
+        match value {
+            ConsonantOrNumeric::B => 'B',
+            ConsonantOrNumeric::C => 'C',
+            ConsonantOrNumeric::D => 'D',
+            ConsonantOrNumeric::F => 'F',
+            ConsonantOrNumeric::G => 'G',
+            ConsonantOrNumeric::H => 'H',
+            ConsonantOrNumeric::J => 'J',
+            ConsonantOrNumeric::K => 'K',
+            ConsonantOrNumeric::L => 'L',
+            ConsonantOrNumeric::M => 'M',
+            ConsonantOrNumeric::N => 'N',
+            ConsonantOrNumeric::P => 'P',
+            ConsonantOrNumeric::Q => 'Q',
+            ConsonantOrNumeric::R => 'R',
+            ConsonantOrNumeric::S => 'S',
+            ConsonantOrNumeric::T => 'T',
+            ConsonantOrNumeric::V => 'V',
+            ConsonantOrNumeric::W => 'W',
+            ConsonantOrNumeric::X => 'X',
+            ConsonantOrNumeric::Y => 'Y',
+            ConsonantOrNumeric::Z => 'Z',
+            ConsonantOrNumeric::Zero => '0',
+            ConsonantOrNumeric::One => '1',
+            ConsonantOrNumeric::Two => '2',
+            ConsonantOrNumeric::Three => '3',
+            ConsonantOrNumeric::Four => '4',
+            ConsonantOrNumeric::Five => '5',
+            ConsonantOrNumeric::Six => '6',
+            ConsonantOrNumeric::Seven => '7',
+            ConsonantOrNumeric::Eight => '8',
+            ConsonantOrNumeric::Nine => '9',
+        }
+    }
+}
+
+impl From<G> for char {
+    fn from(_: G) -> Self {
+        'G'
+    }
 }
 
 impl TryFrom<char> for Consonant {
@@ -186,14 +255,7 @@ impl Serialize for Figi {
     where
         S: Serializer,
     {
-        let mut s = serializer.serialize_seq(Some(12))?;
-        s.serialize_element(&self.pos_1)?;
-        s.serialize_element(&self.pos_2)?;
-        s.serialize_element(&self.pos_3)?;
-        for ref c in self.pos_4_12 {
-            s.serialize_element(c)?;
-        }
-        s.end()
+        serializer.serialize_str(<&Figi as Into<String>>::into(self).as_str())
     }
 }
 
@@ -208,6 +270,19 @@ impl std::str::FromStr for Figi {
         let s = b.map(|c| c as char);
 
         Self::from_chars(&s)
+    }
+}
+
+impl<'a> From<&'a Figi> for String {
+    fn from(value: &Figi) -> Self {
+        let mut s = String::with_capacity(12);
+        s.push(value.pos_1.into());
+        s.push(value.pos_2.into());
+        s.push(value.pos_3.into());
+        for c in value.pos_4_12 {
+            s.push(c.into());
+        }
+        s
     }
 }
 
