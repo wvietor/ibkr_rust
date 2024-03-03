@@ -272,11 +272,8 @@ impl Security for Contract {
 pub async fn new<S: Security>(
     client: &mut crate::client::ActiveClient,
     query: Query,
-    exchange: Option<Routing>,
 ) -> anyhow::Result<S> {
-    client
-        .send_contract_query(query, exchange.unwrap_or(Routing::Smart))
-        .await?;
+    client.send_contract_query(query).await?;
     match client.recv_contract_query().await? {
         Contract::Forex(fx) => fx.try_into().map_err(|_| ()),
         Contract::Crypto(crypto) => crypto.try_into().map_err(|_| ()),
@@ -293,8 +290,9 @@ pub async fn new<S: Security>(
 /// A type used to represent a query for a new contract, which can be made by providing either an
 /// IBKR contract ID, or a FIGI.
 pub enum Query {
-    /// An IBKR contract ID with which to make a query.
-    IbContractId(ContractId),
+    /// An IBKR contract ID with which to make a query. When parsing from a string, the routing field
+    /// defaults to [`Routing::Smart`].
+    IbContractId(ContractId, Routing),
     /// A FIGI.
     Figi(Figi),
 }
@@ -326,6 +324,7 @@ impl FromStr for Query {
         if s.chars().nth(0).ok_or(InvalidQuery::Empty)?.is_numeric() {
             Ok(Self::IbContractId(
                 s.parse().map_err(InvalidQuery::IbContractId)?,
+                Routing::Smart,
             ))
         } else {
             Ok(Self::Figi(s.parse().map_err(InvalidQuery::Figi)?))

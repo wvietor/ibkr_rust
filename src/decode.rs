@@ -2342,19 +2342,17 @@ pub(crate) async fn decode_contract_no_wrapper(
         })
         .collect::<Result<_, _>>()?;
 
-    if let Ok(ToWrapper::ContractQuery((query_client, routing_client, req_id_client))) =
-        rx.try_recv()
-    {
-        if let crate::contract::Query::IbContractId(con_id_client) = query_client {
+    if let Ok(ToWrapper::ContractQuery((query_client, req_id_client))) = rx.try_recv() {
+        if let crate::contract::Query::IbContractId(con_id_client, routing_client) = query_client {
             if con_id_client != contract_id {
                 return Err(anyhow::Error::msg("Unexpected contract ID"));
+            }
+            if exchange != routing_client {
+                return Err(anyhow::Error::msg("Unexpected routing exchange"));
             }
         }
         if req_id_client != req_id {
             return Err(anyhow::Error::msg("Unexpected request ID"));
-        }
-        if exchange != routing_client {
-            return Err(anyhow::Error::msg("Unexpected routing exchange"));
         }
         let contract = match sec_type.as_str() {
             "STK" => Some(Contract::Stock(Stock {

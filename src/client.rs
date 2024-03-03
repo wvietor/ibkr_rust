@@ -2463,26 +2463,24 @@ impl Client<indicators::Active> {
     // === Contract Creation ===
 
     #[inline]
-    pub(crate) async fn send_contract_query(
-        &mut self,
-        query: Query,
-        routing: Routing,
-    ) -> anyhow::Result<()> {
+    pub(crate) async fn send_contract_query(&mut self, query: Query) -> anyhow::Result<()> {
         const VERSION: u8 = 8;
         let req_id = self.get_next_req_id();
         self.status
             .tx
-            .send(ToWrapper::ContractQuery((query, routing, req_id)))
+            .send(ToWrapper::ContractQuery((query, req_id)))
             .await?;
 
         match query {
-            Query::IbContractId(contract_id) => {
+            Query::IbContractId(contract_id, routing) => {
                 self.writer.add_body((
                     Out::ReqContractData,
                     VERSION,
                     req_id,
                     contract_id,
-                    [None::<()>; 16],
+                    [None::<()>; 6],
+                    routing,
+                    [None::<()>; 9],
                 ))?;
             }
             Query::Figi(figi) => {
@@ -2490,7 +2488,9 @@ impl Client<indicators::Active> {
                     Out::ReqContractData,
                     VERSION,
                     req_id,
-                    [None::<()>; 14],
+                    [None::<()>; 7],
+                    Routing::Smart,
+                    [None::<()>; 6],
                     "FIGI",
                     figi,
                     None::<()>,
