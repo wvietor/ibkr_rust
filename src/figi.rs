@@ -197,6 +197,17 @@ impl Serialize for Figi {
     }
 }
 
+impl std::str::FromStr for Figi {
+    type Err = InvalidFigi;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let b: [u8; 12] = s.as_bytes().try_into().map_err(|_| InvalidFigi::Length(s.to_owned()))?;
+        let s = b.map(|c| c as char);
+
+        Self::from_chars(&s)
+    }
+}
+
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 #[allow(clippy::module_name_repetitions)]
 /// Represents all the possible ways a FIGI code could be invalid
@@ -211,6 +222,8 @@ pub enum InvalidFigi {
     Consonant(String),
     /// One of the fourth through eleventh characters is not an uppercase English consonant or digit 0 through 9.
     ConsonantOrNumeric(String),
+    /// The provided code is not exactly twelve characters.
+    Length(String),
 }
 
 impl std::fmt::Display for InvalidFigi {
@@ -221,6 +234,7 @@ impl std::fmt::Display for InvalidFigi {
             Self::Third(s) => format!("Invalid third character for {s}. Third character must be G"),
             Self::Consonant(s) => format!("Invalid consonant found for {s}. {InvalidConsonant}"),
             Self::ConsonantOrNumeric(s) => format!("Invalid consonant or numeric found for {s}. {InvalidConsonantOrNumeric}"),
+            Self::Length(s) => format!("Invalid length. A FIGI code is exactly 12 characters long. {s}"),
         };
         write!(f, "Invalid FIGI. {}", &msg)
     }
