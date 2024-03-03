@@ -2480,7 +2480,7 @@ impl Client<indicators::Active> {
                     contract_id,
                     [None::<()>; 6],
                     routing,
-                    [None::<()>; 9],
+                    [None::<()>; 8],
                 ))?;
             }
             Query::Figi(figi) => {
@@ -2490,7 +2490,7 @@ impl Client<indicators::Active> {
                     req_id,
                     [None::<()>; 7],
                     Routing::Smart,
-                    [None::<()>; 6],
+                    [None::<()>; 5],
                     "FIGI",
                     figi,
                     None::<()>,
