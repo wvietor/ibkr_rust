@@ -1,7 +1,8 @@
 use chrono::NaiveDate;
+use std::fmt::Formatter;
 use std::{num::ParseIntError, str::FromStr};
 
-use crate::figi::Figi;
+use crate::figi::{Figi, InvalidFigi};
 use crate::{
     currency::Currency,
     exchange::{Primary, Routing},
@@ -296,6 +297,40 @@ pub enum Query {
     IbContractId(ContractId),
     /// A FIGI.
     Figi(Figi),
+}
+
+#[derive(Debug, Clone)]
+/// An error type representing the potential ways that a [`Query`] can be invalid.
+pub enum InvalidQuery {
+    /// An invalid [`Query::IbContractId`]
+    IbContractId(ParseIntError),
+    /// AN invalid [`Query::Figi`]
+    Figi(InvalidFigi),
+    /// Invalid in a way such that it's impossible to tell whether it was intended to be an [`Query::IbContractId`] or a [`'Query::Figi`].
+    Empty,
+}
+
+impl std::fmt::Display for InvalidQuery {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Invalid query. {self:?}")
+    }
+}
+
+impl std::error::Error for InvalidQuery {}
+
+impl FromStr for Query {
+    type Err = InvalidQuery;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // A FIGI always begin with a letter
+        if s.chars().nth(0).ok_or(InvalidQuery::Empty)?.is_numeric() {
+            Ok(Self::IbContractId(
+                s.parse().map_err(InvalidQuery::IbContractId)?,
+            ))
+        } else {
+            Ok(Self::Figi(s.parse().map_err(InvalidQuery::Figi)?))
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]

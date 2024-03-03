@@ -65,7 +65,7 @@ enum ConsonantOrNumeric {
     Z = 35,
 }
 
-impl std::convert::TryFrom<char> for Consonant {
+impl TryFrom<char> for Consonant {
     type Error = InvalidConsonant;
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
@@ -96,7 +96,7 @@ impl std::convert::TryFrom<char> for Consonant {
     }
 }
 
-impl std::convert::TryFrom<char> for ConsonantOrNumeric {
+impl TryFrom<char> for ConsonantOrNumeric {
     type Error = InvalidConsonantOrNumeric;
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
@@ -201,7 +201,10 @@ impl std::str::FromStr for Figi {
     type Err = InvalidFigi;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let b: [u8; 12] = s.as_bytes().try_into().map_err(|_| InvalidFigi::Length(s.to_owned()))?;
+        let b: [u8; 12] = s
+            .as_bytes()
+            .try_into()
+            .map_err(|_| InvalidFigi::Length(s.to_owned()))?;
         let s = b.map(|c| c as char);
 
         Self::from_chars(&s)
