@@ -391,7 +391,7 @@ impl Figi {
                 sum += sum_digits_sub_100(*c as u8);
             }
         }
-        self.pos_4_12[self.pos_4_12.len() - 1] as u8 == 10 - sum % 10
+        self.pos_4_12[self.pos_4_12.len() - 1] as u8 == (10 - sum % 10) % 10
     }
 }
 
@@ -399,4 +399,13 @@ impl Figi {
 const fn sum_digits_sub_100(n: u8) -> u8 {
     let rem = n % 10;
     rem + (n - rem) / 10
+}
+
+#[test]
+fn test_figi() -> Result<(), InvalidFigi> {
+    let aapl = "BBG000N88V36".parse::<Figi>()?; // AAPL US Equity
+    let tsm = "BBG000BD8ZK0".parse::<Figi>()?; // TSM US Equity
+    assert!(aapl.is_valid());
+    assert!(tsm.is_valid());
+    Ok(())
 }
