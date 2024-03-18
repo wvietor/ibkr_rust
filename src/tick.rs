@@ -1,4 +1,5 @@
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::serde::{ts_milliseconds, ts_seconds};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{ser::SerializeTuple, Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::Formatter;
 use std::num::ParseFloatError;
@@ -182,21 +183,11 @@ pub enum Volatility {
 /// Represents a timestamp callback.
 pub enum TimeStamp {
     /// Time of the last trade (in UNIX time).
-    #[serde(
-        serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-    )]
-    #[serde(
-        deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-    )]
-    Last(NaiveDateTime),
+    #[serde(with = "ts_seconds")]
+    Last(DateTime<Utc>),
     /// Timestamp (in Unix ms time) of last trade returned with regulatory snapshot.
-    #[serde(
-        serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-    )]
-    #[serde(
-        deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-    )]
-    Regulatory(NaiveDateTime),
+    #[serde(with = "ts_milliseconds")]
+    Regulatory(DateTime<Utc>),
 }
 
 #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
@@ -241,13 +232,8 @@ pub struct RealTimeVolumeBase {
     /// The last trade's size.
     pub(crate) last_size: f64,
     /// The last trade's time.
-    #[serde(
-        serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-    )]
-    #[serde(
-        deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-    )]
-    pub(crate) last_time: NaiveDateTime,
+    #[serde(with = "ts_seconds")]
+    pub(crate) last_time: DateTime<Utc>,
     /// The current day's total traded volume.
     pub(crate) day_volume: f64,
     /// The current day's Volume Weighted Average Price (VWAP).

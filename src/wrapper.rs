@@ -11,7 +11,7 @@ use crate::tick::{
     SecOptionCalculationSource, SecOptionVolume, Size, SummaryVolume, TimeStamp, TradeCount,
     Volatility, Volume, Yield,
 };
-use chrono::{NaiveDateTime, NaiveTime};
+use chrono::{DateTime, NaiveDateTime, NaiveTime, Utc};
 use ibapi_macros::debug_trait;
 use std::future::Future;
 
@@ -38,7 +38,7 @@ pub trait Local {
     /// The callback message that corresponds to [`crate::client::Client::req_current_time`].
     ///
     /// This is TWS's current time. TWS is synchronized with the server (not local computer) using NTP and this function will receive the current time in TWS.
-    fn current_time(&mut self, datetime: NaiveDateTime) -> impl Future {}
+    fn current_time(&mut self, datetime: DateTime<Utc>) -> impl Future {}
     /// The callback message that corresponds to ETF Net Asset Value (NAV) data.
     fn etf_nav(&mut self, req_id: i64, nav: tick::EtfNav) -> impl Future {}
     /// The callback message that corresponds to price data from [`crate::client::Client::req_market_data`].

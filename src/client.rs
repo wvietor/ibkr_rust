@@ -1272,7 +1272,6 @@ impl Client<indicators::Inactive> {
         Ok(())
     }
 
-    #[allow(clippy::unwrap_used, clippy::missing_panics_doc)]
     async fn into_active(self) -> IntoActive {
         let (disconnect, queue, r_thread) = spawn_reader_thread(self.status.reader);
 
@@ -1306,7 +1305,11 @@ impl Client<indicators::Inactive> {
             }
             tokio::task::yield_now().await;
         }
-        let (managed_accounts, valid_id) = (managed_accounts.unwrap(), valid_id.unwrap()..);
+        let (Some(managed_accounts), Some(valid_id)) = (managed_accounts, valid_id) else {
+            unreachable!(
+                "The loop should only exit if a valid set of accounts and id are received."
+            )
+        };
         let (client_tx, wrapper_rx) =
             mpsc::channel::<ToWrapper>(constants::TO_WRAPPER_CHANNEL_SIZE);
         let (wrapper_tx, client_rx) = mpsc::channel::<ToClient>(constants::TO_CLIENT_CHANNEL_SIZE);
@@ -1326,7 +1329,7 @@ impl Client<indicators::Inactive> {
                 tx: client_tx,
                 rx: client_rx,
                 managed_accounts,
-                order_id: valid_id,
+                order_id: valid_id..,
                 req_id: 0_i64..,
             },
         };

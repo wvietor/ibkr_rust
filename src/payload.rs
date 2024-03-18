@@ -1,4 +1,5 @@
-use chrono::NaiveDateTime;
+use chrono::serde::ts_seconds;
+use chrono::{DateTime, Utc};
 use std::fmt::Formatter;
 
 use crate::contract::ContractId;
@@ -204,13 +205,8 @@ pub struct HistogramEntry {
 /// A single historical bar
 pub struct BarCore {
     /// The ending datetime for the bar.
-    #[serde(
-        serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-    )]
-    #[serde(
-        deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-    )]
-    pub datetime: NaiveDateTime,
+    #[serde(with = "ts_seconds")]
+    pub datetime: DateTime<Utc>,
     /// The bar's open price.
     pub open: f64,
     /// The bar's high price.
@@ -286,13 +282,8 @@ pub enum Tick {
 /// A tick representing the midpoint.
 pub struct Midpoint {
     /// The timestamp of the tick.
-    #[serde(
-        serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-    )]
-    #[serde(
-        deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-    )]
-    pub datetime: NaiveDateTime,
+    #[serde(with = "ts_seconds")]
+    pub datetime: DateTime<Utc>,
     /// The midpoint price.
     pub price: f64,
 }
@@ -301,13 +292,8 @@ pub struct Midpoint {
 /// A tick representing a bid/ask.
 pub struct BidAsk {
     /// The timestamp of the tick.
-    #[serde(
-        serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-    )]
-    #[serde(
-        deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-    )]
-    pub datetime: NaiveDateTime,
+    #[serde(with = "ts_seconds")]
+    pub datetime: DateTime<Utc>,
     /// The bid price.
     pub bid_price: f64,
     /// The ask price.
@@ -322,13 +308,8 @@ pub struct BidAsk {
 /// A tick representing the last traded price.
 pub struct Last {
     /// The timestamp of the tick.
-    #[serde(
-        serialize_with = "crate::comm::serialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-    )]
-    #[serde(
-        deserialize_with = "crate::comm::deserialize_naive_datetime_yyyy_hyphen_mm_hyphen_dd_hh_colon_mm_colon_ss"
-    )]
-    pub datetime: NaiveDateTime,
+    #[serde(with = "ts_seconds")]
+    pub datetime: DateTime<Utc>,
     /// The last traded price.
     pub price: f64,
     /// The last traded size.

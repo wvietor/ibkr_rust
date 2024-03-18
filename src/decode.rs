@@ -1,5 +1,5 @@
 use anyhow::Context;
-use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 use core::future::Future;
 
 use crate::account::{self, Tag, TagValue};
@@ -129,7 +129,7 @@ pub trait Local: wrapper::Local {
                         (7, _) => (Price::Low(price), None),
                         (9, _) => (Price::Close(price), None),
                         (14, _) => (Price::Open(price), None),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.price_data(req_id, Class::Live(price)).await;
                     if let Some(sz) = size {
@@ -144,7 +144,7 @@ pub trait Local: wrapper::Local {
                         18 => ExtremeValue::High(Period::TwentySixWeek(price)),
                         19 => ExtremeValue::Low(Period::FiftyTwoWeek(price)),
                         20 => ExtremeValue::High(Period::FiftyTwoWeek(price)),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.extreme_data(req_id, value).await;
                 }
@@ -155,7 +155,7 @@ pub trait Local: wrapper::Local {
                     let mark = match tick_type {
                         37 => MarkPrice::Standard(price),
                         79 => MarkPrice::Slow(price),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.mark_price(req_id, mark).await;
                 }
@@ -164,7 +164,7 @@ pub trait Local: wrapper::Local {
                         50 => Yield::Bid(price),
                         51 => Yield::Ask(price),
                         52 => Yield::Last(price),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.yield_data(req_id, yld).await;
                 }
@@ -185,7 +185,7 @@ pub trait Local: wrapper::Local {
                         (73, _) => (Price::Low(price), None),
                         (75, _) => (Price::Close(price), None),
                         (76, _) => (Price::Open(price), None),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.price_data(req_id, Class::Delayed(price)).await;
                     if let Some(sz) = size {
@@ -202,7 +202,7 @@ pub trait Local: wrapper::Local {
                         97 => EtfNav::FrozenLast(price),
                         98 => EtfNav::High(price),
                         99 => EtfNav::Low(price),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.etf_nav(req_id, nav).await;
                 }
@@ -892,7 +892,7 @@ pub trait Local: wrapper::Local {
                         NaiveTime::parse_and_remainder(rem, " %T")?.0
                     };
                     let core = BarCore {
-                        datetime: NaiveDateTime::new(date, time),
+                        datetime: NaiveDateTime::new(date, time).and_utc(),
                         open: open.parse()?,
                         high: high.parse()?,
                         low: low.parse()?,
@@ -901,7 +901,7 @@ pub trait Local: wrapper::Local {
                     let (volume, wap, trade_count) =
                         (volume.parse()?, wap.parse()?, trade_count.parse::<i64>()?);
                     let bar = if volume > 0. && wap > 0. && trade_count > 0 {
-                        Bar::Trades(crate::payload::Trade {
+                        Bar::Trades(Trade {
                             bar: core,
                             volume,
                             wap,
@@ -997,16 +997,16 @@ pub trait Local: wrapper::Local {
                     12 => SecOptionCalculationSource::Last(calc),
                     13 => SecOptionCalculationSource::Model(calc),
                     53 => SecOptionCalculationSource::Custom(calc),
-                    _ => panic!("The impossible occurred"),
+                    _ => unreachable!(),
                 }),
                 80..=83 => Class::Delayed(match tick_type {
                     80 => SecOptionCalculationSource::Bid(calc),
                     81 => SecOptionCalculationSource::Ask(calc),
                     82 => SecOptionCalculationSource::Last(calc),
                     83 => SecOptionCalculationSource::Model(calc),
-                    _ => panic!("The impossible occurred"),
+                    _ => unreachable!(),
                 }),
-                _ => panic!("The impossible occurred"),
+                _ => unreachable!(),
             };
             wrapper.sec_option_computation(req_id, calc).await;
 
@@ -1048,7 +1048,7 @@ pub trait Local: wrapper::Local {
                         32 => QuotingExchanges::Bid(value.chars().collect()),
                         33 => QuotingExchanges::Ask(value.chars().collect()),
                         84 => QuotingExchanges::Last(value.chars().collect()),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.quoting_exchanges(req_id, quoting_exchanges).await;
                 }
@@ -1060,9 +1060,9 @@ pub trait Local: wrapper::Local {
                         return Ok(());
                     }
                     let timestamp = match tick_type {
-                        45 | 88 => NaiveDateTime::from_timestamp_opt(value, 0),
-                        85 => NaiveDateTime::from_timestamp_millis(value),
-                        _ => panic!("The impossible occurred"),
+                        45 | 88 => DateTime::from_timestamp(value, 0),
+                        85 => DateTime::from_timestamp_millis(value),
+                        _ => unreachable!(),
                     }
                     .ok_or_else(|| {
                         anyhow::Error::msg("Invalid timestamp encountered in string message")
@@ -1071,7 +1071,7 @@ pub trait Local: wrapper::Local {
                         45 => Class::Live(TimeStamp::Last(timestamp)),
                         85 => Class::Live(TimeStamp::Regulatory(timestamp)),
                         88 => Class::Delayed(TimeStamp::Last(timestamp)),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.timestamp(req_id, timestamp).await;
                 }
@@ -1090,7 +1090,7 @@ pub trait Local: wrapper::Local {
                             .with_context(|| "No last size in real time volume message")?
                             .parse()
                             .with_context(|| "Invalid value in RealTimeVolume last_size decode")?,
-                        last_time: NaiveDateTime::from_timestamp_opt(
+                        last_time: DateTime::from_timestamp(
                             vols.next()
                                 .ok_or(MissingInputData)
                                 .with_context(|| "No last time in real time volume message")?
@@ -1129,7 +1129,7 @@ pub trait Local: wrapper::Local {
                     let volume = match tick_type {
                         48 => RealTimeVolume::All(base),
                         77 => RealTimeVolume::Trades(base),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.real_time_volume(req_id, volume).await;
                 }
@@ -1206,13 +1206,11 @@ pub trait Local: wrapper::Local {
             );
 
             wrapper
-                .current_time(
-                    NaiveDateTime::from_timestamp_opt(datetime, 0).ok_or_else(|| {
-                        anyhow::Error::msg(
-                            "Invalid datetime value encountered while parsing the UNIX timestamp!",
-                        )
-                    })?,
-                )
+                .current_time(DateTime::from_timestamp(datetime, 0).ok_or_else(|| {
+                    anyhow::Error::msg(
+                        "Invalid datetime value encountered while parsing the UNIX timestamp!",
+                    )
+                })?)
                 .await;
             Ok(())
         }
@@ -1237,7 +1235,7 @@ pub trait Local: wrapper::Local {
                     trade_count @ 0: i64
             );
             let core = BarCore {
-                datetime: NaiveDateTime::from_timestamp_opt(date_time, 0)
+                datetime: DateTime::from_timestamp(date_time, 0)
                     .ok_or(anyhow::Error::msg("Invalid timestamp"))?,
                 open,
                 high,
@@ -1778,7 +1776,9 @@ pub trait Local: wrapper::Local {
                     volume @ 0: f64
             );
             let core = BarCore {
-                datetime: NaiveDateTime::parse_and_remainder(datetime_str.as_str(), "%Y%m%d %T")?.0,
+                datetime: NaiveDateTime::parse_and_remainder(datetime_str.as_str(), "%Y%m%d %T")?
+                    .0
+                    .and_utc(),
                 open,
                 high,
                 low,
@@ -1901,7 +1901,7 @@ pub trait Local: wrapper::Local {
             {
                 if let [time, _, price, size] = chunk {
                     ticks.push(Tick::Midpoint(Midpoint {
-                        datetime: NaiveDateTime::from_timestamp_opt(time.parse()?, 0)
+                        datetime: DateTime::from_timestamp(time.parse()?, 0)
                             .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
                         price: price.parse()?,
                     }));
@@ -1931,7 +1931,7 @@ pub trait Local: wrapper::Local {
             {
                 if let [time, _, bid_price, ask_price, bid_size, ask_size] = chunk {
                     ticks.push(Tick::BidAsk(BidAsk {
-                        datetime: NaiveDateTime::from_timestamp_opt(time.parse()?, 0)
+                        datetime: DateTime::from_timestamp(time.parse()?, 0)
                             .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
                         bid_price: bid_price.parse()?,
                         ask_price: ask_price.parse()?,
@@ -1964,7 +1964,7 @@ pub trait Local: wrapper::Local {
             {
                 if let [time, _, price, size, exchange, _] = chunk {
                     ticks.push(Tick::Last(Last {
-                        datetime: NaiveDateTime::from_timestamp_opt(time.parse()?, 0)
+                        datetime: DateTime::from_timestamp(time.parse()?, 0)
                             .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
                         price: price.parse()?,
                         size: size.parse()?,
@@ -1989,7 +1989,7 @@ pub trait Local: wrapper::Local {
                     tick_type @ 0: u8,
                     timestamp @ 0: i64
             );
-            let datetime = NaiveDateTime::from_timestamp_opt(timestamp, 0)
+            let datetime = DateTime::from_timestamp(timestamp, 0)
                 .ok_or_else(|| anyhow::Error::msg("Invalid timestamp"))?;
             let tick = match tick_type {
                 1 | 2 => Tick::Last(Last {
@@ -2127,7 +2127,7 @@ pub trait Local: wrapper::Local {
                         0 => Size::Bid(value),
                         3 => Size::Ask(value),
                         5 => Size::Last(value),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     });
                     wrapper.size_data(req_id, size).await;
                 }
@@ -2135,7 +2135,7 @@ pub trait Local: wrapper::Local {
                     let volume = match tick_type {
                         8 => Class::Live(value),
                         74 => Class::Delayed(value),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.volume(req_id, volume).await;
                 }
@@ -2145,7 +2145,7 @@ pub trait Local: wrapper::Local {
                         63 => SummaryVolume::ThreeMinutes(value),
                         64 => SummaryVolume::FiveMinutes(value),
                         65 => SummaryVolume::TenMinutes(value),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.summary_volume(req_id, volume).await;
                 }
@@ -2154,7 +2154,7 @@ pub trait Local: wrapper::Local {
                         23 => Volatility::SecOptionHistorical(value),
                         24 => Volatility::SecOptionImplied(value),
                         58 => Volatility::RealTimeHistorical(value),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.volatility(req_id, vol).await;
                 }
@@ -2163,7 +2163,7 @@ pub trait Local: wrapper::Local {
                         29 => SecOptionVolume::Call(value),
                         30 => SecOptionVolume::Put(value),
                         87 => SecOptionVolume::Average(value),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.sec_option_volume(req_id, volume).await;
                 }
@@ -2172,7 +2172,7 @@ pub trait Local: wrapper::Local {
                         34 => AuctionData::Volume(value),
                         36 => AuctionData::Imbalance(value),
                         61 => AuctionData::Regulatory(value),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.auction(req_id, auction).await;
                 }
@@ -2181,7 +2181,7 @@ pub trait Local: wrapper::Local {
                         27 => OpenInterest::SecOptionCall(value),
                         28 => OpenInterest::SecOptionPut(value),
                         86 => OpenInterest::SecFuture(value),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.open_interest(req_id, open_interest).await;
                 }
@@ -2189,7 +2189,7 @@ pub trait Local: wrapper::Local {
                     let factor = match tick_type {
                         31 => PriceFactor::IndexFuturePremium(value),
                         60 => PriceFactor::BondFactorMultiplier(value),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.price_factor(req_id, factor).await;
                 }
@@ -2198,7 +2198,7 @@ pub trait Local: wrapper::Local {
                         46 => Accessibility::Shortable(value),
                         49 => Accessibility::Halted(value),
                         89 => Accessibility::ShortableShares(value),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.accessibility(req_id, access).await;
                 }
@@ -2209,7 +2209,7 @@ pub trait Local: wrapper::Local {
                     let rate = match tick_type {
                         55 => Rate::Trade(value),
                         56 => Rate::Volume(value),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.rate(req_id, rate).await;
                 }
@@ -2218,7 +2218,7 @@ pub trait Local: wrapper::Local {
                         69 => Size::Bid(value),
                         70 => Size::Ask(value),
                         71 => Size::Last(value),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     });
                     wrapper.size_data(req_id, size).await;
                 }
@@ -2226,7 +2226,7 @@ pub trait Local: wrapper::Local {
                     let ipo = match tick_type {
                         101 => Ipo::Estimated(value),
                         102 => Ipo::Final(value),
-                        _ => panic!("The impossible occurred"),
+                        _ => unreachable!(),
                     };
                     wrapper.ipo(req_id, ipo).await;
                 }
