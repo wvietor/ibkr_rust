@@ -248,15 +248,14 @@ impl Builder {
             "%Y%m%d %T",
         )
         .with_context(|| "Failed to parse connection time")?;
-        let conn_time =
-            conn_time
-                .and_local_timezone(tz.trim().parse::<crate::timezone::IbTimeZone>().map_err(
-                    |e| anyhow::anyhow!("Failed to parse timezone in connection time: {:?}", e),
-                )?)
-                .single()
-                .ok_or(anyhow::anyhow!(
-                    "Failed to find unique timezone in connection time."
-                ))?;
+        let conn_time = conn_time
+            .and_local_timezone(tz.trim().parse::<timezone::IbTimeZone>().map_err(|e| {
+                anyhow::anyhow!("Failed to parse timezone in connection time: {:?}", e)
+            })?)
+            .single()
+            .ok_or(anyhow::anyhow!(
+                "Failed to find unique timezone in connection time."
+            ))?;
 
         let mut client = Client {
             mode,
@@ -1939,7 +1938,7 @@ impl Client<indicators::Active> {
             None::<()>,
             regular_trading_hours_only,
             data,
-            1,
+            2,
         ))?;
         self.writer.send().await?;
         Ok(id)

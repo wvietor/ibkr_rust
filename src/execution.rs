@@ -1,18 +1,33 @@
-use crate::comm::serialize_naive_datetime_yyyymmdd_hh_colon_mm_colon_ss;
 use crate::exchange::Primary;
-use chrono::NaiveDateTime;
-use serde::Serialize;
+use serde::ser::SerializeStruct;
+use serde::{Serialize, Serializer};
 
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Filter {
     pub client_id: i64,
     pub account_number: String,
-    #[serde(serialize_with = "serialize_naive_datetime_yyyymmdd_hh_colon_mm_colon_ss")]
-    pub start_time: NaiveDateTime,
     pub symbol: String,
     pub contract_type: ContractType,
     pub exchange: Primary,
     pub side: OrderSide,
+}
+
+// Add dummy time field that is not used
+impl Serialize for Filter {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut s = serializer.serialize_struct("Filter", 7)?;
+        s.serialize_field("client_id", &self.client_id)?;
+        s.serialize_field("account_number", &self.account_number)?;
+        s.serialize_field("time", &"")?;
+        s.serialize_field("symbol", &self.symbol)?;
+        s.serialize_field("contract_type", &self.contract_type)?;
+        s.serialize_field("exchange", &self.exchange)?;
+        s.serialize_field("side", &self.side)?;
+        s.end()
+    }
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize)]

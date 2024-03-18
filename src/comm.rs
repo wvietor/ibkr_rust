@@ -1,5 +1,4 @@
-use chrono::NaiveDateTime;
-use serde::{Serialize, Serializer};
+use serde::Serialize;
 use std::fmt::{Display, Formatter};
 use std::io::{Error, Write};
 
@@ -507,11 +506,4 @@ pub(crate) mod ser {
             Ok(())
         }
     }
-}
-
-pub(crate) fn serialize_naive_datetime_yyyymmdd_hh_colon_mm_colon_ss<S: Serializer>(
-    dt: &NaiveDateTime,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    dt.format("%Y%m%d %T").to_string().serialize(serializer)
 }

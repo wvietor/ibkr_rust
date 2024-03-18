@@ -11,7 +11,7 @@ use crate::tick::{
     SecOptionCalculationSource, SecOptionVolume, Size, SummaryVolume, TimeStamp, TradeCount,
     Volatility, Volume, Yield,
 };
-use chrono::{DateTime, NaiveDateTime, NaiveTime, Utc};
+use chrono::{DateTime, NaiveTime, Utc};
 use ibapi_macros::debug_trait;
 use std::future::Future;
 
@@ -125,7 +125,7 @@ pub trait Local {
     /// The callback message containing an updated historical bar from [`crate::client::Client::req_updating_historical_bar`].
     fn updating_historical_bar(&mut self, req_id: i64, bar: Bar) -> impl Future {}
     /// The callback message containing a timestamp for the beginning of data for a contract and specified data type from [`crate::client::Client::req_head_timestamp`].
-    fn head_timestamp(&mut self, req_id: i64, timestamp: NaiveDateTime) -> impl Future {}
+    fn head_timestamp(&mut self, req_id: i64, timestamp: DateTime<Utc>) -> impl Future {}
     /// The callback message containing a vector of historical ticks from [`crate::client::Client::req_historical_ticks`] for [`crate::client::Client::req_tick_by_tick_data`].
     fn historical_ticks(&mut self, req_id: i64, ticks: Vec<Tick>) -> impl Future {}
     /// The callback message containing a single tick from [`crate::client::Client::req_tick_by_tick_data`].

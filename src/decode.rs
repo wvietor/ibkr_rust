@@ -1717,12 +1717,13 @@ pub trait Local: wrapper::Local {
             decode_fields!(
                 fields =>
                     req_id @ 1: i64,
-                    timestamp @ 0: String
+                    timestamp @ 0: i64
             );
             wrapper
                 .head_timestamp(
                     req_id,
-                    NaiveDateTime::parse_from_str(timestamp.as_str(), "%Y%m%d-%T")?,
+                    DateTime::from_timestamp(timestamp, 0)
+                        .ok_or(anyhow::anyhow!("Invalid timestamp."))?,
                 )
                 .await;
             Ok(())
