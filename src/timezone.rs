@@ -1549,7 +1549,7 @@ impl std::str::FromStr for IbTimeZone {
             "Europe/Zurich" => Self::EuropeZurich,
             "GB" => Self::Gb,
             "GB-Eire" => Self::GbEire,
-            "Greenwich" => Self::Greenwich,
+            "Greenwich" | "GMT" => Self::Greenwich,
             "Hongkong" => Self::Hongkong,
             "Iceland" => Self::Iceland,
             "Indian/Antananarivo" => Self::IndianAntananarivo,
