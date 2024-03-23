@@ -1,16 +1,25 @@
-use crate::exchange::Primary;
+use chrono::serde::ts_seconds;
+use chrono::Utc;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
-use chrono::serde::ts_seconds;
+
 use crate::contract::{Contract, ContractType, Proxy};
+use crate::exchange::Primary;
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+/// A filter for requesting executions that meet only these criteria.
 pub struct Filter {
+    /// Filter by client id.
     pub client_id: i64,
+    /// Filter by account number.
     pub account_number: String,
+    /// Filter by contract symbol.
     pub symbol: String,
+    /// Filter by contract type.
     pub contract_type: ContractType,
+    /// Filter by exchange.
     pub exchange: Primary,
+    /// Filter by order side.
     pub side: OrderSide,
 }
 
@@ -49,7 +58,10 @@ impl std::str::FromStr for OrderSide {
         match s {
             "BOT" => Ok(Self::Buy),
             "SLD" => Ok(Self::Sell),
-            other => Err(anyhow::anyhow!("Invalid order side. Expected \'BOT\' or \'SLD\', found {}", other)),
+            other => Err(anyhow::anyhow!(
+                "Invalid order side. Expected \'BOT\' or \'SLD\', found {}",
+                other
+            )),
         }
     }
 }
@@ -65,7 +77,7 @@ pub struct Exec {
     pub execution_id: String,
     /// The date and time at which the execution occurred.
     #[serde(with = "ts_seconds")]
-    pub datetime: chrono::DateTime<crate::timezone::IbTimeZone>,
+    pub datetime: chrono::DateTime<Utc>,
     /// The account number for which the trade was made.
     pub account_number: String,
     /// The exchange on which the trade was made.
@@ -85,10 +97,10 @@ pub struct Exec {
     /// The average price at which contracts for the underlying order after this execution.
     pub average_price: f64,
     /// Whether the execution is pending a price revision.
-    pub pending_price_revision: bool
+    pub pending_price_revision: bool,
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize)]
 #[serde(tag = "action")]
 /// A confirmed trade.
 pub enum Execution {
@@ -104,7 +116,7 @@ impl Execution {
     /// Return a reference to the inner [`Exec`]
     pub fn as_exec(&self) -> &Exec {
         match self {
-            Self::Bought(e) | Self::Sold(e) => e
+            Self::Bought(e) | Self::Sold(e) => e,
         }
     }
     #[inline]
@@ -145,7 +157,7 @@ impl Execution {
 impl From<(Exec, OrderSide)> for Execution {
     #[inline]
     fn from(value: (Exec, OrderSide)) -> Self {
-        Self::from(value)
+        Self::from_exec_tuple(value.0, value.1)
     }
 }
 

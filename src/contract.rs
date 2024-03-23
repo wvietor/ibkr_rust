@@ -1,6 +1,9 @@
-use chrono::NaiveDate;
 use std::fmt::Formatter;
 use std::{num::ParseIntError, str::FromStr};
+
+use chrono::NaiveDate;
+use ibapi_macros::{make_getters, Security};
+use serde::{Deserialize, Serialize, Serializer};
 
 use crate::figi::{Figi, InvalidFigi};
 use crate::{
@@ -8,8 +11,6 @@ use crate::{
     exchange::{Primary, Routing},
     match_poly,
 };
-use ibapi_macros::{make_getters, Security};
-use serde::{Deserialize, Serialize, Serializer};
 
 // =========================================================
 // === Utility Types and Functions for Contract Creation ===
@@ -353,8 +354,9 @@ pub enum SecurityId {
 // =================================
 
 mod indicators {
-    use super::{Commodity, Contract, Crypto, Forex, Index, SecFuture, SecOption, Stock};
     use serde::Serialize;
+
+    use super::{Commodity, Contract, Crypto, Forex, Index, SecFuture, SecOption, Stock};
 
     pub trait Valid:
         Serialize
@@ -759,6 +761,7 @@ impl Proxy<SecOption> {
     }
 }
 
+#[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize)]
 /// The possible contract types
 pub enum ContractType {

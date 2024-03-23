@@ -4,26 +4,29 @@ use anyhow::Context;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 
 use crate::account::{self, Tag, TagValue};
-use crate::contract::{Commodity, Contract, ContractId, ContractType, Crypto, Forex, Index, Proxy, SecFuture, SecOption, SecOptionInner, SecurityId, Stock};
+use crate::contract::{
+    Commodity, Contract, ContractId, ContractType, Crypto, Forex, Index, Proxy, SecFuture,
+    SecOption, SecOptionInner, SecurityId, Stock,
+};
+use crate::exchange::Primary;
 use crate::execution::{Exec, Execution, OrderSide};
 use crate::payload::{
-    Bar,
-    BarCore, BidAsk, ExchangeId, Fill, HistogramEntry, Last, market_depth::{CompleteEntry, Entry, Operation}, MarketDataClass, Midpoint,
+    market_depth::{CompleteEntry, Entry, Operation},
+    Bar, BarCore, BidAsk, ExchangeId, Fill, HistogramEntry, Last, MarketDataClass, Midpoint,
     OrderStatus, Pnl, PnlSingle, Position, PositionSummary, Tick, Trade,
 };
 use crate::tick::{
     Accessibility, AuctionData, CalculationResult, Class, Dividends, EtfNav, ExtremeValue, Ipo,
     MarkPrice, OpenInterest, Period, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
-    RealTimeVolumeBase, SecOptionCalculationResults, SecOptionCalculations,
-    SecOptionCalculationSource, SecOptionVolume, Size, SummaryVolume, TimeStamp, Volatility, Yield,
+    RealTimeVolumeBase, SecOptionCalculationResults, SecOptionCalculationSource,
+    SecOptionCalculations, SecOptionVolume, Size, SummaryVolume, TimeStamp, Volatility, Yield,
 };
 use crate::{
     currency::Currency,
     exchange::Routing,
     message::{ToClient, ToWrapper},
-    wrapper,
+    timezone, wrapper,
 };
-use crate::exchange::Primary;
 
 type Tx = tokio::sync::mpsc::Sender<ToClient>;
 type Rx = tokio::sync::mpsc::Receiver<ToWrapper>;
@@ -37,7 +40,7 @@ macro_rules! decode_fields {
         nth($fields, $ind).with_context(|| format!("Expected {:?}, found none", &$fields))?
             .parse::<$f_type>().with_context(|| format!("Invalid value for {:?}", $fields))?
     };
-    ($fields: expr => $($f_name: ident @ $ind: literal: $f_type: ty ),*) => {
+    ($fields: expr => $($f_name: ident @ $ind: literal: $f_type: ty ),* $(,)?) => {
         $(
             let $f_name = decode_fields!($fields => $ind: $f_type);
         )*
@@ -100,7 +103,7 @@ pub trait Local: wrapper::Local {
                 tick_type @ 0: u16,
                 price @ 0: f64,
                 size @ 0: String,
-                attr_mask @ 0: u8
+                _attr_mask @ 0: u8
             );
 
             let size = if size.is_empty() {
@@ -716,7 +719,7 @@ pub trait Local: wrapper::Local {
             );
             wrapper
                 .portfolio_value(Position {
-                    proxy,
+                    contract: proxy,
                     position,
                     market_price,
                     market_value,
@@ -749,10 +752,10 @@ pub trait Local: wrapper::Local {
 
     #[inline]
     fn next_valid_id_msg(
-        fields: &mut Fields,
-        wrapper: &mut Self,
-        tx: &mut Tx,
-        rx: &mut Rx,
+        _fields: &mut Fields,
+        _wrapper: &mut Self,
+        _tx: &mut Tx,
+        _rx: &mut Rx,
     ) -> impl Future<Output = anyhow::Result<()>> {
         async move { Ok(()) }
     }
@@ -760,7 +763,7 @@ pub trait Local: wrapper::Local {
     #[inline]
     fn contract_data_msg(
         fields: &mut Fields,
-        wrapper: &mut Self,
+        _wrapper: &mut Self,
         tx: &mut Tx,
         rx: &mut Rx,
     ) -> impl Future<Output = anyhow::Result<()>> {
@@ -796,12 +799,32 @@ pub trait Local: wrapper::Local {
                     pending_price_revision @ 5: u8
             );
 
-            let exec = Exec {
-
-            };
-
-            // IntoIter(["11", "-1", "49", "320227571", "QQQ", "STK", "", "0.0", "", "", "NASDAQ", "USD", "QQQ", "NMS", "00025b49.65fc4aed.01.01", "20240321 13:41:28 US/Eastern", "DU2587433", "NASDAQ", "BOT", "10", "448.16", "602693702", "0", "0", "10", "448.16", "", "", "", "", "2", "0", ""])
-
+            let (dt, tz) = NaiveDateTime::parse_and_remainder(datetime.as_str(), "%Y%m%d %T ")?;
+            let datetime = dt
+                .and_local_timezone(tz.parse::<timezone::IbTimeZone>()?)
+                .single()
+                .ok_or(anyhow::anyhow!("Invalid timezone in execution data."))?
+                .to_utc();
+            let exec = Execution::from((
+                Exec {
+                    contract,
+                    order_id,
+                    execution_id,
+                    datetime,
+                    account_number,
+                    exchange,
+                    quantity,
+                    price,
+                    perm_id,
+                    client_id,
+                    liquidation: liquidation.ne(&0),
+                    cumulative_quantity,
+                    average_price,
+                    pending_price_revision: pending_price_revision.ne(&0),
+                },
+                side,
+            ));
+            wrapper.execution(req_id, exec).await;
 
             Ok(())
         }
@@ -883,10 +906,10 @@ pub trait Local: wrapper::Local {
     }
     #[inline]
     fn managed_accts_msg(
-        fields: &mut Fields,
-        wrapper: &mut Self,
-        tx: &mut Tx,
-        rx: &mut Rx,
+        _fields: &mut Fields,
+        _wrapper: &mut Self,
+        _tx: &mut Tx,
+        _rx: &mut Rx,
     ) -> impl Future<Output = anyhow::Result<()>> {
         async move { Ok(()) }
     }
@@ -911,8 +934,8 @@ pub trait Local: wrapper::Local {
             decode_fields!(
                 fields =>
                     req_id @ 1: i64,
-                    start_date_str @ 0: String,
-                    end_date_str @ 0: String,
+                    _start_date_str @ 0: String,
+                    _end_date_str @ 0: String,
                     count @ 0: usize
             );
             let mut bars = Vec::with_capacity(count);
@@ -1218,8 +1241,8 @@ pub trait Local: wrapper::Local {
 
     #[inline]
     fn tick_efp_msg(
-        fields: &mut Fields,
-        wrapper: &mut Self,
+        _fields: &mut Fields,
+        _wrapper: &mut Self,
     ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
             unimplemented!();
@@ -1239,11 +1262,14 @@ pub trait Local: wrapper::Local {
             );
 
             wrapper
-                .current_time(DateTime::from_timestamp(datetime, 0).ok_or_else(|| {
-                    anyhow::Error::msg(
-                        "Invalid datetime value encountered while parsing the UNIX timestamp!",
-                    )
-                })?)
+                .current_time(
+                    req_id,
+                    DateTime::from_timestamp(datetime, 0).ok_or_else(|| {
+                        anyhow::Error::msg(
+                            "Invalid datetime value encountered while parsing the UNIX timestamp!",
+                        )
+                    })?,
+                )
                 .await;
             Ok(())
         }
@@ -1407,14 +1433,17 @@ pub trait Local: wrapper::Local {
         async move {
             decode_fields!(
                 fields =>
-                    account_number @ 2: String,
-                    contract_id @ 0: ContractId,
-                    position @ 10: f64,
+                    account_number @ 2: String
+            );
+            let contract = deserialize_contract_proxy(fields)?;
+            decode_fields!(
+                fields =>
+                    position @ 0: f64,
                     average_cost @ 0: f64
             );
             wrapper
                 .position_summary(PositionSummary {
-                    contract_id,
+                    contract,
                     position,
                     average_cost,
                     account_number,

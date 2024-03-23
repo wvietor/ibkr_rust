@@ -5,7 +5,8 @@ use ibapi_macros::debug_trait;
 
 use crate::account::{Attribute, TagValue};
 use crate::client::ActiveClient;
-use crate::contract::Proxy;
+use crate::contract::{Contract, Proxy};
+use crate::execution::Execution;
 use crate::payload::{
     self, Bar, ExchangeId, HistogramEntry, OrderStatus, Pnl, PnlSingle, Position, PositionSummary,
     Tick,
@@ -40,7 +41,7 @@ pub trait Local {
     /// The callback message that corresponds to [`crate::client::Client::req_current_time`].
     ///
     /// This is TWS's current time. TWS is synchronized with the server (not local computer) using NTP and this function will receive the current time in TWS.
-    fn current_time(&mut self, datetime: DateTime<Utc>) -> impl Future {}
+    fn current_time(&mut self, req_id: i64, datetime: DateTime<Utc>) -> impl Future {}
     /// The callback message that corresponds to ETF Net Asset Value (NAV) data.
     fn etf_nav(&mut self, req_id: i64, nav: tick::EtfNav) -> impl Future {}
     /// The callback message that corresponds to price data from [`crate::client::Client::req_market_data`].
@@ -176,6 +177,8 @@ pub trait Local {
         permanent_id: i64,
     ) -> impl Future {
     }
+    /// The callback message that contains information about an execution.
+    fn execution(&mut self, req_id: i64, execution: Execution) -> impl Future {}
 }
 
 #[trait_variant::make(RemoteRecurring: Send)]

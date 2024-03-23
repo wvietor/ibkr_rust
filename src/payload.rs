@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 
-use crate::contract::ContractId;
+use crate::contract::{Contract, Proxy};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 /// The result of a [`crate::client::Client::req_market_data`] request, which contains an identifier that can be passed to
@@ -304,11 +304,11 @@ pub struct Last {
     pub exchange: crate::exchange::Primary,
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize)]
 /// A single position, comprising a single security and details about its current value, P&L, etc.
 pub struct Position {
     /// The ID of the underlying contract.
-    pub contract_id: ContractId,
+    pub contract: Proxy<Contract>,
     /// The number of contracts owned.
     pub position: f64,
     /// The current market price of each contract.
@@ -325,11 +325,11 @@ pub struct Position {
     pub account_number: String,
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize)]
 /// A single position, comprising a single security and a few details about its cost, account, etc.
 pub struct PositionSummary {
-    /// The ID of the underlying contract.
-    pub contract_id: ContractId,
+    /// The underlying contract
+    pub contract: Proxy<Contract>,
     /// The number of contracts owned.
     pub position: f64,
     /// The average cost per contract for the entire position.
