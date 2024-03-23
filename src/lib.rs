@@ -56,6 +56,8 @@ pub mod order;
 /// Contains the types that are parsed from API callbacks. They are used in the [`wrapper::Local`] and
 /// [`wrapper::Remote`] callback functions.
 pub mod payload;
+/// Convenience module containing commonly-used types, functions, and modules.
+pub mod prelude;
 mod reader;
 /// Contains modules, types, and functions related to live data subscriptions, namely those
 /// that are created in [`client::Client::req_market_data`].

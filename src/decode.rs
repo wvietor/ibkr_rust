@@ -13,7 +13,7 @@ use crate::execution::{Exec, Execution, OrderSide};
 use crate::payload::{
     market_depth::{CompleteEntry, Entry, Operation},
     Bar, BarCore, BidAsk, ExchangeId, Fill, HistogramEntry, Last, MarketDataClass, Midpoint,
-    OrderStatus, Pnl, PnlSingle, Position, PositionSummary, Tick, Trade,
+    OrderStatus, Pnl, PnlSingle, Position, PositionSummary, TickData, Trade,
 };
 use crate::tick::{
     Accessibility, AuctionData, CalculationResult, Class, Dividends, EtfNav, ExtremeValue, Ipo,
@@ -1963,7 +1963,7 @@ pub trait Local: wrapper::Local {
                 .chunks_exact(4)
             {
                 if let [time, _, price, size] = chunk {
-                    ticks.push(Tick::Midpoint(Midpoint {
+                    ticks.push(TickData::Midpoint(Midpoint {
                         datetime: DateTime::from_timestamp(time.parse()?, 0)
                             .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
                         price: price.parse()?,
@@ -1993,7 +1993,7 @@ pub trait Local: wrapper::Local {
                 .chunks_exact(6)
             {
                 if let [time, _, bid_price, ask_price, bid_size, ask_size] = chunk {
-                    ticks.push(Tick::BidAsk(BidAsk {
+                    ticks.push(TickData::BidAsk(BidAsk {
                         datetime: DateTime::from_timestamp(time.parse()?, 0)
                             .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
                         bid_price: bid_price.parse()?,
@@ -2026,7 +2026,7 @@ pub trait Local: wrapper::Local {
                 .chunks_exact(6)
             {
                 if let [time, _, price, size, exchange, _] = chunk {
-                    ticks.push(Tick::Last(Last {
+                    ticks.push(TickData::Last(Last {
                         datetime: DateTime::from_timestamp(time.parse()?, 0)
                             .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
                         price: price.parse()?,
@@ -2055,7 +2055,7 @@ pub trait Local: wrapper::Local {
             let datetime = DateTime::from_timestamp(timestamp, 0)
                 .ok_or_else(|| anyhow::Error::msg("Invalid timestamp"))?;
             let tick = match tick_type {
-                1 | 2 => Tick::Last(Last {
+                1 | 2 => TickData::Last(Last {
                     datetime,
                     price: nth(fields, 0)?.parse()?,
                     size: nth(fields, 0)?.parse()?,
@@ -2069,7 +2069,7 @@ pub trait Local: wrapper::Local {
                             bid_size @ 0: f64,
                             ask_size @ 0: f64
                     );
-                    Tick::BidAsk(BidAsk {
+                    TickData::BidAsk(BidAsk {
                         datetime,
                         bid_price,
                         ask_price,
@@ -2077,7 +2077,7 @@ pub trait Local: wrapper::Local {
                         ask_size,
                     })
                 }
-                4 => Tick::Midpoint(Midpoint {
+                4 => TickData::Midpoint(Midpoint {
                     datetime,
                     price: nth(fields, 0)?.parse()?,
                 }),

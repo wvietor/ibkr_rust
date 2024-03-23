@@ -9,7 +9,7 @@ use crate::contract::{Contract, Proxy};
 use crate::execution::Execution;
 use crate::payload::{
     self, Bar, ExchangeId, HistogramEntry, OrderStatus, Pnl, PnlSingle, Position, PositionSummary,
-    Tick,
+    TickData,
 };
 use crate::tick::{
     self, Accessibility, AuctionData, Class, Dividends, ExtremeValue, Ipo, MarkPrice, News,
@@ -130,9 +130,9 @@ pub trait Local {
     /// The callback message containing a timestamp for the beginning of data for a contract and specified data type from [`crate::client::Client::req_head_timestamp`].
     fn head_timestamp(&mut self, req_id: i64, timestamp: DateTime<Utc>) -> impl Future {}
     /// The callback message containing a vector of historical ticks from [`crate::client::Client::req_historical_ticks`] for [`crate::client::Client::req_tick_by_tick_data`].
-    fn historical_ticks(&mut self, req_id: i64, ticks: Vec<Tick>) -> impl Future {}
+    fn historical_ticks(&mut self, req_id: i64, ticks: Vec<TickData>) -> impl Future {}
     /// The callback message containing a single tick from [`crate::client::Client::req_tick_by_tick_data`].
-    fn live_tick(&mut self, req_id: i64, tick: Tick) -> impl Future {}
+    fn live_tick(&mut self, req_id: i64, tick: TickData) -> impl Future {}
     /// The callback message containing account attributes from [`crate::client::Client::req_account_updates`].
     fn account_attribute(&mut self, attribute: Attribute, account_number: String) -> impl Future {}
     /// The callback message containing information about a single [`Position`] from [`crate::client::Client::req_account_updates`].

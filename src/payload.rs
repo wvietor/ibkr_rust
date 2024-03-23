@@ -255,7 +255,7 @@ impl Serialize for Trade {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
 #[serde(tag = "tick")]
 /// A historical or live tick.
-pub enum Tick {
+pub enum TickData {
     /// A tick representing a midpoint price.
     Midpoint(Midpoint),
     /// A tick representing the current best bid / ask prices.
