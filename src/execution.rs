@@ -32,39 +32,55 @@ impl Serialize for Filter {
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize)]
 pub enum ContractType {
-    #[serde(rename(serialize = "CASH"))]
+    #[serde(rename = "CASH")]
     /// A [`crate::contract::Forex`] contract.
     Forex,
-    #[serde(rename(serialize = "CRYPTO"))]
+    #[serde(rename = "CRYPTO")]
     /// A [`crate::contract::Crypto`] contract.
     Crypto,
-    #[serde(rename(serialize = "STK"))]
+    #[serde(rename = "STK")]
     /// A [`crate::contract::Stock`] contract.
     Stock,
-    #[serde(rename(serialize = "IND"))]
+    #[serde(rename = "IND")]
     /// An [`crate::contract::Index`] contract.
     Index,
     //Cfd,
-    #[serde(rename(serialize = "FUT"))]
+    #[serde(rename = "FUT")]
     /// A [`crate::contract::SecFuture`] contract.
     SecFuture,
-    #[serde(rename(serialize = "OPT"))]
+    #[serde(rename = "OPT")]
     /// A [`crate::contract::SecOption`] contract.
     SecOption,
     //FutureSecOption,
     //Bond,
     //MutualFund,
-    #[serde(rename(serialize = "CMDTY"))]
+    #[serde(rename = "CMDTY")]
     /// A [`crate::contract::Commodity`] contract.
     Commodity,
     //Warrant,
     //StructuredProduct,
 }
 
+impl std::str::FromStr for ContractType {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "CASH" => Self::Forex,
+            "CRYPTO" => Self::Crypto,
+            "STK" => Self::Stock,
+            "IND" => Self::Index,
+            "FUT" => Self::SecFuture,
+            "OPT" => Self::SecOption,
+            "CMDTY" => Self::Commodity,
+            v => return Err(anyhow::anyhow!("Invalid contract type {}", v)),
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq, Hash, Serialize)]
 pub enum OrderSide {
-    #[serde(rename(serialize = "BUY"))]
+    #[serde(rename = "BUY")]
     Buy,
-    #[serde(rename(serialize = "SELL"))]
+    #[serde(rename = "SELL")]
     Sell,
 }

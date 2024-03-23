@@ -2,6 +2,7 @@ mod security;
 mod debug_trait;
 mod send_trait;
 mod variant_value;
+mod getters;
 
 use proc_macro::TokenStream;
 use quote::ToTokens;
@@ -31,4 +32,11 @@ pub fn typed_variants(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut ast = syn::parse(item).unwrap();
 
     variant_value::impl_typed_variants(&mut ast).into()
+}
+
+#[proc_macro_attribute]
+pub fn make_getters(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let mut ast = syn::parse(item).unwrap();
+
+    getters::impl_make_getters(&mut ast).into()
 }

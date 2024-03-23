@@ -56,7 +56,7 @@ pub enum Currency {
     SwissFranc,
     #[serde(rename(serialize = "USD"))]
     /// The US Dollar (USD) is the currency of the United States of America.
-    USDollar,
+    UsDollar,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -104,7 +104,7 @@ impl ToString for Currency {
             Self::NorwegianKrone => "NOK",
             Self::SwedishKrona => "SEK",
             Self::SwissFranc => "CHF",
-            Self::USDollar => "USD",
+            Self::UsDollar => "USD",
         }
         .to_owned()
     }
@@ -132,7 +132,7 @@ impl FromStr for Currency {
             "NOK" => Self::NorwegianKrone,
             "SEK" => Self::SwedishKrona,
             "CHF" => Self::SwissFranc,
-            "USD" => Self::USDollar,
+            "USD" => Self::UsDollar,
             s => return Err(ParseCurrencyError(s.to_owned())),
         })
     }

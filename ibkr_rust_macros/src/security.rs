@@ -1,30 +1,78 @@
-use syn::{Ident, parse_str};
-use quote::{format_ident, quote};
 use std::collections::HashSet;
+
 use proc_macro2::TokenStream;
+use quote::{format_ident, quote};
+use SecType::*;
+use syn::{Ident, parse_str};
 
-const FOREX: &str = "Forex";
-const CRYPTO: &str = "Crypto";
-const STOCK: &str = "Stock";
-const INDEX: &str = "Index";
-const SEC_FUTURE: &str = "SecFuture";
-const SEC_OPTION: &str = "SecOption";
-const COMMODITY: &str = "Commodity";
-
-const CONTRACTS: [&str; 7] = [
-    FOREX, CRYPTO, STOCK, INDEX, SEC_FUTURE, SEC_OPTION, COMMODITY,
-];
-
-
-#[inline]
-fn panic_msg(s_name: &str) -> ! {
-    panic!("Invalid Security name {s_name}")
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+enum SecType {
+    Forex,
+    Crypto,
+    Stock,
+    Index,
+    SecFuture,
+    SecOption,
+    Commodity,
 }
+
+impl SecType {
+    #[inline]
+    const fn as_str(&self) -> &'static str {
+        match self {
+            Forex => "Forex",
+            Crypto => "Crypto",
+            Stock => "Stock",
+            Index => "Index",
+            SecFuture => "SecFuture",
+            SecOption => "SecOption",
+            Commodity => "Commodity",
+        }
+    }
+}
+
+impl From<&str> for SecType {
+    fn from(s: &str) -> Self {
+        match s {
+            "Forex" => Forex,
+            "Crypto" => Crypto,
+            "Stock" => Stock,
+            "Index" => Index,
+            "SecFuture" => SecFuture,
+            "SecOption" => SecOption,
+            "Commodity" => Commodity,
+            _ => panic!("Invalid Security name {s}.")
+        }
+    }
+}
+
+impl From<&SecType> for &'static str {
+    fn from(value: &SecType) -> Self {
+        value.as_str()
+    }
+}
+
+impl From<&Ident> for SecType {
+    fn from(value: &Ident) -> Self {
+        let s = value.to_string();
+        s.as_str().into()
+    }
+}
+
+const CONTRACTS: [SecType; 7] = [
+    Forex,
+    Crypto,
+    Stock,
+    Index,
+    SecFuture,
+    SecOption,
+    Commodity,
+];
 
 fn impl_try_from_other_contracts(name: &Ident) -> TokenStream {
     let mut idents = CONTRACTS
         .into_iter()
-        .map(|c| parse_str(c).unwrap())
+        .map(|c| parse_str(c.as_str()).unwrap())
         .collect::<HashSet<Ident>>();
     idents.remove(name);
 
@@ -55,179 +103,207 @@ fn impl_into_contract(name: &Ident) -> TokenStream {
     }
 }
 
+
 #[allow(clippy::module_name_repetitions, clippy::too_many_lines)]
 pub fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
-    let s_name = name.to_string();
-    let s_name = s_name.as_str();
+    let s_name: SecType = name.into();
 
     let contract_id = match s_name {
-        FOREX
-        | CRYPTO
-        | STOCK
-        | INDEX
-        | SEC_FUTURE
-        | COMMODITY => quote! { self.contract_id },
-        SEC_OPTION => quote! {
+        Forex
+        | Crypto
+        | Stock
+        | Index
+        | SecFuture
+        | Commodity => quote! { self.contract_id },
+        SecOption => quote! {
             match self {
                 SecOption::Call(inner) | SecOption::Put(inner) => inner.contract_id
             }
         },
-        _ => panic_msg(s_name),
     };
-
     let symbol = match s_name {
-        FOREX
-        | CRYPTO
-        | STOCK
-        | INDEX
-        | SEC_FUTURE
-        | COMMODITY => quote! { self.symbol.as_str() },
-        SEC_OPTION => quote! {
+        Forex
+        | Crypto
+        | Stock
+        | Index
+        | SecFuture
+        | Commodity => quote! { self.symbol.as_str() },
+        SecOption => quote! {
             match self {
                 SecOption::Call(inner) | SecOption::Put(inner) => inner.symbol.as_str()
             }
         },
-        _ => panic_msg(s_name),
     };
-
     let security_type = match s_name {
-        FOREX => "CASH",
-        CRYPTO => "CRYPTO",
-        STOCK => "STK",
-        INDEX => "IND",
-        SEC_FUTURE => "FUT",
-        SEC_OPTION => "OPT",
-        COMMODITY => "CMDTY",
-        _ => panic_msg(s_name),
+        Forex => "CASH",
+        Crypto => "Crypto",
+        Stock => "STK",
+        Index => "IND",
+        SecFuture => "FUT",
+        SecOption => "OPT",
+        Commodity => "CMDTY",
     };
-
     let expiration_date = match s_name {
-        FOREX | CRYPTO | STOCK | INDEX | COMMODITY => {
-            quote! { None }
+        Forex | Crypto | Stock | Index | Commodity => {
+            quote! { None::<NaiveDate> }
         }
-        SEC_FUTURE => quote! { Some(self.expiration_date) },
-        SEC_OPTION => quote! {
+        SecFuture => quote! { Some(self.expiration_date) },
+        SecOption => quote! {
             match self {
                 SecOption::Call(inner) | SecOption::Put(inner) => Some(inner.expiration_date)
             }
         },
-        _ => panic_msg(s_name),
     };
-
     let strike = match s_name {
-        FOREX
-        | CRYPTO
-        | STOCK
-        | INDEX
-        | SEC_FUTURE
-        | COMMODITY => quote! { None },
-        SEC_OPTION => quote! {
+        Forex
+        | Crypto
+        | Stock
+        | Index
+        | SecFuture
+        | Commodity => quote! { None::<f64> },
+        SecOption => quote! {
             match self {
                 SecOption::Call(inner) | SecOption::Put(inner) => Some(inner.strike)
             }
         },
-        _ => panic_msg(s_name),
     };
-
     let right = match s_name {
-        FOREX
-        | CRYPTO
-        | STOCK
-        | INDEX
-        | SEC_FUTURE
-        | COMMODITY => quote! { None },
-        SEC_OPTION => quote! {
+        Forex
+        | Crypto
+        | Stock
+        | Index
+        | SecFuture
+        | Commodity => quote! { None::<&str> },
+        SecOption => quote! {
             match self {
                 SecOption::Call(_) => Some("C"),
                 SecOption::Put(_) => Some("P"),
             }
         },
-        _ => panic_msg(s_name),
     };
-
     let multiplier = match s_name {
-        FOREX | CRYPTO | STOCK | INDEX | COMMODITY => {
-            quote! { None }
+        Forex | Crypto | Stock | Index | Commodity => {
+            quote! { None::<u32> }
         }
-        SEC_FUTURE => quote! { Some(self.multiplier) },
-        SEC_OPTION => quote! {
+        SecFuture => quote! { Some(self.multiplier) },
+        SecOption => quote! {
             match self {
                 SecOption::Call(inner) | SecOption::Put(inner) => Some(inner.multiplier)
             }
         },
-        _ => panic_msg(s_name),
     };
-
     let exchange = match s_name {
-        FOREX | STOCK | INDEX | SEC_FUTURE | COMMODITY => {
+        Forex | Stock | Index | SecFuture | Commodity => {
             quote! { self.exchange }
         }
-        CRYPTO => quote! { Routing::Primary(Primary::PaxosCryptoExchange) },
-        SEC_OPTION => quote! {
+        Crypto => quote! { Routing::Primary(Primary::PaxosCryptoExchange) },
+        SecOption => quote! {
             match self {
                 SecOption::Call(inner) | SecOption::Put(inner) => inner.exchange
             }
         },
-        _ => panic_msg(s_name),
     };
-
     let primary_exchange = match s_name {
-        FOREX
-        | CRYPTO
-        | INDEX
-        | SEC_FUTURE
-        | SEC_OPTION
-        | COMMODITY => quote! { None },
-        STOCK => quote! { Some(self.primary_exchange) },
-        _ => panic_msg(s_name),
+        Forex
+        | Crypto
+        | Index
+        | SecFuture
+        | SecOption
+        | Commodity => quote! { None::<Primary> },
+        Stock => quote! { Some(self.primary_exchange) },
     };
-
     let currency = match s_name {
-        FOREX
-        | CRYPTO
-        | STOCK
-        | INDEX
-        | SEC_FUTURE
-        | COMMODITY => quote! { self.currency },
-        SEC_OPTION => quote! {
+        Forex
+        | Crypto
+        | Stock
+        | Index
+        | SecFuture
+        | Commodity => quote! { self.currency },
+        SecOption => quote! {
             match self {
                 SecOption::Call(inner) | SecOption::Put(inner) => inner.currency
             }
         },
-        _ => panic_msg(s_name),
     };
-
     let local_symbol = match s_name {
-        FOREX
-        | CRYPTO
-        | STOCK
-        | INDEX
-        | SEC_FUTURE
-        | COMMODITY => quote! { self.local_symbol.as_str() },
-        SEC_OPTION => quote! {
+        Forex
+        | Crypto
+        | Stock
+        | Index
+        | SecFuture
+        | Commodity => quote! { self.local_symbol.as_str() },
+        SecOption => quote! {
             match self {
                 SecOption::Call(inner) | SecOption::Put(inner) => inner.local_symbol.as_str()
             }
         },
-        _ => panic_msg(s_name),
     };
-
+    let min_tick = match s_name {
+        Forex
+        | Crypto
+        | Stock
+        | Index
+        | SecFuture
+        | Commodity => quote! { self.min_tick },
+        SecOption => quote! {
+            match self {
+                SecOption::Call(inner) | SecOption::Put(inner) => inner.min_tick
+            }
+        },
+    };
     let trading_class = match s_name {
-        FOREX | CRYPTO | STOCK | SEC_FUTURE | COMMODITY => {
+        Forex | Crypto | Stock | SecFuture | Commodity => {
             quote! { Some(self.trading_class.as_str()) }
         }
-        INDEX => quote! { None },
-        SEC_OPTION => quote! {
+        Index => quote! { None::<&str> },
+        SecOption => quote! {
             match self {
                 SecOption::Call(inner) | SecOption::Put(inner) => Some(inner.trading_class.as_str())
             }
         },
-        _ => panic_msg(s_name),
+    };
+    let long_name = match s_name {
+        Forex
+        | Crypto
+        | Stock
+        | Index
+        | SecFuture
+        | Commodity => quote! { self.long_name.as_str() },
+        SecOption => quote! {
+            match self {
+                SecOption::Call(inner) | SecOption::Put(inner) => inner.long_name.as_str()
+            }
+        },
+    };
+    let order_types = match s_name {
+        Forex
+        | Crypto
+        | Stock
+        | Index
+        | SecFuture
+        | Commodity => quote! { &self.order_types },
+        SecOption => quote! {
+            match self {
+                SecOption::Call(inner) | SecOption::Put(inner) => &inner.order_types
+            }
+        },
+    };
+    let valid_exchanges = match s_name {
+        Forex
+        | Crypto
+        | Stock
+        | Index
+        | SecFuture
+        | Commodity => quote! { &self.valid_exchanges },
+        SecOption => quote! {
+            match self {
+                SecOption::Call(inner) | SecOption::Put(inner) => &inner.valid_exchanges
+            }
+        },
     };
 
     let try_from_impl = impl_try_from_other_contracts(name);
-
     let into_contract_impl = impl_into_contract(name);
 
     let gen = quote! {
@@ -236,81 +312,54 @@ pub fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
         impl serde::Serialize for #name {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
                 (
-                    self.get_contract_id(),
-                    self.get_symbol(),
-                    self.get_security_type(),
-                    self.get_expiration_date().map(|d| d.format("%Y%m%d").to_string()),
-                    self.get_strike(),
-                    self.get_right(),
-                    self.get_multiplier(),
-                    self.get_exchange(),
-                    self.get_primary_exchange(),
-                    self.get_currency(),
-                    self.get_local_symbol(),
-                    self.get_trading_class()
+                    #contract_id,
+                    #symbol,
+                    #security_type,
+                    #expiration_date.map(|d| d.format("%Y%m%d").to_string()),
+                    #strike,
+                    #right,
+                    #multiplier,
+                    #exchange,
+                    #primary_exchange,
+                    #currency,
+                    #local_symbol,
+                    #trading_class
                 ).serialize(serializer)
             }
         }
 
         impl Security for #name {
             #[inline]
-            fn get_contract_id(&self) -> ContractId {
+            fn contract_id(&self) -> ContractId {
                 #contract_id
             }
-
             #[inline]
-            fn get_symbol(&self) -> &str {
+            fn min_tick(&self) -> f64 {
+                #min_tick
+            }
+            #[inline]
+            fn symbol(&self) -> &str {
                 #symbol
             }
-
             #[inline]
-            fn get_security_type(&self) -> &'static str {
-                #security_type
-            }
-
-            #[inline]
-            fn get_expiration_date(&self) -> Option<NaiveDate> {
-                #expiration_date
-            }
-
-            #[inline]
-            fn get_strike(&self) -> Option<f64> {
-                #strike
-            }
-
-            #[inline]
-            fn get_right(&self) -> Option<&'static str> {
-                #right
-            }
-
-            #[inline]
-            fn get_multiplier(&self) -> Option<u32> {
-                #multiplier
-            }
-
-            #[inline]
-            fn get_exchange(&self) -> Routing {
-                #exchange
-            }
-
-            #[inline]
-            fn get_primary_exchange(&self) -> Option<Primary> {
-                #primary_exchange
-            }
-
-            #[inline]
-            fn get_currency(&self) -> Currency {
+            fn currency(&self) -> Currency {
                 #currency
             }
-
             #[inline]
-            fn get_local_symbol(&self) -> &str {
+            fn local_symbol(&self) -> &str {
                 #local_symbol
             }
-
             #[inline]
-            fn get_trading_class(&self) -> Option<&str> {
-                #trading_class
+            fn long_name(&self) -> &str {
+                #long_name
+            }
+            #[inline]
+            fn order_types(&self) -> &Vec<String> {
+                #order_types
+            }
+            #[inline]
+            fn valid_exchanges(&self) -> &Vec<Routing> {
+                #valid_exchanges
             }
         }
 

@@ -132,9 +132,9 @@ pub trait Local {
     fn live_tick(&mut self, req_id: i64, tick: Tick) -> impl Future {}
     /// The callback message containing account attributes from [`crate::client::Client::req_account_updates`].
     fn account_attribute(&mut self, attribute: Attribute, account_number: String) -> impl Future {}
-    /// The callback message containing information about a single [`Position`] from [`crate::client::Client::req_positions`].
-    fn position(&mut self, position: Position) -> impl Future {}
-    /// The callback message containing information about the time at which [`Local::account_attribute`] data is valid.
+    /// The callback message containing information about a single [`Position`] from [`crate::client::Client::req_account_updates`].
+    fn portfolio_value(&mut self, position: Position) -> impl Future {}
+    /// The callback message containing information about the time at which account attribute data is valid.
     fn account_attribute_time(&mut self, time: NaiveTime) -> impl Future {}
     /// The callback message containing summary information about positions from [`crate::client::Client::req_positions`].
     fn position_summary(&mut self, summary: PositionSummary) -> impl Future {}

@@ -1,27 +1,12 @@
-use chrono::serde::ts_seconds;
-use chrono::{DateTime, Utc};
 use std::fmt::Formatter;
-
-use crate::contract::ContractId;
-use serde::ser::SerializeStruct;
-use serde::{Deserialize, Serialize, Serializer};
 use std::str::FromStr;
 
-// macro_rules! make_error {
-//     ($( #[doc = $name_doc:expr] )? $name: ident: $msg: literal) => {
-//         $( #[doc = $name_doc] )?
-//         #[derive(Debug, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-//         pub struct $name(pub String);
-//
-//         impl std::error::Error for $name {}
-//
-//         impl std::fmt::Display for $name {
-//             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> std::fmt::Result {
-//                 write!(f, "{}: {}", $msg, self.0)
-//             }
-//         }
-//     };
-// }
+use chrono::{DateTime, Utc};
+use chrono::serde::ts_seconds;
+use serde::{Deserialize, Serialize, Serializer};
+use serde::ser::SerializeStruct;
+
+use crate::contract::ContractId;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 /// The result of a [`crate::client::Client::req_market_data`] request, which contains an identifier that can be passed to
@@ -71,8 +56,9 @@ pub type MarketDataClass = crate::market_data::live_data::Class;
 
 /// Contains types related to market depth updates from [`crate::client::Client::req_market_depth`]
 pub mod market_depth {
-    use crate::exchange::Primary;
     use serde::{de::Error, Deserialize, Serialize};
+
+    use crate::exchange::Primary;
 
     #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
     #[serde(tag = "operation")]

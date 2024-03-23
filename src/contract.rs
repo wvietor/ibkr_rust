@@ -8,8 +8,9 @@ use crate::{
     exchange::{Primary, Routing},
     match_poly,
 };
-use ibapi_macros::Security;
+use ibapi_macros::{Security, make_getters};
 use serde::{Deserialize, Serialize, Serializer};
+use crate::execution::ContractType;
 
 // =========================================================
 // === Utility Types and Functions for Contract Creation ===
@@ -44,7 +45,13 @@ pub enum Contract {
 
 macro_rules! contract_impl {
     ($sec_type: ty, $pat: pat_param => $exp: expr, $func_name_ref: ident, $func_name: ident) => {
-        #[allow(missing_docs, clippy::missing_errors_doc)]
+        #[doc=concat!("Coerce the contract reference to a ", stringify!($sec_type), " reference.")]
+        ///
+        /// # Returns
+        #[doc=concat!("The underlying ", stringify!($sec_type),  " reference.")]
+        ///
+        /// # Errors
+        #[doc=concat!("Will error if the underlying contract is not a ", stringify!($sec_type), " reference.")]
         pub fn $func_name_ref(&self) -> anyhow::Result<&$sec_type> {
             match self {
                 $pat => $exp,
@@ -54,7 +61,13 @@ macro_rules! contract_impl {
                 )),
             }
         }
-        #[allow(missing_docs, clippy::missing_errors_doc)]
+        #[doc=concat!("Coerce the contract to a ", stringify!($sec_type))]
+        ///
+        /// # Returns
+        #[doc=concat!("The underlying ", stringify!($sec_type))]
+        ///
+        /// # Errors
+        #[doc=concat!("Will error if the underlying contract is not a ", stringify!($sec_type))]
         pub fn $func_name(self) -> anyhow::Result<$sec_type> {
             match self {
                 $pat => $exp,
@@ -97,7 +110,7 @@ impl Serialize for Contract {
 
 impl Security for Contract {
     #[inline]
-    fn get_contract_id(&self) -> ContractId {
+    fn contract_id(&self) -> ContractId {
         match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
@@ -105,12 +118,12 @@ impl Security for Contract {
             | Self::Index(t)
             | Self::SecFuture(t)
             | Self::SecOption(t)
-            | Self::Commodity(t) => t.get_contract_id()
+            | Self::Commodity(t) => t.contract_id()
         )
     }
 
     #[inline]
-    fn get_symbol(&self) -> &str {
+    fn min_tick(&self) -> f64 {
         match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
@@ -118,12 +131,12 @@ impl Security for Contract {
             | Self::Index(t)
             | Self::SecFuture(t)
             | Self::SecOption(t)
-            | Self::Commodity(t) => t.get_symbol()
+            | Self::Commodity(t) => t.min_tick()
         )
     }
 
     #[inline]
-    fn get_security_type(&self) -> &'static str {
+    fn symbol(&self) -> &str {
         match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
@@ -131,12 +144,12 @@ impl Security for Contract {
             | Self::Index(t)
             | Self::SecFuture(t)
             | Self::SecOption(t)
-            | Self::Commodity(t) => t.get_security_type()
+            | Self::Commodity(t) => t.symbol()
         )
     }
 
     #[inline]
-    fn get_expiration_date(&self) -> Option<NaiveDate> {
+    fn currency(&self) -> Currency {
         match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
@@ -144,12 +157,12 @@ impl Security for Contract {
             | Self::Index(t)
             | Self::SecFuture(t)
             | Self::SecOption(t)
-            | Self::Commodity(t) => t.get_expiration_date()
+            | Self::Commodity(t) => t.currency()
         )
     }
 
     #[inline]
-    fn get_strike(&self) -> Option<f64> {
+    fn local_symbol(&self) -> &str {
         match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
@@ -157,12 +170,12 @@ impl Security for Contract {
             | Self::Index(t)
             | Self::SecFuture(t)
             | Self::SecOption(t)
-            | Self::Commodity(t) => t.get_strike()
+            | Self::Commodity(t) => t.local_symbol()
         )
     }
 
     #[inline]
-    fn get_right(&self) -> Option<&'static str> {
+    fn long_name(&self) -> &str {
         match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
@@ -170,12 +183,12 @@ impl Security for Contract {
             | Self::Index(t)
             | Self::SecFuture(t)
             | Self::SecOption(t)
-            | Self::Commodity(t) => t.get_right()
+            | Self::Commodity(t) => t.long_name()
         )
     }
 
     #[inline]
-    fn get_multiplier(&self) -> Option<u32> {
+    fn order_types(&self) -> &Vec<String> {
         match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
@@ -183,12 +196,12 @@ impl Security for Contract {
             | Self::Index(t)
             | Self::SecFuture(t)
             | Self::SecOption(t)
-            | Self::Commodity(t) => t.get_multiplier()
+            | Self::Commodity(t) => t.order_types()
         )
     }
 
     #[inline]
-    fn get_exchange(&self) -> Routing {
+    fn valid_exchanges(&self) -> &Vec<Routing> {
         match_poly!(self;
             Self::Forex(t)
             | Self::Crypto(t)
@@ -196,59 +209,7 @@ impl Security for Contract {
             | Self::Index(t)
             | Self::SecFuture(t)
             | Self::SecOption(t)
-            | Self::Commodity(t) => t.get_exchange()
-        )
-    }
-
-    #[inline]
-    fn get_primary_exchange(&self) -> Option<Primary> {
-        match_poly!(self;
-            Self::Forex(t)
-            | Self::Crypto(t)
-            | Self::Stock(t)
-            | Self::Index(t)
-            | Self::SecFuture(t)
-            | Self::SecOption(t)
-            | Self::Commodity(t) => t.get_primary_exchange()
-        )
-    }
-
-    #[inline]
-    fn get_currency(&self) -> Currency {
-        match_poly!(self;
-            Self::Forex(t)
-            | Self::Crypto(t)
-            | Self::Stock(t)
-            | Self::Index(t)
-            | Self::SecFuture(t)
-            | Self::SecOption(t)
-            | Self::Commodity(t) => t.get_currency()
-        )
-    }
-
-    #[inline]
-    fn get_local_symbol(&self) -> &str {
-        match_poly!(self;
-            Self::Forex(t)
-            | Self::Crypto(t)
-            | Self::Stock(t)
-            | Self::Index(t)
-            | Self::SecFuture(t)
-            | Self::SecOption(t)
-            | Self::Commodity(t) => t.get_local_symbol()
-        )
-    }
-
-    #[inline]
-    fn get_trading_class(&self) -> Option<&str> {
-        match_poly!(self;
-            Self::Forex(t)
-            | Self::Crypto(t)
-            | Self::Stock(t)
-            | Self::Index(t)
-            | Self::SecFuture(t)
-            | Self::SecOption(t)
-            | Self::Commodity(t) => t.get_trading_class()
+            | Self::Commodity(t) => t.valid_exchanges()
         )
     }
 }
@@ -417,69 +378,46 @@ mod indicators {
 #[doc(alias = "Contract")]
 /// Attributes shared by a tradable contract or asset. All valid contracts implement this trait.
 pub trait Security: indicators::Valid {
-    /// Get the security's [`ContractId`].
+    /// Get the security's contract ID
     ///
     /// # Returns
-    /// The security's contract ID.
-    fn get_contract_id(&self) -> ContractId;
+    /// The security's unique contract ID
+    fn contract_id(&self) -> ContractId;
+    /// Get the security's minimum tick size.
+    ///
+    /// # Returns
+    /// The security's minimum tick size
+    fn min_tick(&self) -> f64;
     /// Get the security's symbol.
     ///
     /// # Returns
     /// The security's symbol.
-    fn get_symbol(&self) -> &str;
-    /// Get a text representation of the security's type.
+    fn symbol(&self) -> &str;
+    /// Get the security's currency.
     ///
     /// # Returns
-    /// The security's type, encoded as a [`&'static str`].
-    fn get_security_type(&self) -> &'static str;
-    /// Get the security's expiration / last-trade date, if it has one.
-    ///
-    /// # Returns
-    /// The security's expiration / last-trade date, provided that it exists.
-    fn get_expiration_date(&self) -> Option<NaiveDate>;
-    /// Get the security's strike price, if it has one.
-    ///
-    /// # Returns
-    /// The security's strike price, provided that it exists.
-    fn get_strike(&self) -> Option<f64>;
-    /// Get the security's "right," which is a character/symbol representing its class, if it has
-    ///  one.
-    ///
-    /// # Returns
-    /// The security's right, provided that it exists.
-    fn get_right(&self) -> Option<&'static str>;
-    /// Get the security's multiplier (the ratio of the actual price paid to the quoted price), if
-    ///  it has one.
-    ///
-    /// # Returns
-    /// The security's multiplier, provided that it exists.
-    fn get_multiplier(&self) -> Option<u32>;
-    /// Get the security's routing exchange (ie: The exchange to which orders will be routed.
-    ///
-    /// # Returns
-    /// The security's exchange.
-    fn get_exchange(&self) -> Routing;
-    /// Get the security's primary exchange, which is the physical exchange where it is listed, if
-    /// it has one.
-    ///
-    /// # Returns
-    /// The security's primary exchange, provided that it exists.
-    fn get_primary_exchange(&self) -> Option<Primary>;
-    /// Get the security's trading currency.
-    ///
-    /// # Returns
-    /// The security's trading currency.
-    fn get_currency(&self) -> Currency;
+    /// The security's currency.
+    fn currency(&self) -> Currency;
     /// Get the security's local symbol.
     ///
     /// # Returns
     /// The security's local symbol.
-    fn get_local_symbol(&self) -> &str;
-    /// Get the security's trading class (mainly a regulatory indicator), if it has one.
+    fn local_symbol(&self) -> &str;
+    /// Get the security's long name.
     ///
     /// # Returns
-    /// The security's trading class.
-    fn get_trading_class(&self) -> Option<&str>;
+    /// The security's long name.
+    fn long_name(&self) -> &str;
+    /// Get the security's order types.
+    ///
+    /// # Returns
+    /// The security's order types.
+    fn order_types(&self) -> &Vec<String>;
+    /// Get the security's valid exchanges.
+    ///
+    /// # Returns
+    /// The security's valid exchanges..
+    fn valid_exchanges(&self) -> &Vec<Routing>;
 }
 
 // =======================================
@@ -489,6 +427,7 @@ pub trait Security: indicators::Valid {
 macro_rules! make_contract {
     ($( #[doc = $name_doc:expr] )? $name: ident $(,$trt: ident)?; $($field: ident: $f_type: ty),* $(,)?) => {
         $( #[doc = $name_doc] )?
+        #[make_getters]
         #[derive(Debug, Clone, PartialEq, PartialOrd, $($trt)?)]
         pub struct $name {
             pub(crate) contract_id: ContractId,
@@ -501,7 +440,6 @@ macro_rules! make_contract {
             pub(crate) order_types: Vec<String>,
             pub(crate) valid_exchanges: Vec<Routing>,
         }
-
     }
 }
 
@@ -574,6 +512,38 @@ pub enum SecOption {
     Put(SecOptionInner),
 }
 
+impl SecOption {
+    #[must_use]
+    #[inline]
+    /// Return `true` if the option is a call option.
+    pub fn is_call(&self) -> bool {
+        matches!(self, SecOption::Call(_))
+    }
+
+    #[must_use]
+    #[inline]
+    /// Return `true` if the option is a put option.
+    pub fn is_put(&self) -> bool {
+        !self.is_call()
+    }
+
+    #[must_use]
+    #[inline]
+    /// Get a reference to the underlying contract's specifications.
+    pub fn as_inner_ref(&self) -> &SecOptionInner {
+        let (SecOption::Call(inner) | SecOption::Put(inner)) = self;
+        inner
+    }
+
+    #[must_use]
+    #[inline]
+    /// Transform the option into its underlying specification
+    pub fn into_inner(self) -> SecOptionInner {
+        let (SecOption::Call(inner) | SecOption::Put(inner)) = self;
+        inner
+    }
+}
+
 // ===============================
 // === Unimplemented Contracts ===
 // ===============================
@@ -594,3 +564,193 @@ pub enum SecOption {
 //     Call(SecOptionInner),
 //     Put(SecOptionInner),
 // }
+
+macro_rules! proxy_impl {
+    ($sec_type: ty, $pat: pat_param => $exp: expr, $func_name: ident) => {
+        #[doc=concat!("Coerce the contract to a ", stringify!($sec_type))]
+        ///
+        /// # Returns
+        #[doc=concat!("The underlying ", stringify!($sec_type))]
+        ///
+        /// # Errors
+        #[doc=concat!("Will error if the underlying contract is not a ", stringify!($sec_type))]
+        pub fn $func_name(self) -> anyhow::Result<Proxy<$sec_type>> {
+            match self.inner {
+                $pat => Ok($exp),
+                _ => Err(anyhow::anyhow!(
+                    "Expected {}; found other contract type.",
+                    stringify!($func_name)
+                )),
+            }
+        }
+    };
+}
+
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+/// Holds information about a contract but lacks the information of a full [`Contract`].
+pub struct Proxy<S: Security> {
+    pub(crate) inner: S,
+}
+
+
+impl<S: Security> Proxy<S> {
+    #[inline]
+    /// Get the underlying Security's contract ID.
+    pub fn contract_id(&self) -> ContractId {
+        self.inner.contract_id()
+    }
+
+    #[inline]
+    /// Get the underlying Security's symbol.
+    pub fn symbol(&self) -> &str {
+        self.inner.symbol()
+    }
+
+    #[inline]
+    /// Get the underlying Security's currency.
+    pub fn currency(&self) -> Currency {
+        self.inner.currency()
+    }
+
+    #[inline]
+    /// Get the underlying Security's symbol.
+    pub fn local_symbol(&self) -> &str {
+        self.inner.symbol()
+    }
+}
+
+impl Proxy<Contract> {
+    #[inline]
+    #[must_use]
+    /// Get the type of contract.
+    pub fn contract_type(&self) -> ContractType {
+        match self.inner {
+            Contract::Forex(_) => ContractType::Forex,
+            Contract::Crypto(_) => ContractType::Crypto,
+            Contract::Stock(_) => ContractType::Stock,
+            Contract::Index(_) => ContractType::Index,
+            Contract::Commodity(_) => ContractType::Commodity,
+            Contract::SecFuture(_) => ContractType::SecFuture,
+            Contract::SecOption(_) => ContractType::SecOption,
+        }
+    }
+
+    proxy_impl!(Forex, Contract::Forex(t) => Proxy::<Forex> { inner: t }, forex);
+    proxy_impl!(Crypto, Contract::Crypto(t) => Proxy::<Crypto> { inner: t }, crypto);
+    proxy_impl!(Stock, Contract::Stock(t) => Proxy::<Stock> { inner: t }, stock);
+    proxy_impl!(Index, Contract::Index(t) => Proxy::<Index> { inner: t }, index);
+    proxy_impl!(Commodity, Contract::Commodity(t) => Proxy::<Commodity> { inner: t }, commodity);
+    proxy_impl!(SecFuture, Contract::SecFuture(t) => Proxy::<SecFuture> { inner: t }, sec_future);
+    proxy_impl!(SecOption, Contract::SecOption(t) => Proxy::<SecOption> { inner: t }, sec_option);
+}
+
+impl Proxy<Forex> {
+    #[inline]
+    #[must_use]
+    /// Get the [`Forex`] trading class.
+    pub fn trading_class(&self) -> &str {
+        self.inner.trading_class()
+    }
+}
+
+impl Proxy<Crypto> {
+    #[inline]
+    #[must_use]
+    /// Get the [`Crypto`] trading class.
+    pub fn trading_class(&self) -> &str {
+        self.inner.trading_class()
+    }
+}
+
+impl Proxy<Stock> {
+    #[inline]
+    #[must_use]
+    /// Get the [`Stock`] trading class.
+    pub fn trading_class(&self) -> &str {
+        self.inner.trading_class()
+    }
+
+    #[inline]
+    #[must_use]
+    /// Get the [`Stock`] primary exchange.
+    pub fn primary_exchange(&self) -> Primary {
+        self.inner.primary_exchange
+    }
+}
+
+impl Proxy<Commodity> {
+    #[inline]
+    #[must_use]
+    /// Get the [`Commodity`] trading class.
+    pub fn trading_class(&self) -> &str {
+        self.inner.trading_class()
+    }
+}
+
+impl Proxy<SecFuture> {
+    #[inline]
+    #[must_use]
+    /// Get the [`SecFuture`] trading class.
+    pub fn trading_class(&self) -> &str {
+        self.inner.trading_class()
+    }
+
+    #[inline]
+    #[must_use]
+    /// Get the [`SecFuture`] `expiration_date`.
+    pub fn expiration_date(&self) -> NaiveDate {
+        self.inner.expiration_date
+    }
+
+    #[inline]
+    #[must_use]
+    /// Get the [`SecFuture`] `multiplier`.
+    pub fn multiplier(&self) -> u32 {
+        self.inner.multiplier
+    }
+}
+
+impl Proxy<SecOption> {
+    #[inline]
+    #[must_use]
+    /// Get the [`SecOption`] trading class.
+    pub fn trading_class(&self) -> &str {
+        self.inner.as_inner_ref().trading_class.as_str()
+    }
+
+    #[inline]
+    #[must_use]
+    /// Get the [`SecOption`] `expiration_date`.
+    pub fn expiration_date(&self) -> NaiveDate {
+        self.inner.as_inner_ref().expiration_date
+    }
+
+    #[inline]
+    #[must_use]
+    /// Get the [`SecOption`] `strike` price.
+    pub fn strike(&self) -> f64 {
+        self.inner.as_inner_ref().strike
+    }
+
+    #[inline]
+    #[must_use]
+    /// Return true if the [`SecOption`] is a call.
+    pub fn is_call(&self) -> bool {
+        self.inner.is_call()
+    }
+
+    #[inline]
+    #[must_use]
+    /// Return true if the [`SecOption`] is a put.
+    pub fn is_put(&self) -> bool {
+        self.inner.is_put()
+    }
+
+    #[inline]
+    #[must_use]
+    /// Get the [`SecOption`] `multiplier`.
+    pub fn multiplier(&self) -> u32 {
+        self.inner.as_inner_ref().multiplier
+    }
+}
