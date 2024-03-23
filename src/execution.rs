@@ -1,6 +1,8 @@
 use crate::exchange::Primary;
 use serde::ser::SerializeStruct;
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
+use chrono::serde::ts_seconds;
+use crate::contract::{Contract, ContractType, Proxy};
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Filter {
@@ -30,57 +32,126 @@ impl Serialize for Filter {
     }
 }
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize)]
-pub enum ContractType {
-    #[serde(rename = "CASH")]
-    /// A [`crate::contract::Forex`] contract.
-    Forex,
-    #[serde(rename = "CRYPTO")]
-    /// A [`crate::contract::Crypto`] contract.
-    Crypto,
-    #[serde(rename = "STK")]
-    /// A [`crate::contract::Stock`] contract.
-    Stock,
-    #[serde(rename = "IND")]
-    /// An [`crate::contract::Index`] contract.
-    Index,
-    //Cfd,
-    #[serde(rename = "FUT")]
-    /// A [`crate::contract::SecFuture`] contract.
-    SecFuture,
-    #[serde(rename = "OPT")]
-    /// A [`crate::contract::SecOption`] contract.
-    SecOption,
-    //FutureSecOption,
-    //Bond,
-    //MutualFund,
-    #[serde(rename = "CMDTY")]
-    /// A [`crate::contract::Commodity`] contract.
-    Commodity,
-    //Warrant,
-    //StructuredProduct,
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// The possible sides for an order
+pub enum OrderSide {
+    #[serde(rename = "BUY")]
+    /// A buy order
+    Buy,
+    #[serde(rename = "SELL")]
+    /// A sell order
+    Sell,
 }
 
-impl std::str::FromStr for ContractType {
+impl std::str::FromStr for OrderSide {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
-            "CASH" => Self::Forex,
-            "CRYPTO" => Self::Crypto,
-            "STK" => Self::Stock,
-            "IND" => Self::Index,
-            "FUT" => Self::SecFuture,
-            "OPT" => Self::SecOption,
-            "CMDTY" => Self::Commodity,
-            v => return Err(anyhow::anyhow!("Invalid contract type {}", v)),
-        })
+        match s {
+            "BOT" => Ok(Self::Buy),
+            "SLD" => Ok(Self::Sell),
+            other => Err(anyhow::anyhow!("Invalid order side. Expected \'BOT\' or \'SLD\', found {}", other)),
+        }
     }
 }
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq, Hash, Serialize)]
-pub enum OrderSide {
-    #[serde(rename = "BUY")]
-    Buy,
-    #[serde(rename = "SELL")]
-    Sell,
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize)]
+/// Contains the core fields relating to an [`Execution`]. which occurs when a trade is made.
+pub struct Exec {
+    /// The contract on which the trade was made.
+    pub contract: Proxy<Contract>,
+    /// The ID of the order that produced the execution.
+    pub order_id: i64,
+    /// The execution ID.
+    pub execution_id: String,
+    /// The date and time at which the execution occurred.
+    #[serde(with = "ts_seconds")]
+    pub datetime: chrono::DateTime<crate::timezone::IbTimeZone>,
+    /// The account number for which the trade was made.
+    pub account_number: String,
+    /// The exchange on which the trade was made.
+    pub exchange: Primary,
+    /// The number of contracts traded.
+    pub quantity: f64,
+    /// The price at which the trade was made.
+    pub price: f64,
+    /// The permanent ID of the order that produced the execution.
+    pub perm_id: i64,
+    /// The client ID that placed the order.
+    pub client_id: i64,
+    /// Whether the execution was caused by an IBKR-initiated liquidation.
+    pub liquidation: bool,
+    /// The cumulative number of contracts traded for the underlying order after this execution.
+    pub cumulative_quantity: f64,
+    /// The average price at which contracts for the underlying order after this execution.
+    pub average_price: f64,
+    /// Whether the execution is pending a price revision.
+    pub pending_price_revision: bool
+}
+
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "action")]
+/// A confirmed trade.
+pub enum Execution {
+    /// Contracts were bought.
+    Bought(Exec),
+    /// Contracts were sold.
+    Sold(Exec),
+}
+
+impl Execution {
+    #[inline]
+    #[must_use]
+    /// Return a reference to the inner [`Exec`]
+    pub fn as_exec(&self) -> &Exec {
+        match self {
+            Self::Bought(e) | Self::Sold(e) => e
+        }
+    }
+    #[inline]
+    #[must_use]
+    /// Convert the [`Execution`] into an [`Exec`] and an [`OrderSide`]
+    pub fn into_exec_tuple(self) -> (Exec, OrderSide) {
+        match self {
+            Self::Bought(e) => (e, OrderSide::Buy),
+            Self::Sold(e) => (e, OrderSide::Sell),
+        }
+    }
+
+    #[inline]
+    #[must_use]
+    /// Construct a new [`Execution`] from an [`Exec`] and an [`OrderSide`]
+    pub fn from_exec_tuple(exec: Exec, side: OrderSide) -> Self {
+        match side {
+            OrderSide::Buy => Self::Bought(exec),
+            OrderSide::Sell => Self::Sold(exec),
+        }
+    }
+
+    #[inline]
+    #[must_use]
+    /// Return `true` if a Buy execution
+    pub fn is_buy(&self) -> bool {
+        matches!(self, Execution::Bought(_))
+    }
+
+    #[inline]
+    #[must_use]
+    /// Return `true` if a Sell execution
+    pub fn is_sell(&self) -> bool {
+        matches!(self, Execution::Sold(_))
+    }
+}
+
+impl From<(Exec, OrderSide)> for Execution {
+    #[inline]
+    fn from(value: (Exec, OrderSide)) -> Self {
+        Self::from(value)
+    }
+}
+
+impl From<(OrderSide, Exec)> for Execution {
+    #[inline]
+    fn from(value: (OrderSide, Exec)) -> Self {
+        Self::from((value.1, value.0))
+    }
 }

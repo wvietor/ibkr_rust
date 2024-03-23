@@ -41,7 +41,8 @@ pub mod currency;
 mod decode;
 /// Contains types related to security exchanges and trading venues available in the API.
 pub mod exchange;
-mod execution;
+/// Contains types related to executions, which are produced after a trade is made.
+pub mod execution;
 /// Contains an implementation of the [FIGI  alphanumeric identifier](https://www.openfigi.com/about/figi#!) for use in contract specification.
 pub mod figi;
 /// Contains modules that each relate to different market data requests. In particular, each module

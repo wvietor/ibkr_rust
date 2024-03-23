@@ -8,9 +8,8 @@ use crate::{
     exchange::{Primary, Routing},
     match_poly,
 };
-use ibapi_macros::{Security, make_getters};
+use ibapi_macros::{make_getters, Security};
 use serde::{Deserialize, Serialize, Serializer};
-use crate::execution::ContractType;
 
 // =========================================================
 // === Utility Types and Functions for Contract Creation ===
@@ -299,7 +298,7 @@ impl FromStr for Query {
 pub struct UnexpectedSecurityType(&'static str);
 
 impl std::fmt::Display for UnexpectedSecurityType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
@@ -586,15 +585,20 @@ macro_rules! proxy_impl {
     };
 }
 
-
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize)]
+#[serde(into = "ContractId")]
 /// Holds information about a contract but lacks the information of a full [`Contract`].
-pub struct Proxy<S: Security> {
+pub struct Proxy<S: Security + Clone> {
     pub(crate) inner: S,
 }
 
+impl<S: Security + Clone> From<Proxy<S>> for ContractId {
+    fn from(value: Proxy<S>) -> Self {
+        value.inner.contract_id()
+    }
+}
 
-impl<S: Security> Proxy<S> {
+impl<S: Security + Clone> Proxy<S> {
     #[inline]
     /// Get the underlying Security's contract ID.
     pub fn contract_id(&self) -> ContractId {
@@ -752,5 +756,53 @@ impl Proxy<SecOption> {
     /// Get the [`SecOption`] `multiplier`.
     pub fn multiplier(&self) -> u32 {
         self.inner.as_inner_ref().multiplier
+    }
+}
+
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize)]
+/// The possible contract types
+pub enum ContractType {
+    #[serde(rename = "CASH")]
+    /// A [`Forex`] contract.
+    Forex,
+    #[serde(rename = "CRYPTO")]
+    /// A [`Crypto`] contract.
+    Crypto,
+    #[serde(rename = "STK")]
+    /// A [`Stock`] contract.
+    Stock,
+    #[serde(rename = "IND")]
+    /// An [`Index`] contract.
+    Index,
+    //Cfd,
+    #[serde(rename = "FUT")]
+    /// A [`SecFuture`] contract.
+    SecFuture,
+    #[serde(rename = "OPT")]
+    /// A [`SecOption`] contract.
+    SecOption,
+    //FutureSecOption,
+    //Bond,
+    //MutualFund,
+    #[serde(rename = "CMDTY")]
+    /// A [`Commodity`] contract.
+    Commodity,
+    //Warrant,
+    //StructuredProduct,
+}
+
+impl FromStr for ContractType {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "CASH" => Self::Forex,
+            "CRYPTO" => Self::Crypto,
+            "STK" => Self::Stock,
+            "IND" => Self::Index,
+            "FUT" => Self::SecFuture,
+            "OPT" => Self::SecOption,
+            "CMDTY" => Self::Commodity,
+            v => return Err(anyhow::anyhow!("Invalid contract type {}", v)),
+        })
     }
 }

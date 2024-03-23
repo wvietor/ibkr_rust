@@ -1,6 +1,11 @@
+use std::future::Future;
+
+use chrono::{DateTime, NaiveTime, Utc};
+use ibapi_macros::debug_trait;
+
 use crate::account::{Attribute, TagValue};
 use crate::client::ActiveClient;
-use crate::contract::ContractId;
+use crate::contract::Proxy;
 use crate::payload::{
     self, Bar, ExchangeId, HistogramEntry, OrderStatus, Pnl, PnlSingle, Position, PositionSummary,
     Tick,
@@ -11,9 +16,6 @@ use crate::tick::{
     SecOptionCalculationSource, SecOptionVolume, Size, SummaryVolume, TimeStamp, TradeCount,
     Volatility, Volume, Yield,
 };
-use chrono::{DateTime, NaiveTime, Utc};
-use ibapi_macros::debug_trait;
-use std::future::Future;
 
 // todo! Updated Bar payload api to make it more clear that BidAsk callback isn't just a "normal Bar"
 
@@ -168,7 +170,7 @@ pub trait Local {
     fn open_order(
         &mut self,
         order_id: i64,
-        contract_id: ContractId,
+        proxy: Proxy<Contract>,
         client_id: i64,
         parent_id: Option<i64>,
         permanent_id: i64,

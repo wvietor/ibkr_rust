@@ -3,22 +3,27 @@ use core::future::Future;
 use anyhow::Context;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 
-use crate::{
-    currency::Currency,
-    exchange::Routing,
-    message::{ToClient, ToWrapper},
-    wrapper,
-};
 use crate::account::{self, Tag, TagValue};
-use crate::contract::{Commodity, Contract, ContractId, Crypto, Forex, Index, Proxy, SecFuture, SecOption, SecOptionInner, SecurityId, Stock};
-use crate::execution::ContractType;
-use crate::payload::{Bar, BarCore, BidAsk, ExchangeId, Fill, HistogramEntry, Last, market_depth::{CompleteEntry, Entry, Operation}, MarketDataClass, Midpoint, OrderStatus, Pnl, PnlSingle, Position, PositionSummary, Tick, Trade};
+use crate::contract::{Commodity, Contract, ContractId, ContractType, Crypto, Forex, Index, Proxy, SecFuture, SecOption, SecOptionInner, SecurityId, Stock};
+use crate::execution::{Exec, Execution, OrderSide};
+use crate::payload::{
+    Bar,
+    BarCore, BidAsk, ExchangeId, Fill, HistogramEntry, Last, market_depth::{CompleteEntry, Entry, Operation}, MarketDataClass, Midpoint,
+    OrderStatus, Pnl, PnlSingle, Position, PositionSummary, Tick, Trade,
+};
 use crate::tick::{
     Accessibility, AuctionData, CalculationResult, Class, Dividends, EtfNav, ExtremeValue, Ipo,
     MarkPrice, OpenInterest, Period, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
     RealTimeVolumeBase, SecOptionCalculationResults, SecOptionCalculations,
     SecOptionCalculationSource, SecOptionVolume, Size, SummaryVolume, TimeStamp, Volatility, Yield,
 };
+use crate::{
+    currency::Currency,
+    exchange::Routing,
+    message::{ToClient, ToWrapper},
+    wrapper,
+};
+use crate::exchange::Primary;
 
 type Tx = tokio::sync::mpsc::Sender<ToClient>;
 type Rx = tokio::sync::mpsc::Receiver<ToWrapper>;
@@ -335,9 +340,12 @@ pub trait Local: wrapper::Local {
         async move {
             decode_fields!(
                 fields =>
-                    order_id @ 1: i64,
-                    contract_id @ 0: ContractId,
-                    client_id @ 21: i64,
+                    order_id @ 1: i64
+            );
+            let proxy = deserialize_contract_proxy(fields)?;
+            decode_fields!(
+                fields =>
+                    client_id @ 10: i64,
                     permanent_id @ 0: i64,
                     parent_id @ 32: i64
             );
@@ -347,7 +355,7 @@ pub trait Local: wrapper::Local {
                 Some(parent_id)
             };
             wrapper
-                .open_order(order_id, contract_id, client_id, parent_id, permanent_id)
+                .open_order(order_id, proxy, client_id, parent_id, permanent_id)
                 .await;
             // outside: 1,
             // hidden: 1
@@ -694,10 +702,11 @@ pub trait Local: wrapper::Local {
         wrapper: &mut Self,
     ) -> impl Future<Output = anyhow::Result<()>> {
         async move {
+            let _ = fields.nth(1);
+            let proxy = deserialize_contract_proxy(fields)?;
             decode_fields!(
                 fields =>
-                    contract_id @ 2: ContractId,
-                    position @ 10: f64,
+                    position @ 0: f64,
                     market_price @ 0: f64,
                     market_value @ 0: f64,
                     average_cost @ 0: f64,
@@ -707,7 +716,7 @@ pub trait Local: wrapper::Local {
             );
             wrapper
                 .portfolio_value(Position {
-                    contract_id,
+                    proxy,
                     position,
                     market_price,
                     market_value,
@@ -767,72 +776,32 @@ pub trait Local: wrapper::Local {
             decode_fields!(
                 fields =>
                     req_id @ 1: i64,
-                    order_id @ 0: i64,
-                    contract_id @ 0: i64
+                    order_id @ 0: i64
             );
-            // IntoIter(["11", "-1", "49", "320227571", "QQQ", "STK", "", "0.0", "", "", "NASDAQ", "USD", "QQQ", "NMS", "00025b49.65fc4aed.01.01", "20240321 13:41:28 US/Eastern", "DU2587433", "NASDAQ", "BOT", "10", "448.16", "602693702", "0", "0", "10", "448.16", "", "", "", "", "2", "0", ""])
-            println!("{:?}", &fields);
+            let contract = deserialize_contract_proxy(fields)?;
+            decode_fields!(
+                fields =>
+                    execution_id @ 0: String,
+                    datetime @ 0: String,
+                    account_number @ 0: String,
+                    exchange @ 0: Primary,
+                    side @ 0: OrderSide,
+                    quantity @ 0: f64,
+                    price @ 0: f64,
+                    perm_id @ 0: i64,
+                    client_id @ 0: i64,
+                    liquidation @ 0: u8,
+                    cumulative_quantity @ 0: f64,
+                    average_price @ 0: f64,
+                    pending_price_revision @ 5: u8
+            );
 
-            // def processExecutionDataMsg(self, fields):
-            //     next(fields)
-            // version = self.serverVersion
-            //
-            // if self.serverVersion < MIN_SERVER_VER_LAST_LIQUIDITY:
-            //     version = decode(int, fields)
-            //
-            // reqId = -1
-            // if version >= 7:
-            //     reqId = decode(int, fields)
-            //
-            // orderId = decode(int, fields)
-            //
-            // # decode contract fields
-            // contract = Contract()
-            // contract.conId = decode(int, fields)  # ver 5 field
-            // contract.secType = decode(str, fields)
-            // contract.lastTradeDateOrContractMonth = decode(str, fields)
-            // contract.strike = decode(float, fields)
-            // contract.right = decode(str, fields)
-            // if version >= 9:
-            //     contract.multiplier = decode(str, fields)
-            // contract.exchange = decode(str, fields)
-            // contract.currency = decode(str, fields)
-            // contract.localSymbol = decode(str, fields)
-            // if version >= 10:
-            //     contract.tradingClass = decode(str, fields)
-            //
-            // # decode execution fields
-            // execution = Execution()
-            // execution.orderId = orderId
-            // execution.execId = decode(str, fields)
-            // execution.time = decode(str, fields)
-            // execution.acctNumber = decode(str, fields)
-            // execution.exchange = decode(str, fields)
-            // execution.side = decode(str, fields)
-            // execution.shares = decode(Decimal, fields)
-            // execution.price = decode(float, fields)
-            // execution.permId = decode(int, fields)  # ver 2 field
-            // execution.clientId = decode(int, fields)  # ver 3 field
-            // execution.liquidation = decode(int, fields)  # ver 4 field
-            //
-            // if version >= 6:
-            //     execution.cumQty = decode(Decimal, fields)
-            // execution.avgPrice = decode(float, fields)
-            //
-            // if version >= 8:
-            //     execution.orderRef = decode(str, fields)
-            //
-            // if version >= 9:
-            //     execution.evRule = decode(str, fields)
-            // execution.evMultiplier = decode(float, fields)
-            // if self.serverVersion >= MIN_SERVER_VER_MODELS_SUPPORT:
-            //     execution.modelCode = decode(str, fields)
-            // if self.serverVersion >= MIN_SERVER_VER_LAST_LIQUIDITY:
-            //     execution.lastLiquidity = decode(int, fields)
-            // if self.serverVersion >= MIN_SERVER_VER_PENDING_PRICE_REVISION:
-            //     execution.pendingPriceRevision = decode(bool, fields)
-            //
-            // self.wrapper.execDetails(reqId, contract, execution)
+            let exec = Exec {
+
+            };
+
+            // IntoIter(["11", "-1", "49", "320227571", "QQQ", "STK", "", "0.0", "", "", "NASDAQ", "USD", "QQQ", "NMS", "00025b49.65fc4aed.01.01", "20240321 13:41:28 US/Eastern", "DU2587433", "NASDAQ", "BOT", "10", "448.16", "602693702", "0", "0", "10", "448.16", "", "", "", "", "2", "0", ""])
+
 
             Ok(())
         }
@@ -2563,95 +2532,89 @@ fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<Proxy<Contr
     );
 
     let inner = match sec_type {
-        ContractType::Stock => Contract::Stock(
-            Stock {
-                contract_id,
-                min_tick: f64::default(),
-                symbol,
-                exchange: Routing::Smart,
-                primary_exchange: primary_exchange.parse().with_context(|| "Invalid primary exchange in STK proxy")?,
-                stock_type: String::default(),
-                security_ids: Vec::default(),
-                sector: String::default(),
-                trading_class,
-                currency,
-                local_symbol,
-                long_name: String::default(),
-                order_types: Vec::default(),
-                valid_exchanges: Vec::default(),
-            }
-        ),
-        ContractType::Crypto => Contract::Crypto(
-            Crypto {
-                contract_id,
-                min_tick: f64::default(),
-                symbol,
-                trading_class,
-                currency,
-                local_symbol,
-                long_name: String::default(),
-                order_types: Vec::default(),
-                valid_exchanges: Vec::default(),
-            }
-        ),
-        ContractType::Index => Contract::Index(
-            Index {
-                contract_id,
-                min_tick: f64::default(),
-                symbol,
-                exchange: Routing::Smart,
-                currency,
-                local_symbol,
-                long_name: String::default(),
-                order_types: Vec::default(),
-                valid_exchanges: Vec::default(),
-            }
-        ),
-        ContractType::Commodity => Contract::Commodity(
-            Commodity {
-                contract_id,
-                min_tick: f64::default(),
-                symbol,
-                exchange: Routing::Smart,
-                trading_class,
-                currency,
-                local_symbol,
-                long_name: String::default(),
-                order_types: Vec::default(),
-                valid_exchanges: Vec::default(),
-            }
-        ),
-        ContractType::Forex => Contract::Forex(
-            Forex {
-                contract_id,
-                min_tick: f64::default(),
-                symbol,
-                exchange: Routing::Smart,
-                trading_class,
-                currency,
-                local_symbol,
-                long_name: String::default(),
-                order_types: Vec::default(),
-                valid_exchanges: Vec::default(),
-            }
-        ),
-        ContractType::SecFuture => Contract::SecFuture(
-            SecFuture {
-                contract_id,
-                min_tick: f64::default(),
-                symbol,
-                exchange: Routing::Smart,
-                multiplier: multiplier.parse().with_context(|| "Invalid multiplier in FUT proxy")?,
-                expiration_date: NaiveDate::parse_and_remainder(expiration_date.as_str(), "%Y%m%d").with_context(|| "Invalid expiration date in OPT proxy")?.0,
-                trading_class,
-                underlying_contract_id: contract_id,
-                currency,
-                local_symbol,
-                long_name: String::default(),
-                order_types: Vec::default(),
-                valid_exchanges: Vec::default(),
-            }
-        ),
+        ContractType::Stock => Contract::Stock(Stock {
+            contract_id,
+            min_tick: f64::default(),
+            symbol,
+            exchange: Routing::Smart,
+            primary_exchange: primary_exchange
+                .parse()
+                .with_context(|| "Invalid primary exchange in STK proxy")?,
+            stock_type: String::default(),
+            security_ids: Vec::default(),
+            sector: String::default(),
+            trading_class,
+            currency,
+            local_symbol,
+            long_name: String::default(),
+            order_types: Vec::default(),
+            valid_exchanges: Vec::default(),
+        }),
+        ContractType::Crypto => Contract::Crypto(Crypto {
+            contract_id,
+            min_tick: f64::default(),
+            symbol,
+            trading_class,
+            currency,
+            local_symbol,
+            long_name: String::default(),
+            order_types: Vec::default(),
+            valid_exchanges: Vec::default(),
+        }),
+        ContractType::Index => Contract::Index(Index {
+            contract_id,
+            min_tick: f64::default(),
+            symbol,
+            exchange: Routing::Smart,
+            currency,
+            local_symbol,
+            long_name: String::default(),
+            order_types: Vec::default(),
+            valid_exchanges: Vec::default(),
+        }),
+        ContractType::Commodity => Contract::Commodity(Commodity {
+            contract_id,
+            min_tick: f64::default(),
+            symbol,
+            exchange: Routing::Smart,
+            trading_class,
+            currency,
+            local_symbol,
+            long_name: String::default(),
+            order_types: Vec::default(),
+            valid_exchanges: Vec::default(),
+        }),
+        ContractType::Forex => Contract::Forex(Forex {
+            contract_id,
+            min_tick: f64::default(),
+            symbol,
+            exchange: Routing::Smart,
+            trading_class,
+            currency,
+            local_symbol,
+            long_name: String::default(),
+            order_types: Vec::default(),
+            valid_exchanges: Vec::default(),
+        }),
+        ContractType::SecFuture => Contract::SecFuture(SecFuture {
+            contract_id,
+            min_tick: f64::default(),
+            symbol,
+            exchange: Routing::Smart,
+            multiplier: multiplier
+                .parse()
+                .with_context(|| "Invalid multiplier in FUT proxy")?,
+            expiration_date: NaiveDate::parse_and_remainder(expiration_date.as_str(), "%Y%m%d")
+                .with_context(|| "Invalid expiration date in OPT proxy")?
+                .0,
+            trading_class,
+            underlying_contract_id: contract_id,
+            currency,
+            local_symbol,
+            long_name: String::default(),
+            order_types: Vec::default(),
+            valid_exchanges: Vec::default(),
+        }),
         ContractType::SecOption => {
             let op_inner = SecOptionInner {
                 contract_id,
@@ -2659,8 +2622,12 @@ fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<Proxy<Contr
                 symbol,
                 exchange: Routing::Smart,
                 strike: strike.parse().with_context(|| "Invalid strike")?,
-                multiplier: multiplier.parse().with_context(|| "Invalid multiplier in OPT proxy")?,
-                expiration_date: NaiveDate::parse_and_remainder(expiration_date.as_str(), "%Y%m%d").with_context(|| "Invalid expiration date in OPT proxy")?.0,
+                multiplier: multiplier
+                    .parse()
+                    .with_context(|| "Invalid multiplier in OPT proxy")?,
+                expiration_date: NaiveDate::parse_and_remainder(expiration_date.as_str(), "%Y%m%d")
+                    .with_context(|| "Invalid expiration date in OPT proxy")?
+                    .0,
                 underlying_contract_id: contract_id,
                 sector: String::default(),
                 trading_class,
@@ -2673,7 +2640,12 @@ fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<Proxy<Contr
             let op_outer = match right {
                 'C' => SecOption::Call(op_inner),
                 'P' => SecOption::Put(op_inner),
-                other => return Err(anyhow::anyhow!("Unexpected option right. Expected \'C\' or \'P\'. Found {}.", other)),
+                other => {
+                    return Err(anyhow::anyhow!(
+                        "Unexpected option right. Expected \'C\' or \'P\'. Found {}.",
+                        other
+                    ))
+                }
             };
             Contract::SecOption(op_outer)
         }

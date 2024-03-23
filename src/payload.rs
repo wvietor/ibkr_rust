@@ -1,10 +1,10 @@
 use std::fmt::Formatter;
 use std::str::FromStr;
 
-use chrono::{DateTime, Utc};
 use chrono::serde::ts_seconds;
-use serde::{Deserialize, Serialize, Serializer};
+use chrono::{DateTime, Utc};
 use serde::ser::SerializeStruct;
+use serde::{Deserialize, Serialize, Serializer};
 
 use crate::contract::ContractId;
 
