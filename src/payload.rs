@@ -3,8 +3,7 @@ use std::str::FromStr;
 
 use chrono::serde::ts_seconds;
 use chrono::{DateTime, Utc};
-use serde::ser::SerializeStruct;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 
 use crate::contract::{Contract, Proxy};
 
@@ -213,7 +212,7 @@ pub enum Bar {
     Trades(Trade),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
 /// A trade bar with volume, WAP, and count data.
 pub struct Trade {
     #[serde(flatten)]
@@ -225,31 +224,6 @@ pub struct Trade {
     pub wap: f64,
     /// The number of trades during the bar's timespan.
     pub trade_count: u64,
-}
-
-impl Serialize for Trade {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let BarCore {
-            datetime,
-            open,
-            high,
-            low,
-            close,
-        } = self.bar;
-        let mut ser = serializer.serialize_struct("Trade", 8)?;
-        ser.serialize_field("datetime", &datetime.format("%Y-%m-%d %T").to_string())?;
-        ser.serialize_field("open", &open)?;
-        ser.serialize_field("high", &high)?;
-        ser.serialize_field("low", &low)?;
-        ser.serialize_field("close", &close)?;
-        ser.serialize_field("volume", &self.volume)?;
-        ser.serialize_field("wap", &self.wap)?;
-        ser.serialize_field("trade_count", &self.trade_count)?;
-        ser.end()
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
@@ -304,7 +278,7 @@ pub struct Last {
     pub exchange: crate::exchange::Primary,
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 /// A single position, comprising a single security and details about its current value, P&L, etc.
 pub struct Position {
     /// The ID of the underlying contract.
@@ -325,7 +299,7 @@ pub struct Position {
     pub account_number: String,
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 /// A single position, comprising a single security and a few details about its cost, account, etc.
 pub struct PositionSummary {
     /// The underlying contract

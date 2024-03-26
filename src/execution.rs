@@ -66,7 +66,7 @@ impl std::str::FromStr for OrderSide {
     }
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 /// Contains the core fields relating to an [`Execution`]. which occurs when a trade is made.
 pub struct Exec {
     /// The contract on which the trade was made.
@@ -100,7 +100,7 @@ pub struct Exec {
     pub pending_price_revision: bool,
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "action")]
 /// A confirmed trade.
 pub enum Execution {

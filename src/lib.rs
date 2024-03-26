@@ -81,12 +81,12 @@ pub mod wrapper;
 #[macro_export]
 /// Match across typed variant values
 macro_rules! match_poly {
-    ($self: expr; $($($pat: pat_param)|* => $meth_call: expr),*) => {
+    ($self: expr; $($($pat: pat_param)|* => $meth_call: expr),* $(,)?) => {
         match $self {
             $($($pat => $meth_call),*),*
         }
     };
-    ($self: expr; $($($pat: pat_param)|* => $meth_call: block),*) => {
+    ($self: expr; $($($pat: pat_param)|* => $meth_call: block),* $(,)?) => {
         match $self {
             $($($pat => $meth_call),*),*
         }

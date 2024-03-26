@@ -1,4 +1,5 @@
 use core::str::FromStr;
+
 use serde::{Deserialize, Serialize};
 
 // === Type definitions ===
@@ -6,7 +7,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 /// Represents a "routing" exchange where orders and market data requests can be directed.
 pub enum Routing {
-    #[serde(rename(serialize = "SMART", deserialize = "SMART"))]
+    #[serde(rename = "SMART")]
     /// IBKR's "SMART" routing destination, which aggregates data from many component exchanges
     /// and intelligently routes orders to minimize overall costs net of rebates.
     Smart,
@@ -44,404 +45,404 @@ impl std::error::Error for ParseExchangeError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 /// Represents all the valid physical trading venues for various contracts.
 pub enum Primary {
-    #[serde(rename(serialize = "AEB", deserialize = "AEB"))]
+    #[serde(rename = "AEB")]
     AmsterdamseEffectenbeurs,
-    #[serde(rename(serialize = "ALPHA", deserialize = "ALPHA"))]
+    #[serde(rename = "ALPHA")]
     AlphaTradingSystems,
-    #[serde(rename(serialize = "AMEX", deserialize = "AMEX"))]
+    #[serde(rename = "AMEX")]
     AmericanStockExchange,
-    #[serde(rename(serialize = "APEXEN", deserialize = "APEXEN"))]
+    #[serde(rename = "APEXEN")]
     ApexEuronext,
-    #[serde(rename(serialize = "APEXIT", deserialize = "APEXIT"))]
+    #[serde(rename = "APEXIT")]
     ApexItaly,
-    #[serde(rename(serialize = "AQEUDE", deserialize = "AQEUDE"))]
+    #[serde(rename = "AQEUDE")]
     AquisExchangeEuropeGermany,
-    #[serde(rename(serialize = "AQEUEN", deserialize = "AQEUEN"))]
+    #[serde(rename = "AQEUEN")]
     AquisExchangeEuropeEuronext,
-    #[serde(rename(serialize = "AQEUES", deserialize = "AQEUES"))]
+    #[serde(rename = "AQEUES")]
     AquisExchangeEuropeSpain,
-    #[serde(rename(serialize = "AQEUIT", deserialize = "AQEUIT"))]
+    #[serde(rename = "AQEUIT")]
     AquisExchangeEuropeItaly,
-    #[serde(rename(serialize = "AQS", deserialize = "AQS"))]
+    #[serde(rename = "AQS")]
     Quadriserv,
-    #[serde(rename(serialize = "ARCA", deserialize = "ARCA"))]
+    #[serde(rename = "ARCA")]
     Archipelago,
-    #[serde(rename(serialize = "ARCAEDGE", deserialize = "ARCAEDGE"))]
+    #[serde(rename = "ARCAEDGE")]
     Arcaedge,
-    #[serde(rename(serialize = "ASX", deserialize = "ASX"))]
+    #[serde(rename = "ASX")]
     AustralianStockExchange,
-    #[serde(rename(serialize = "ASXCEN", deserialize = "ASXCEN"))]
+    #[serde(rename = "ASXCEN")]
     AsxCentrePoint,
-    #[serde(rename(serialize = "BARCBONDG", deserialize = "BARCBONDG"))]
+    #[serde(rename = "BARCBONDG")]
     BarclaysGovernmentBonds,
-    #[serde(rename(serialize = "BATS", deserialize = "BATS"))]
+    #[serde(rename = "BATS")]
     BatsTradingInc,
-    #[serde(rename(serialize = "BELFOX", deserialize = "BELFOX"))]
+    #[serde(rename = "BELFOX")]
     BelgianFuturesAmpOptionsExchange,
-    #[serde(rename(serialize = "BEX", deserialize = "BEX"))]
+    #[serde(rename = "BEX")]
     NasdaqOmxBx,
-    #[serde(rename(serialize = "BLOOMBERG", deserialize = "BLOOMBERG"))]
+    #[serde(rename = "BLOOMBERG")]
     Bloomberg,
-    #[serde(rename(serialize = "BM", deserialize = "BM"))]
+    #[serde(rename = "BM")]
     BolsaDeMadrid,
-    #[serde(rename(serialize = "BOND1G", deserialize = "BOND1G"))]
+    #[serde(rename = "BOND1G")]
     Bond1GovernmentBonds,
-    #[serde(rename(serialize = "BONDDESK", deserialize = "BONDDESK"))]
+    #[serde(rename = "BONDDESK")]
     BondDesk,
-    #[serde(rename(serialize = "BONDDESKG", deserialize = "BONDDESKG"))]
+    #[serde(rename = "BONDDESKG")]
     BonddeskForUsGovernmentSecurities,
-    #[serde(rename(serialize = "BONDDESKM", deserialize = "BONDDESKM"))]
+    #[serde(rename = "BONDDESKM")]
     BondDeskMunicipalBonds,
-    #[serde(rename(serialize = "BONDLARGE", deserialize = "BONDLARGE"))]
+    #[serde(rename = "BONDLARGE")]
     GovernmentBondsLargeOrders,
-    #[serde(rename(serialize = "BOX", deserialize = "BOX"))]
+    #[serde(rename = "BOX")]
     BostonOptionExchange,
-    #[serde(rename(serialize = "BUX", deserialize = "BUX"))]
+    #[serde(rename = "BUX")]
     BudapestStockExchange,
-    #[serde(rename(serialize = "BVL", deserialize = "BVL"))]
+    #[serde(rename = "BVL")]
     LisbonStockExchange,
-    #[serde(rename(serialize = "BVME", deserialize = "BVME"))]
+    #[serde(rename = "BVME")]
     BorsaValoriDiMilano,
-    #[serde(rename(serialize = "BVME.ETF", deserialize = "BVME.ETF"))]
+    #[serde(rename = "BVME.ETF")]
     BorsaItalianaEtf,
-    #[serde(rename(serialize = "BYX", deserialize = "BYX"))]
+    #[serde(rename = "BYX")]
     BatsYExchange,
-    #[serde(rename(serialize = "CBK2FX", deserialize = "CBK2FX"))]
+    #[serde(rename = "CBK2FX")]
     CommerzbankAgFrankfurtCurrencyDealing2,
-    #[serde(rename(serialize = "CBKFX", deserialize = "CBKFX"))]
+    #[serde(rename = "CBKFX")]
     CommerzbankAgFrankfurtCurrencyDealing,
-    #[serde(rename(serialize = "CBOE", deserialize = "CBOE"))]
+    #[serde(rename = "CBOE")]
     ChicagoBoardOptionsExchange,
-    #[serde(rename(serialize = "CBOE.JPN", deserialize = "CBOE.JPN"))]
+    #[serde(rename = "CBOE.JPN")]
     CboeJapanLimited,
-    #[serde(rename(serialize = "CBOE2", deserialize = "CBOE2"))]
+    #[serde(rename = "CBOE2")]
     ChicagoBoardOptionsExchange2,
-    #[serde(rename(serialize = "CBOT", deserialize = "CBOT"))]
+    #[serde(rename = "CBOT")]
     ChicagoBoardOfTrade,
-    #[serde(rename(serialize = "CDE", deserialize = "CDE"))]
+    #[serde(rename = "CDE")]
     CanadianDerivativesExchange,
-    #[serde(rename(serialize = "CFE", deserialize = "CFE"))]
+    #[serde(rename = "CFE")]
     CboeFuturesExchange,
-    #[serde(rename(serialize = "CFETAS", deserialize = "CFETAS"))]
+    #[serde(rename = "CFETAS")]
     ChicagoFuturesExchangeTradingAtSettlement,
-    #[serde(rename(serialize = "CHINEXT", deserialize = "CHINEXT"))]
+    #[serde(rename = "CHINEXT")]
     ChinextSharesOnShenzhenStockExchange,
-    #[serde(rename(serialize = "CHIX_CA", deserialize = "CHIX_CA"))]
+    #[serde(rename = "CHIX_CA")]
     ChiXCanadaAtsLimited,
-    #[serde(rename(serialize = "CHIXAU", deserialize = "CHIXAU"))]
+    #[serde(rename = "CHIXAU")]
     ChiXAustralia,
-    #[serde(rename(serialize = "CHX", deserialize = "CHX"))]
+    #[serde(rename = "CHX")]
     ChicagoStockExchange,
-    #[serde(rename(serialize = "CITIFX", deserialize = "CITIFX"))]
+    #[serde(rename = "CITIFX")]
     CitibankCurrencyDealing,
-    #[serde(rename(serialize = "CME", deserialize = "CME"))]
+    #[serde(rename = "CME")]
     ChicagoMercantileExchange,
-    #[serde(rename(serialize = "COMEX", deserialize = "COMEX"))]
+    #[serde(rename = "COMEX")]
     CommodityExchange,
-    #[serde(rename(serialize = "CPH", deserialize = "CPH"))]
+    #[serde(rename = "CPH")]
     CopenhagenStockExchange,
-    #[serde(rename(serialize = "CSBONDG", deserialize = "CSBONDG"))]
+    #[serde(rename = "CSBONDG")]
     CreditSuisseGovernmentBondsSmallOrders,
-    #[serde(rename(serialize = "CSFBALGO", deserialize = "CSFBALGO"))]
+    #[serde(rename = "CSFBALGO")]
     CsfbAlgorithmicEngine,
-    #[serde(rename(serialize = "CSFX", deserialize = "CSFX"))]
+    #[serde(rename = "CSFX")]
     CreditSuisseCurrencyDealing,
-    #[serde(rename(serialize = "CTDLZERO", deserialize = "CTDLZERO"))]
+    #[serde(rename = "CTDLZERO")]
     CitadelZeroCommission,
-    #[serde(rename(serialize = "DRCTEDGE", deserialize = "DRCTEDGE"))]
+    #[serde(rename = "DRCTEDGE")]
     DirectEdgeEcnLlc,
-    #[serde(rename(serialize = "DXEDE", deserialize = "DXEDE"))]
+    #[serde(rename = "DXEDE")]
     CboeGermany,
-    #[serde(rename(serialize = "DXEEN", deserialize = "DXEEN"))]
+    #[serde(rename = "DXEEN")]
     CboeEuronext,
-    #[serde(rename(serialize = "DXEES", deserialize = "DXEES"))]
+    #[serde(rename = "DXEES")]
     CboeSpain,
-    #[serde(rename(serialize = "DXEIT", deserialize = "DXEIT"))]
+    #[serde(rename = "DXEIT")]
     CboeEuropeBVDxeOrderBookItaly,
-    #[serde(rename(serialize = "EBS", deserialize = "EBS"))]
+    #[serde(rename = "EBS")]
     ElektronischeBoerseSchweiz,
-    #[serde(rename(serialize = "EDGEA", deserialize = "EDGEA"))]
+    #[serde(rename = "EDGEA")]
     DirectEdgeEcnEdgea,
-    #[serde(rename(serialize = "EDGX", deserialize = "EDGX"))]
+    #[serde(rename = "EDGX")]
     BatsTradingEdgx,
-    #[serde(rename(serialize = "EMERALD", deserialize = "EMERALD"))]
+    #[serde(rename = "EMERALD")]
     MiaxEmeraldExchange,
-    #[serde(rename(serialize = "ENDEX", deserialize = "ENDEX"))]
+    #[serde(rename = "ENDEX")]
     IceEndexFutures,
-    #[serde(rename(serialize = "ENEXT.BE", deserialize = "ENEXT.BE"))]
+    #[serde(rename = "ENEXT.BE")]
     EuronextBelgium,
-    #[serde(rename(serialize = "EUIBFRSH", deserialize = "EUIBFRSH"))]
+    #[serde(rename = "EUIBFRSH")]
     InternalFractionalShareVenueForEuStocksAndEtfs,
-    #[serde(rename(serialize = "EUIBSI", deserialize = "EUIBSI"))]
+    #[serde(rename = "EUIBSI")]
     IbEuropeanSystematicInternaliser,
-    #[serde(rename(serialize = "EUREXUK", deserialize = "EUREXUK"))]
+    #[serde(rename = "EUREXUK")]
     EurexBritishMarketsForLchCrestClearing,
-    #[serde(rename(serialize = "FOXRIVER", deserialize = "FOXRIVER"))]
+    #[serde(rename = "FOXRIVER")]
     FoxRiver,
-    #[serde(rename(serialize = "FRACSHARE", deserialize = "FRACSHARE"))]
+    #[serde(rename = "FRACSHARE")]
     PartnerFractionalShares,
-    #[serde(rename(serialize = "FTA", deserialize = "FTA"))]
+    #[serde(rename = "FTA")]
     FinancieleTermijnmarktAmsterdam,
-    #[serde(rename(serialize = "FINRA", deserialize = "FINRA"))]
+    #[serde(rename = "FINRA")]
     Finra,
-    #[serde(rename(serialize = "FUNDSERV", deserialize = "FUNDSERV"))]
+    #[serde(rename = "FUNDSERV")]
     MutualFundHoldingVenue,
-    #[serde(rename(serialize = "FWB", deserialize = "FWB"))]
+    #[serde(rename = "FWB")]
     FrankfurterWertpapierboerse,
-    #[serde(rename(serialize = "FXSETTLE", deserialize = "FXSETTLE"))]
+    #[serde(rename = "FXSETTLE")]
     NonStandardSettlementForFx,
-    #[serde(rename(serialize = "GEMINI", deserialize = "GEMINI"))]
+    #[serde(rename = "GEMINI")]
     IseGemini,
-    #[serde(rename(serialize = "GETTEX", deserialize = "GETTEX"))]
+    #[serde(rename = "GETTEX")]
     BRseMNchenAg,
-    #[serde(rename(serialize = "GETTEX2", deserialize = "GETTEX2"))]
+    #[serde(rename = "GETTEX2")]
     BRseMNchenAgForCblSettlement,
-    #[serde(rename(serialize = "GS2FX", deserialize = "GS2FX"))]
+    #[serde(rename = "GS2FX")]
     GoldmanSachsCurrencyDealing2,
-    #[serde(rename(serialize = "GSFX", deserialize = "GSFX"))]
+    #[serde(rename = "GSFX")]
     GoldmanSachsCurrencyDealing,
-    #[serde(rename(serialize = "HEADLAND", deserialize = "HEADLAND"))]
+    #[serde(rename = "HEADLAND")]
     HeadlandsTechnologies,
-    #[serde(rename(serialize = "HEADLANDM", deserialize = "HEADLANDM"))]
+    #[serde(rename = "HEADLANDM")]
     HeadlandsTechnologiesMunis,
-    #[serde(rename(serialize = "HEX", deserialize = "HEX"))]
+    #[serde(rename = "HEX")]
     HelsinkiStockExchange,
-    #[serde(rename(serialize = "HKFE", deserialize = "HKFE"))]
+    #[serde(rename = "HKFE")]
     HongKongFuturesExchange,
-    #[serde(rename(serialize = "HSBC2FX", deserialize = "HSBC2FX"))]
+    #[serde(rename = "HSBC2FX")]
     HsbcCurrencyDealing2,
-    #[serde(rename(serialize = "HSBCFX", deserialize = "HSBCFX"))]
+    #[serde(rename = "HSBCFX")]
     HsbcCurrencyDealing,
-    #[serde(rename(serialize = "HTD", deserialize = "HTD"))]
+    #[serde(rename = "HTD")]
     HartfieldTitusAndDonnelly,
-    #[serde(rename(serialize = "IBAPCFD", deserialize = "IBAPCFD"))]
+    #[serde(rename = "IBAPCFD")]
     IbCfdDealingAsiaPacific,
-    #[serde(rename(serialize = "IBBOND", deserialize = "IBBOND"))]
+    #[serde(rename = "IBBOND")]
     InteractiveBrokersBond,
-    #[serde(rename(serialize = "IBCMDTY", deserialize = "IBCMDTY"))]
+    #[serde(rename = "IBCMDTY")]
     InteractiveBrokersCommodity,
-    #[serde(rename(serialize = "IBDARK", deserialize = "IBDARK"))]
+    #[serde(rename = "IBDARK")]
     IbDarkPool,
-    #[serde(rename(serialize = "IBEOS", deserialize = "IBEOS"))]
+    #[serde(rename = "IBEOS")]
     IbkrOvernightExchange,
-    #[serde(rename(serialize = "IBFX", deserialize = "IBFX"))]
+    #[serde(rename = "IBFX")]
     IbCurrencyDealing,
-    #[serde(rename(serialize = "IBFXCFD", deserialize = "IBFXCFD"))]
+    #[serde(rename = "IBFXCFD")]
     IbFxCfdDealing,
-    #[serde(rename(serialize = "IBIS", deserialize = "IBIS"))]
+    #[serde(rename = "IBIS")]
     IntegriertesBoersenhandelsUndInformationsSystem,
-    #[serde(rename(serialize = "IBKRAM", deserialize = "IBKRAM"))]
+    #[serde(rename = "IBKRAM")]
     InteractiveBrokersAssetManagement,
-    #[serde(rename(serialize = "IBKRNOTE", deserialize = "IBKRNOTE"))]
+    #[serde(rename = "IBKRNOTE")]
     IbkrNote,
-    #[serde(rename(serialize = "IBMETAL", deserialize = "IBMETAL"))]
+    #[serde(rename = "IBMETAL")]
     InternalizedTradingOfMetals,
-    #[serde(rename(serialize = "IBUSCFD", deserialize = "IBUSCFD"))]
+    #[serde(rename = "IBUSCFD")]
     IbCfdDealingUs,
-    #[serde(rename(serialize = "IBUSOPT", deserialize = "IBUSOPT"))]
+    #[serde(rename = "IBUSOPT")]
     IbUsOpt,
-    #[serde(rename(serialize = "ICECRYPTO", deserialize = "ICECRYPTO"))]
+    #[serde(rename = "ICECRYPTO")]
     IceCryptocurrency,
-    #[serde(rename(serialize = "ICEUS", deserialize = "ICEUS"))]
+    #[serde(rename = "ICEUS")]
     IceFuturesUsInc,
-    #[serde(rename(serialize = "IDEAL", deserialize = "IDEAL"))]
+    #[serde(rename = "IDEAL")]
     InteractiveBrokersDealingSystem,
-    #[serde(rename(serialize = "IDEALPRO", deserialize = "IDEALPRO"))]
+    #[serde(rename = "IDEALPRO")]
     IbForexPro,
-    #[serde(rename(serialize = "IDEALFX", deserialize = "IDEALFX"))]
+    #[serde(rename = "IDEALFX")]
     IdealCurrencyDealing,
-    #[serde(rename(serialize = "IDEM", deserialize = "IDEM"))]
+    #[serde(rename = "IDEM")]
     ItalianDerivativesMarketMilano,
-    #[serde(rename(serialize = "IEX", deserialize = "IEX"))]
+    #[serde(rename = "IEX")]
     InvestorsExchange,
-    #[serde(rename(serialize = "IPE", deserialize = "IPE"))]
+    #[serde(rename = "IPE")]
     InternationalPetroleumExchange,
-    #[serde(rename(serialize = "IR", deserialize = "IR"))]
+    #[serde(rename = "IR")]
     InterestRateRecordingExchange,
-    #[serde(rename(serialize = "ISE", deserialize = "ISE"))]
+    #[serde(rename = "ISE")]
     InternationalSecuritiesExchange,
-    #[serde(rename(serialize = "ISLAND", deserialize = "ISLAND"))]
+    #[serde(rename = "ISLAND")]
     Island,
-    #[serde(rename(serialize = "JANE", deserialize = "JANE"))]
+    #[serde(rename = "JANE")]
     JaneStreetExecutionServices,
-    #[serde(rename(serialize = "JANEZERO", deserialize = "JANEZERO"))]
+    #[serde(rename = "JANEZERO")]
     JaneStreetZeroCommission,
-    #[serde(rename(serialize = "JEFFALGO", deserialize = "JEFFALGO"))]
+    #[serde(rename = "JEFFALGO")]
     JefferiesAlgorithmicEngine,
-    #[serde(rename(serialize = "JPMCBOND", deserialize = "JPMCBOND"))]
+    #[serde(rename = "JPMCBOND")]
     JpmcCorporateBonds,
-    #[serde(rename(serialize = "JPNNEXT", deserialize = "JPNNEXT"))]
+    #[serde(rename = "JPNNEXT")]
     Japannext,
-    #[serde(rename(serialize = "KSE", deserialize = "KSE"))]
+    #[serde(rename = "KSE")]
     KoreaStockExchange,
-    #[serde(rename(serialize = "LTSE", deserialize = "LTSE"))]
+    #[serde(rename = "LTSE")]
     LongTermStockExchange,
-    #[serde(rename(serialize = "MATIF", deserialize = "MATIF"))]
+    #[serde(rename = "MATIF")]
     MarcheATermeDInstrumentsFinanciers,
-    #[serde(rename(serialize = "MEFFRV", deserialize = "MEFFRV"))]
+    #[serde(rename = "MEFFRV")]
     MercadoEspanolDeFuturosFinancierosRentaVariableProxy,
-    #[serde(rename(serialize = "MEMX", deserialize = "MEMX"))]
+    #[serde(rename = "MEMX")]
     MembersExchange,
-    #[serde(rename(serialize = "MERCURY", deserialize = "MERCURY"))]
+    #[serde(rename = "MERCURY")]
     IseMercury,
-    #[serde(rename(serialize = "MEXDER", deserialize = "MEXDER"))]
+    #[serde(rename = "MEXDER")]
     MercadoMexicanoDeDerivados,
-    #[serde(rename(serialize = "MEXI", deserialize = "MEXI"))]
+    #[serde(rename = "MEXI")]
     MexicoStockExchange,
-    #[serde(rename(serialize = "MIAX", deserialize = "MIAX"))]
+    #[serde(rename = "MIAX")]
     MiamiOptionsExchange,
-    #[serde(rename(serialize = "MILLADV", deserialize = "MILLADV"))]
+    #[serde(rename = "MILLADV")]
     MillenniumAdvisorsCorporateBonds,
-    #[serde(rename(serialize = "MKTAXESS", deserialize = "MKTAXESS"))]
+    #[serde(rename = "MKTAXESS")]
     MarketaxessCorporates,
-    #[serde(rename(serialize = "MONEP", deserialize = "MONEP"))]
+    #[serde(rename = "MONEP")]
     MarcheDesOptsNegDeLaBourseDeParis,
-    #[serde(rename(serialize = "MSFX", deserialize = "MSFX"))]
+    #[serde(rename = "MSFX")]
     MorganStanleyCurrencyDealing,
-    #[serde(rename(serialize = "N.RIGA", deserialize = "N.RIGA"))]
+    #[serde(rename = "N.RIGA")]
     NasdaqRiga,
-    #[serde(rename(serialize = "N.TALLINN", deserialize = "N.TALLINN"))]
+    #[serde(rename = "N.TALLINN")]
     NasdaqTallinn,
-    #[serde(rename(serialize = "N.VILNIUS", deserialize = "N.VILNIUS"))]
+    #[serde(rename = "N.VILNIUS")]
     AbNasdaqVilnius,
-    #[serde(rename(serialize = "NASDAQ", deserialize = "NASDAQ"))]
+    #[serde(rename = "NASDAQ")]
     NationalAssociationOfSecurityDealers,
-    #[serde(rename(serialize = "NASDAQBX", deserialize = "NASDAQBX"))]
+    #[serde(rename = "NASDAQBX")]
     NasdaqOmxBxOptionsExchange,
-    #[serde(rename(serialize = "NASDAQOM", deserialize = "NASDAQOM"))]
+    #[serde(rename = "NASDAQOM")]
     NationalAssociationOfSecurityDealersOptionsMarket,
-    #[serde(rename(serialize = "NATIXISFX", deserialize = "NATIXISFX"))]
+    #[serde(rename = "NATIXISFX")]
     NatixisCurrencyDealing,
-    #[serde(rename(serialize = "NITE", deserialize = "NITE"))]
+    #[serde(rename = "NITE")]
     KnightTradingOtcbbAndPinkSheets,
-    #[serde(rename(serialize = "NITEZERO", deserialize = "NITEZERO"))]
+    #[serde(rename = "NITEZERO")]
     IbkrRetailZeroCommission,
-    #[serde(rename(serialize = "NSE", deserialize = "NSE"))]
+    #[serde(rename = "NSE")]
     NationalStockExchangeOfIndiaLimited,
-    #[serde(rename(serialize = "NYBOT", deserialize = "NYBOT"))]
+    #[serde(rename = "NYBOT")]
     NewYorkBoardOfTrade,
-    #[serde(rename(serialize = "NYMEX", deserialize = "NYMEX"))]
+    #[serde(rename = "NYMEX")]
     NewYorkMercantileExchange,
-    #[serde(rename(serialize = "NYSE", deserialize = "NYSE"))]
+    #[serde(rename = "NYSE")]
     NewYorkStockExchange,
-    #[serde(rename(serialize = "NYSEFLOOR", deserialize = "NYSEFLOOR"))]
+    #[serde(rename = "NYSEFLOOR")]
     NyseFloor,
-    #[serde(rename(serialize = "NYSELIFFE", deserialize = "NYSELIFFE"))]
+    #[serde(rename = "NYSELIFFE")]
     NyseLiffeUs,
-    #[serde(rename(serialize = "NYSENAT", deserialize = "NYSENAT"))]
+    #[serde(rename = "NYSENAT")]
     NyseNational,
-    #[serde(rename(serialize = "OMEGA", deserialize = "OMEGA"))]
+    #[serde(rename = "OMEGA")]
     OmegaAts,
-    #[serde(rename(serialize = "OMS", deserialize = "OMS"))]
+    #[serde(rename = "OMS")]
     StockholmOptionsMarket,
-    #[serde(rename(serialize = "OMXNO", deserialize = "OMXNO"))]
+    #[serde(rename = "OMXNO")]
     NorwegianSharesOnOmx,
-    #[serde(rename(serialize = "OSE", deserialize = "OSE"))]
+    #[serde(rename = "OSE")]
     OsloStockExchange,
-    #[serde(rename(serialize = "OSE.JPN", deserialize = "OSE.JPN"))]
+    #[serde(rename = "OSE.JPN")]
     OsakaStockExchange,
-    #[serde(rename(serialize = "OSL", deserialize = "OSL"))]
+    #[serde(rename = "OSL")]
     OslCryptoExchange,
-    #[serde(rename(serialize = "OTCBB", deserialize = "OTCBB"))]
+    #[serde(rename = "OTCBB")]
     OtcBulletinBoard,
-    #[serde(rename(serialize = "OTCLNKECN", deserialize = "OTCLNKECN"))]
+    #[serde(rename = "OTCLNKECN")]
     OtcLinkEcn,
-    #[serde(rename(serialize = "OVERNIGHT", deserialize = "OVERNIGHT"))]
+    #[serde(rename = "OVERNIGHT")]
     OvernightTrading,
-    #[serde(rename(serialize = "PAXOS", deserialize = "PAXOS"))]
+    #[serde(rename = "PAXOS")]
     PaxosCryptoExchange,
-    #[serde(rename(serialize = "PEARL", deserialize = "PEARL"))]
+    #[serde(rename = "PEARL")]
     MiaxPearlExchange,
-    #[serde(rename(serialize = "PHLX", deserialize = "PHLX"))]
+    #[serde(rename = "PHLX")]
     PhiladelphiaStockExchange,
-    #[serde(rename(serialize = "PINK", deserialize = "PINK"))]
+    #[serde(rename = "PINK")]
     PinkSheets,
-    #[serde(rename(serialize = "PRA", deserialize = "PRA"))]
+    #[serde(rename = "PRA")]
     PraqueStockExchange,
-    #[serde(rename(serialize = "PSE", deserialize = "PSE"))]
+    #[serde(rename = "PSE")]
     PacificStockExchange,
-    #[serde(rename(serialize = "PSX", deserialize = "PSX"))]
+    #[serde(rename = "PSX")]
     NasdaqOmxPsx,
-    #[serde(rename(serialize = "PURE", deserialize = "PURE"))]
+    #[serde(rename = "PURE")]
     PureTrading,
-    #[serde(rename(serialize = "RBC2FX", deserialize = "RBC2FX"))]
+    #[serde(rename = "RBC2FX")]
     RoyalBankOfCanadaCurrencyDealing2,
-    #[serde(rename(serialize = "RBCFX", deserialize = "RBCFX"))]
+    #[serde(rename = "RBCFX")]
     RoyalBankOfCanadaCurrencyDealing,
-    #[serde(rename(serialize = "RBSFX", deserialize = "RBSFX"))]
+    #[serde(rename = "RBSFX")]
     RoyalBankOfScotlandCurrencyDealing,
-    #[serde(rename(serialize = "RUSSELL", deserialize = "RUSSELL"))]
+    #[serde(rename = "RUSSELL")]
     ExchangeForRussellIndices,
-    #[serde(rename(serialize = "SEHK", deserialize = "SEHK"))]
+    #[serde(rename = "SEHK")]
     StockExchangeOfHongKong,
-    #[serde(rename(serialize = "SEHKNTL", deserialize = "SEHKNTL"))]
+    #[serde(rename = "SEHKNTL")]
     StockExchangeHongKongNorthboundTradingLink,
-    #[serde(rename(serialize = "SEHKSZSE", deserialize = "SEHKSZSE"))]
+    #[serde(rename = "SEHKSZSE")]
     HongKongShenzhenStockExchangeNorthboundTradingLink,
-    #[serde(rename(serialize = "SFB", deserialize = "SFB"))]
+    #[serde(rename = "SFB")]
     StockholmFondbors,
-    #[serde(rename(serialize = "SGX", deserialize = "SGX"))]
+    #[serde(rename = "SGX")]
     SingaporeExchange,
-    #[serde(rename(serialize = "SGXCME", deserialize = "SGXCME"))]
+    #[serde(rename = "SGXCME")]
     SingaporeExchangeCme,
-    #[serde(rename(serialize = "SMFE", deserialize = "SMFE"))]
+    #[serde(rename = "SMFE")]
     TheSmallExchange,
-    #[serde(rename(serialize = "SNFE", deserialize = "SNFE"))]
+    #[serde(rename = "SNFE")]
     SydneyFuturesExchange,
-    #[serde(rename(serialize = "SUMRIDGE", deserialize = "SUMRIDGE"))]
+    #[serde(rename = "SUMRIDGE")]
     SumridgePartners,
-    #[serde(rename(serialize = "SUMRIDGEM", deserialize = "SUMRIDGEM"))]
+    #[serde(rename = "SUMRIDGEM")]
     SumridgePartnersMunicipalBonds,
-    #[serde(rename(serialize = "SWB", deserialize = "SWB"))]
+    #[serde(rename = "SWB")]
     StuttgartWertpapierboerse,
-    #[serde(rename(serialize = "TASE", deserialize = "TASE"))]
+    #[serde(rename = "TASE")]
     TelAvivStockExchange,
-    #[serde(rename(serialize = "TGATE", deserialize = "TGATE"))]
+    #[serde(rename = "TGATE")]
     Tradegate,
-    #[serde(rename(serialize = "TGHEDE", deserialize = "TGHEDE"))]
+    #[serde(rename = "TGHEDE")]
     TurquoiseGlobalHoldingsEuropeBVGermany,
-    #[serde(rename(serialize = "TGHEEN", deserialize = "TGHEEN"))]
+    #[serde(rename = "TGHEEN")]
     TurquoiseGlobalHoldingsEuropeBVEuronext,
-    #[serde(rename(serialize = "TGHEES", deserialize = "TGHEES"))]
+    #[serde(rename = "TGHEES")]
     TurquoiseGlobalHoldingsEuropeBVSpain,
-    #[serde(rename(serialize = "TGHEIT", deserialize = "TGHEIT"))]
+    #[serde(rename = "TGHEIT")]
     TurquoiseGlobalHoldingsBVItaly,
-    #[serde(rename(serialize = "THFXCFD", deserialize = "THFXCFD"))]
+    #[serde(rename = "THFXCFD")]
     ThFxCfdDealing,
-    #[serde(rename(serialize = "TPLUS1", deserialize = "TPLUS1"))]
+    #[serde(rename = "TPLUS1")]
     TPlusOne,
-    #[serde(rename(serialize = "TRADEWEB", deserialize = "TRADEWEB"))]
+    #[serde(rename = "TRADEWEB")]
     TradewebCorporate,
-    #[serde(rename(serialize = "TRADEWEBG", deserialize = "TRADEWEBG"))]
+    #[serde(rename = "TRADEWEBG")]
     TradewebGovernment,
-    #[serde(rename(serialize = "TSE", deserialize = "TSE"))]
+    #[serde(rename = "TSE")]
     TorontoStockExchange,
-    #[serde(rename(serialize = "TSEJ", deserialize = "TSEJ"))]
+    #[serde(rename = "TSEJ")]
     TokyoStockExchange,
-    #[serde(rename(serialize = "UBS2FX", deserialize = "UBS2FX"))]
+    #[serde(rename = "UBS2FX")]
     UbsCurrencyDealing2,
-    #[serde(rename(serialize = "UBSBOND", deserialize = "UBSBOND"))]
+    #[serde(rename = "UBSBOND")]
     UbsCorporateBond,
-    #[serde(rename(serialize = "UBSFX", deserialize = "UBSFX"))]
+    #[serde(rename = "UBSFX")]
     UbsCurrencyDealing,
-    #[serde(rename(serialize = "VALUBOND", deserialize = "VALUBOND"))]
+    #[serde(rename = "VALUBOND")]
     KnightValuebondCorporate,
-    #[serde(rename(serialize = "VALUBONDG", deserialize = "VALUBONDG"))]
+    #[serde(rename = "VALUBONDG")]
     KnightValuebondGovernment,
-    #[serde(rename(serialize = "VALUBONDM", deserialize = "VALUBONDM"))]
+    #[serde(rename = "VALUBONDM")]
     MunicipalBondsOnValuebond,
-    #[serde(rename(serialize = "VENTURE", deserialize = "VENTURE"))]
+    #[serde(rename = "VENTURE")]
     TsxVentureExchange,
-    #[serde(rename(serialize = "VIRTBONDG", deserialize = "VIRTBONDG"))]
+    #[serde(rename = "VIRTBONDG")]
     VirtuFinancialGovernmentBonds,
-    #[serde(rename(serialize = "VSE", deserialize = "VSE"))]
+    #[serde(rename = "VSE")]
     ViennaStockExchange,
-    #[serde(rename(serialize = "VALUE", deserialize = "VALUE"))]
+    #[serde(rename = "VALUE")]
     /// A holding exchange used for clients to close positions ona contract that is no longer listed
     Value,
-    #[serde(rename(serialize = "WFFX", deserialize = "WFFX"))]
+    #[serde(rename = "WFFX")]
     WellsFargoForex,
-    #[serde(rename(serialize = "WSE", deserialize = "WSE"))]
+    #[serde(rename = "WSE")]
     WarsawStockExchange,
 }
 

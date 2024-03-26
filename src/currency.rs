@@ -1,60 +1,61 @@
 use core::str::FromStr;
+
 use serde::{Deserialize, Serialize};
 
 // === Type definitions ===
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 /// Represents all the possible currencies available for trading at IBKR.
 pub enum Currency {
-    #[serde(rename(serialize = "AUD"))]
+    #[serde(rename = "AUD")]
     /// The Australian Dollar (AUD) is the currency of Australia.
     AustralianDollar,
-    #[serde(rename(serialize = "GBP"))]
+    #[serde(rename = "GBP")]
     /// The Pound Sterling (GBP) is the currency of the United Kingdom.
     BritishPound,
-    #[serde(rename(serialize = "CAD"))]
+    #[serde(rename = "CAD")]
     /// The Canadian Dollar (CAD) is the currency of Canada.
     CanadianDollar,
-    #[serde(rename(serialize = "CNH"))]
+    #[serde(rename = "CNH")]
     /// The Chinese Renminbi (RMB / CNH) is the currency of The People's Republic of China. The
     /// Yuan is the basic unit of the Renminbi.
     ChineseYuan,
-    #[serde(rename(serialize = "DKK"))]
+    #[serde(rename = "DKK")]
     /// The Danish Krone (DKK) is the currency of Denmark.
     DanishKrone,
-    #[serde(rename(serialize = "EUR"))]
+    #[serde(rename = "EUR")]
     /// The Euro (EUR) is the currency of most countries in the European Union
     Euro,
-    #[serde(rename(serialize = "HKD"))]
+    #[serde(rename = "HKD")]
     /// The Hong Kong Dollar (HKD) is the currency of Hong Kong.
     HongKongDollar,
-    #[serde(rename(serialize = "INR"))]
+    #[serde(rename = "INR")]
     /// The Indian Rupee (INR) is the currency of the Republic of India.
     IndianRupee,
-    #[serde(rename(serialize = "ILS"))]
+    #[serde(rename = "ILS")]
     /// The Israeli New Shekel (ILS / NIS) is the currency of Israel.
     IsraeliNewShekel,
-    #[serde(rename(serialize = "JPY"))]
+    #[serde(rename = "JPY")]
     /// The Japanese Yen (JPY) is the currency of Japan.
     JapaneseYen,
-    #[serde(rename(serialize = "KRW"))]
+    #[serde(rename = "KRW")]
     /// The Korean Won (KRW) is the currency of South Korea.
     KoreanWon,
-    #[serde(rename(serialize = "MXN"))]
+    #[serde(rename = "MXN")]
     /// The Mexican Peso (MXN) is the currency of Mexico.
     MexicanPeso,
-    #[serde(rename(serialize = "NZD"))]
+    #[serde(rename = "NZD")]
     /// The New Zealand Dollar (NZD) is the currency of New Zealand.
     NewZealandDollar,
-    #[serde(rename(serialize = "NOK"))]
+    #[serde(rename = "NOK")]
     /// The Norwegian Krone (NOK) is the currency of Norway.
     NorwegianKrone,
-    #[serde(rename(serialize = "SEK"))]
+    #[serde(rename = "SEK")]
     /// The Swedish Krona (SEK) is the currency of Sweden.
     SwedishKrona,
-    #[serde(rename(serialize = "CHF"))]
+    #[serde(rename = "CHF")]
     /// The Swiss Franc (CHF) is the currency of Switzerland.
     SwissFranc,
-    #[serde(rename(serialize = "USD"))]
+    #[serde(rename = "USD")]
     /// The US Dollar (USD) is the currency of the United States of America.
     UsDollar,
 }

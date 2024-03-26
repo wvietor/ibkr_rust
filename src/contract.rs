@@ -3,7 +3,7 @@ use std::{num::ParseIntError, str::FromStr};
 
 use chrono::NaiveDate;
 use ibapi_macros::{make_getters, Security};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::figi::{Figi, InvalidFigi};
 use crate::{
@@ -212,6 +212,19 @@ impl Security for Contract {
             | Self::Commodity(t) => t.valid_exchanges()
         )
     }
+
+    #[inline]
+    fn contract_type(&self) -> ContractType {
+        match_poly!(self;
+            Self::Forex(t)
+            | Self::Crypto(t)
+            | Self::Stock(t)
+            | Self::Index(t)
+            | Self::SecFuture(t)
+            | Self::SecOption(t)
+            | Self::Commodity(t) => t.contract_type()
+        )
+    }
 }
 
 /// Create a new contract based on the unique IBKR contract ID. These contract IDs can be found
@@ -417,8 +430,13 @@ pub trait Security: indicators::Valid {
     /// Get the security's valid exchanges.
     ///
     /// # Returns
-    /// The security's valid exchanges..
+    /// The security's valid exchanges.
     fn valid_exchanges(&self) -> &Vec<Routing>;
+    /// Get the security's contract type.
+    ///
+    /// # Returns
+    /// The security's contract type.
+    fn contract_type(&self) -> ContractType;
 }
 
 // =======================================
@@ -587,11 +605,301 @@ macro_rules! proxy_impl {
     };
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize)]
-#[serde(into = "ContractId")]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[serde(into = "SerProxyHelp", try_from = "SerProxyHelp")]
 /// Holds information about a contract but lacks the information of a full [`Contract`].
 pub struct Proxy<S: Security + Clone> {
+    #[serde(serialize_with = "_dummy_ser", deserialize_with = "_dummy_de")]
+    // Temporary until https://github.com/serde-rs/serde/pull/2239 is merged
     pub(crate) inner: S,
+}
+
+#[allow(clippy::needless_pass_by_value)]
+fn _dummy_ser<Sec: Security + Clone, Ser: Serializer>(
+    _t: &Proxy<Sec>,
+    _ser: Ser,
+) -> Result<Ser::Ok, Ser::Error> {
+    unreachable!()
+}
+
+#[allow(clippy::needless_pass_by_value)]
+fn _dummy_de<'de, Sec: Security + Clone, De: Deserializer<'de>>(
+    _de: De,
+) -> Result<Proxy<Sec>, De::Error> {
+    unreachable!()
+}
+
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+struct SerProxyHelp {
+    contract_type: ContractType,
+    contract_id: ContractId,
+    symbol: String,
+    currency: Currency,
+    local_symbol: String,
+    trading_class: Option<String>,
+    primary_exchange: Option<Primary>,
+    expiration_date: Option<NaiveDate>,
+    multiplier: Option<u32>,
+    option_type: Option<SecOptionType>,
+    strike: Option<f64>,
+}
+
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+enum SecOptionType {
+    Call,
+    Put,
+}
+
+impl<S: Security + Clone> From<Proxy<S>> for SerProxyHelp {
+    #[allow(clippy::too_many_lines)]
+    fn from(value: Proxy<S>) -> Self {
+        let contract_type = value.contract_type();
+        let contract_id = value.contract_id();
+        let currency = value.currency();
+
+        match value.inner.into() {
+            Contract::Stock(stk) => Self {
+                contract_type,
+                contract_id,
+                symbol: stk.symbol,
+                currency,
+                local_symbol: stk.local_symbol,
+                trading_class: Some(stk.trading_class),
+                primary_exchange: Some(stk.primary_exchange),
+                expiration_date: None,
+                multiplier: None,
+                strike: None,
+                option_type: None,
+            },
+            Contract::SecOption(opt) => {
+                let option_type = Some(if opt.is_call() {
+                    SecOptionType::Call
+                } else {
+                    SecOptionType::Put
+                });
+                let opt = opt.into_inner();
+                Self {
+                    contract_type,
+                    contract_id,
+                    symbol: opt.symbol,
+                    currency,
+                    local_symbol: opt.local_symbol,
+                    trading_class: Some(opt.trading_class),
+                    primary_exchange: None,
+                    expiration_date: Some(opt.expiration_date),
+                    multiplier: Some(opt.multiplier),
+                    strike: Some(opt.strike),
+                    option_type,
+                }
+            }
+            Contract::SecFuture(fut) => Self {
+                contract_type,
+                contract_id,
+                symbol: fut.symbol,
+                currency,
+                local_symbol: fut.local_symbol,
+                trading_class: Some(fut.trading_class),
+                primary_exchange: None,
+                expiration_date: Some(fut.expiration_date),
+                multiplier: Some(fut.multiplier),
+                strike: None,
+                option_type: None,
+            },
+            Contract::Commodity(cmdty) => Self {
+                contract_type,
+                contract_id,
+                symbol: cmdty.symbol,
+                currency,
+                local_symbol: cmdty.local_symbol,
+                trading_class: Some(cmdty.trading_class),
+                primary_exchange: None,
+                expiration_date: None,
+                multiplier: None,
+                strike: None,
+                option_type: None,
+            },
+            Contract::Crypto(crypto) => Self {
+                contract_type,
+                contract_id,
+                symbol: crypto.symbol,
+                currency,
+                local_symbol: crypto.local_symbol,
+                trading_class: Some(crypto.trading_class),
+                primary_exchange: None,
+                expiration_date: None,
+                multiplier: None,
+                strike: None,
+                option_type: None,
+            },
+            Contract::Index(ind) => Self {
+                contract_type,
+                contract_id,
+                symbol: ind.symbol,
+                currency,
+                local_symbol: ind.local_symbol,
+                trading_class: None,
+                primary_exchange: None,
+                expiration_date: None,
+                multiplier: None,
+                strike: None,
+                option_type: None,
+            },
+            Contract::Forex(fx) => Self {
+                contract_type,
+                contract_id,
+                symbol: fx.symbol,
+                currency,
+                local_symbol: fx.local_symbol,
+                trading_class: Some(fx.trading_class),
+                primary_exchange: None,
+                expiration_date: None,
+                multiplier: None,
+                strike: None,
+                option_type: None,
+            },
+        }
+    }
+}
+
+impl<S: Security + Clone> TryFrom<SerProxyHelp> for Proxy<S> {
+    type Error = anyhow::Error;
+
+    #[allow(clippy::too_many_lines)]
+    fn try_from(value: SerProxyHelp) -> Result<Self, Self::Error> {
+        let SerProxyHelp {
+            contract_type,
+            trading_class,
+            contract_id,
+            symbol,
+            currency,
+            local_symbol,
+            primary_exchange,
+            multiplier,
+            strike,
+            option_type,
+            expiration_date,
+        } = value;
+
+        let inner = match contract_type {
+            ContractType::Stock => Stock {
+                contract_id,
+                min_tick: f64::default(),
+                symbol,
+                currency,
+                local_symbol,
+                long_name: String::default(),
+                order_types: Vec::default(),
+                trading_class: trading_class.ok_or(anyhow::anyhow!("Missing data"))?,
+                primary_exchange: primary_exchange.ok_or(anyhow::anyhow!("Missing data"))?,
+                stock_type: String::default(),
+                security_ids: Vec::default(),
+                exchange: Routing::Smart,
+                sector: String::default(),
+                valid_exchanges: Vec::default(),
+            }
+            .try_into()
+            .map_err(|_| ()),
+            ContractType::Index => Index {
+                contract_id,
+                min_tick: f64::default(),
+                symbol,
+                exchange: Routing::Smart,
+                currency,
+                local_symbol,
+                long_name: String::default(),
+                order_types: Vec::default(),
+                valid_exchanges: Vec::default(),
+            }
+            .try_into()
+            .map_err(|_| ()),
+            ContractType::Commodity => Commodity {
+                contract_id,
+                min_tick: f64::default(),
+                symbol,
+                exchange: Routing::Smart,
+                trading_class: trading_class.ok_or(anyhow::anyhow!("Missing data"))?,
+                currency,
+                local_symbol,
+                long_name: String::default(),
+                order_types: Vec::default(),
+                valid_exchanges: Vec::default(),
+            }
+            .try_into()
+            .map_err(|_| ()),
+            ContractType::Crypto => Crypto {
+                contract_id,
+                min_tick: f64::default(),
+                symbol,
+                trading_class: trading_class.ok_or(anyhow::anyhow!("Missing data"))?,
+                currency,
+                local_symbol,
+                long_name: String::default(),
+                order_types: Vec::default(),
+                valid_exchanges: Vec::default(),
+            }
+            .try_into()
+            .map_err(|_| ()),
+            ContractType::Forex => Forex {
+                contract_id,
+                min_tick: f64::default(),
+                symbol,
+                exchange: Routing::Smart,
+                trading_class: trading_class.ok_or(anyhow::anyhow!("Missing data"))?,
+                currency,
+                local_symbol,
+                long_name: String::default(),
+                order_types: Vec::default(),
+                valid_exchanges: Vec::default(),
+            }
+            .try_into()
+            .map_err(|_| ()),
+            ContractType::SecFuture => SecFuture {
+                contract_id,
+                min_tick: f64::default(),
+                symbol,
+                exchange: Routing::Smart,
+                multiplier: multiplier.ok_or(anyhow::anyhow!("Missing data"))?,
+                expiration_date: expiration_date.ok_or(anyhow::anyhow!("Missing data"))?,
+                trading_class: trading_class.ok_or(anyhow::anyhow!("Missing data"))?,
+                underlying_contract_id: contract_id,
+                currency,
+                local_symbol,
+                long_name: String::default(),
+                order_types: Vec::default(),
+                valid_exchanges: Vec::default(),
+            }
+            .try_into()
+            .map_err(|_| ()),
+            ContractType::SecOption => {
+                let inner = SecOptionInner {
+                    contract_id,
+                    min_tick: f64::default(),
+                    symbol,
+                    exchange: Routing::Smart,
+                    strike: strike.ok_or(anyhow::anyhow!("Missing data"))?,
+                    multiplier: multiplier.ok_or(anyhow::anyhow!("Missing data"))?,
+                    expiration_date: expiration_date.ok_or(anyhow::anyhow!("Missing data"))?,
+                    underlying_contract_id: contract_id,
+                    sector: String::default(),
+                    trading_class: trading_class.ok_or(anyhow::anyhow!("Missing data"))?,
+                    currency,
+                    local_symbol,
+                    long_name: String::default(),
+                    order_types: Vec::default(),
+                    valid_exchanges: Vec::default(),
+                };
+                match option_type.ok_or(anyhow::anyhow!("Missing data"))? {
+                    SecOptionType::Call => SecOption::Call(inner),
+                    SecOptionType::Put => SecOption::Put(inner),
+                }
+                .try_into()
+                .map_err(|_| ())
+            }
+        }
+        .map_err(|()| anyhow::anyhow!("Failed to coerce contract into desired security type."))?;
+
+        Ok(Self { inner })
+    }
 }
 
 impl<S: Security + Clone> From<Proxy<S>> for ContractId {
@@ -601,6 +909,11 @@ impl<S: Security + Clone> From<Proxy<S>> for ContractId {
 }
 
 impl<S: Security + Clone> Proxy<S> {
+    #[inline]
+    /// Get the type of contract.
+    pub fn contract_type(&self) -> ContractType {
+        self.inner.contract_type()
+    }
     #[inline]
     /// Get the underlying Security's contract ID.
     pub fn contract_id(&self) -> ContractId {
@@ -627,21 +940,6 @@ impl<S: Security + Clone> Proxy<S> {
 }
 
 impl Proxy<Contract> {
-    #[inline]
-    #[must_use]
-    /// Get the type of contract.
-    pub fn contract_type(&self) -> ContractType {
-        match self.inner {
-            Contract::Forex(_) => ContractType::Forex,
-            Contract::Crypto(_) => ContractType::Crypto,
-            Contract::Stock(_) => ContractType::Stock,
-            Contract::Index(_) => ContractType::Index,
-            Contract::Commodity(_) => ContractType::Commodity,
-            Contract::SecFuture(_) => ContractType::SecFuture,
-            Contract::SecOption(_) => ContractType::SecOption,
-        }
-    }
-
     proxy_impl!(Forex, Contract::Forex(t) => Proxy::<Forex> { inner: t }, forex);
     proxy_impl!(Crypto, Contract::Crypto(t) => Proxy::<Crypto> { inner: t }, crypto);
     proxy_impl!(Stock, Contract::Stock(t) => Proxy::<Stock> { inner: t }, stock);
@@ -762,7 +1060,7 @@ impl Proxy<SecOption> {
 }
 
 #[allow(clippy::module_name_repetitions)]
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
 /// The possible contract types
 pub enum ContractType {
     #[serde(rename = "CASH")]

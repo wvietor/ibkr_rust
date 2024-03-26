@@ -2,8 +2,8 @@ use std::collections::HashSet;
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
+use syn::{parse_str, Ident};
 use SecType::*;
-use syn::{Ident, parse_str};
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 enum SecType {
@@ -41,7 +41,7 @@ impl From<&str> for SecType {
             "SecFuture" => SecFuture,
             "SecOption" => SecOption,
             "Commodity" => Commodity,
-            _ => panic!("Invalid Security name {s}.")
+            _ => panic!("Invalid Security name {s}."),
         }
     }
 }
@@ -59,15 +59,7 @@ impl From<&Ident> for SecType {
     }
 }
 
-const CONTRACTS: [SecType; 7] = [
-    Forex,
-    Crypto,
-    Stock,
-    Index,
-    SecFuture,
-    SecOption,
-    Commodity,
-];
+const CONTRACTS: [SecType; 7] = [Forex, Crypto, Stock, Index, SecFuture, SecOption, Commodity];
 
 fn impl_try_from_other_contracts(name: &Ident) -> TokenStream {
     let mut idents = CONTRACTS
@@ -103,19 +95,13 @@ fn impl_into_contract(name: &Ident) -> TokenStream {
     }
 }
 
-
 #[allow(clippy::module_name_repetitions, clippy::too_many_lines)]
 pub fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
     let s_name: SecType = name.into();
 
     let contract_id = match s_name {
-        Forex
-        | Crypto
-        | Stock
-        | Index
-        | SecFuture
-        | Commodity => quote! { self.contract_id },
+        Forex | Crypto | Stock | Index | SecFuture | Commodity => quote! { self.contract_id },
         SecOption => quote! {
             match self {
                 SecOption::Call(inner) | SecOption::Put(inner) => inner.contract_id
@@ -123,12 +109,7 @@ pub fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
         },
     };
     let symbol = match s_name {
-        Forex
-        | Crypto
-        | Stock
-        | Index
-        | SecFuture
-        | Commodity => quote! { self.symbol.as_str() },
+        Forex | Crypto | Stock | Index | SecFuture | Commodity => quote! { self.symbol.as_str() },
         SecOption => quote! {
             match self {
                 SecOption::Call(inner) | SecOption::Put(inner) => inner.symbol.as_str()
@@ -156,12 +137,7 @@ pub fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
         },
     };
     let strike = match s_name {
-        Forex
-        | Crypto
-        | Stock
-        | Index
-        | SecFuture
-        | Commodity => quote! { None::<f64> },
+        Forex | Crypto | Stock | Index | SecFuture | Commodity => quote! { None::<f64> },
         SecOption => quote! {
             match self {
                 SecOption::Call(inner) | SecOption::Put(inner) => Some(inner.strike)
@@ -169,12 +145,7 @@ pub fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
         },
     };
     let right = match s_name {
-        Forex
-        | Crypto
-        | Stock
-        | Index
-        | SecFuture
-        | Commodity => quote! { None::<&str> },
+        Forex | Crypto | Stock | Index | SecFuture | Commodity => quote! { None::<&str> },
         SecOption => quote! {
             match self {
                 SecOption::Call(_) => Some("C"),
@@ -205,21 +176,11 @@ pub fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
         },
     };
     let primary_exchange = match s_name {
-        Forex
-        | Crypto
-        | Index
-        | SecFuture
-        | SecOption
-        | Commodity => quote! { None::<Primary> },
+        Forex | Crypto | Index | SecFuture | SecOption | Commodity => quote! { None::<Primary> },
         Stock => quote! { Some(self.primary_exchange) },
     };
     let currency = match s_name {
-        Forex
-        | Crypto
-        | Stock
-        | Index
-        | SecFuture
-        | Commodity => quote! { self.currency },
+        Forex | Crypto | Stock | Index | SecFuture | Commodity => quote! { self.currency },
         SecOption => quote! {
             match self {
                 SecOption::Call(inner) | SecOption::Put(inner) => inner.currency
@@ -227,12 +188,9 @@ pub fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
         },
     };
     let local_symbol = match s_name {
-        Forex
-        | Crypto
-        | Stock
-        | Index
-        | SecFuture
-        | Commodity => quote! { self.local_symbol.as_str() },
+        Forex | Crypto | Stock | Index | SecFuture | Commodity => {
+            quote! { self.local_symbol.as_str() }
+        }
         SecOption => quote! {
             match self {
                 SecOption::Call(inner) | SecOption::Put(inner) => inner.local_symbol.as_str()
@@ -240,12 +198,7 @@ pub fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
         },
     };
     let min_tick = match s_name {
-        Forex
-        | Crypto
-        | Stock
-        | Index
-        | SecFuture
-        | Commodity => quote! { self.min_tick },
+        Forex | Crypto | Stock | Index | SecFuture | Commodity => quote! { self.min_tick },
         SecOption => quote! {
             match self {
                 SecOption::Call(inner) | SecOption::Put(inner) => inner.min_tick
@@ -264,12 +217,9 @@ pub fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
         },
     };
     let long_name = match s_name {
-        Forex
-        | Crypto
-        | Stock
-        | Index
-        | SecFuture
-        | Commodity => quote! { self.long_name.as_str() },
+        Forex | Crypto | Stock | Index | SecFuture | Commodity => {
+            quote! { self.long_name.as_str() }
+        }
         SecOption => quote! {
             match self {
                 SecOption::Call(inner) | SecOption::Put(inner) => inner.long_name.as_str()
@@ -277,12 +227,7 @@ pub fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
         },
     };
     let order_types = match s_name {
-        Forex
-        | Crypto
-        | Stock
-        | Index
-        | SecFuture
-        | Commodity => quote! { &self.order_types },
+        Forex | Crypto | Stock | Index | SecFuture | Commodity => quote! { &self.order_types },
         SecOption => quote! {
             match self {
                 SecOption::Call(inner) | SecOption::Put(inner) => &inner.order_types
@@ -290,12 +235,7 @@ pub fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
         },
     };
     let valid_exchanges = match s_name {
-        Forex
-        | Crypto
-        | Stock
-        | Index
-        | SecFuture
-        | Commodity => quote! { &self.valid_exchanges },
+        Forex | Crypto | Stock | Index | SecFuture | Commodity => quote! { &self.valid_exchanges },
         SecOption => quote! {
             match self {
                 SecOption::Call(inner) | SecOption::Put(inner) => &inner.valid_exchanges
@@ -360,6 +300,10 @@ pub fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
             #[inline]
             fn valid_exchanges(&self) -> &Vec<Routing> {
                 #valid_exchanges
+            }
+            #[inline]
+            fn contract_type(&self) -> ContractType {
+                ContractType::#name
             }
         }
 
