@@ -2552,7 +2552,7 @@ fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<Proxy<Contr
             sec_type @ 0: ContractType,
             expiration_date @ 0: String,
             strike @ 0: String,
-            right @ 0: char,
+            right @ 0: String,
             multiplier @ 0: String,
             primary_exchange @ 0: String,
             currency @ 0: Currency,
@@ -2666,9 +2666,9 @@ fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<Proxy<Contr
                 order_types: Vec::default(),
                 valid_exchanges: Vec::default(),
             };
-            let op_outer = match right {
-                'C' => SecOption::Call(op_inner),
-                'P' => SecOption::Put(op_inner),
+            let op_outer = match right.as_str() {
+                "C" => SecOption::Call(op_inner),
+                "P" => SecOption::Put(op_inner),
                 other => {
                     return Err(anyhow::anyhow!(
                         "Unexpected option right. Expected \'C\' or \'P\'. Found {}.",
@@ -2680,5 +2680,5 @@ fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<Proxy<Contr
         }
     };
 
-    todo!()
+    Ok(Proxy { inner })
 }
