@@ -45,49 +45,99 @@ pub enum Contract {
 
 macro_rules! contract_impl {
     ($sec_type: ty, $pat: pat_param => $exp: expr, $func_name_ref: ident, $func_name: ident) => {
-        #[doc=concat!("Coerce the contract reference to a ", stringify!($sec_type), " reference.")]
+        #[doc=concat!("Try to coerce a contract reference to a ", stringify!($sec_type), " reference.")]
         ///
         /// # Returns
-        #[doc=concat!("The underlying ", stringify!($sec_type),  " reference.")]
-        ///
-        /// # Errors
-        #[doc=concat!("Will error if the underlying contract is not a ", stringify!($sec_type), " reference.")]
-        pub fn $func_name_ref(&self) -> anyhow::Result<&$sec_type> {
+        #[doc=concat!("A reference to the underlying ", stringify!($sec_type),  " if the underlying contract is a ", stringify!($sec_type), " and `None` otherwise.")]
+        pub fn $func_name_ref(&self) -> Option<&$sec_type> {
             match self {
                 $pat => $exp,
-                _ => Err(anyhow::anyhow!(
-                    "Expected {}; found other contract type.",
-                    stringify!($func_name)
-                )),
+                _ => None,
             }
         }
-        #[doc=concat!("Coerce the contract to a ", stringify!($sec_type))]
+        #[doc=concat!("Try to coerce the contract to a ", stringify!($sec_type))]
         ///
         /// # Returns
-        #[doc=concat!("The underlying ", stringify!($sec_type))]
-        ///
-        /// # Errors
-        #[doc=concat!("Will error if the underlying contract is not a ", stringify!($sec_type))]
-        pub fn $func_name(self) -> anyhow::Result<$sec_type> {
+        #[doc=concat!("The underlying ", stringify!($sec_type),  " if the underlying contract is a ", stringify!($sec_type), " and `None` otherwise.")]
+        pub fn $func_name(self) -> Option<$sec_type> {
             match self {
                 $pat => $exp,
-                _ => Err(anyhow::anyhow!(
-                    "Expected {}; found other contract type.",
-                    stringify!($func_name)
-                )),
+                _ => None,
             }
         }
     };
 }
 
 impl Contract {
-    contract_impl!(Forex, Self::Forex(t) => Ok(t), forex_ref, forex);
-    contract_impl!(Crypto, Self::Crypto(t) => Ok(t), crypto_ref, crypto);
-    contract_impl!(Stock, Self::Stock(t) => Ok(t), stock_ref, stock);
-    contract_impl!(Index, Self::Index(t) => Ok(t), index_ref, index);
-    contract_impl!(SecFuture, Self::SecFuture(t) => Ok(t), secfuture_ref, secfuture);
-    contract_impl!(SecOption, Self::SecOption(t) => Ok(t), secoption_ref, secoption);
-    contract_impl!(Commodity, Self::Commodity(t) => Ok(t), commodity_ref, commodity);
+    contract_impl!(Forex, Self::Forex(t) => Some(t), forex_ref, forex);
+    contract_impl!(Crypto, Self::Crypto(t) => Some(t), crypto_ref, crypto);
+    contract_impl!(Stock, Self::Stock(t) => Some(t), stock_ref, stock);
+    contract_impl!(Index, Self::Index(t) => Some(t), index_ref, index);
+    contract_impl!(SecFuture, Self::SecFuture(t) => Some(t), secfuture_ref, secfuture);
+    contract_impl!(SecOption, Self::SecOption(t) => Some(t), secoption_ref, secoption);
+    contract_impl!(Commodity, Self::Commodity(t) => Some(t), commodity_ref, commodity);
+
+    #[inline]
+    /// Attempt to get the inner security's exchange.
+    ///
+    /// # Returns
+    /// The inner security's exchange, `None` if the field doesn't exist (for a [`Crypto`] contract)
+    pub fn exchange(&self) -> Option<Routing> {
+        match_poly!(self;
+            Contract::SecOption(s) | Contract::Forex(s) | Contract::Index(s) |
+            Contract::SecFuture(s) | Contract::Commodity(s) | Contract::Stock(s) => Some(s.exchange()),
+            Contract::Crypto(_) => None,
+        )
+    }
+
+    #[inline]
+    /// Attempt to get the inner security's trading class.
+    ///
+    /// # Returns
+    /// The inner security's exchange, `None` if the field doesn't exist (for an [`Index`] contract)
+    pub fn trading_class(&self) -> Option<&str> {
+        match_poly!(self;
+            Contract::SecOption(s) | Contract::Forex(s) | Contract::Crypto(s) |
+            Contract::SecFuture(s) | Contract::Commodity(s) | Contract::Stock(s) => Some(s.trading_class()),
+            Contract::Index(_) => None,
+        )
+    }
+
+    #[inline]
+    /// Attempt to get the inner security's multiplier.
+    ///
+    /// # Returns
+    /// The inner security's multiplier if the inner contract is a [`SecOption`] or [`SecFuture`], `None` otherwise
+    pub fn multiplier(&self) -> Option<u32> {
+        match_poly!(self;
+            Contract::SecOption(s) | Contract::SecFuture(s) => Some(s.multiplier()),
+            _ => None
+        )
+    }
+
+    #[inline]
+    /// Attempt to get the inner security's expiration date.
+    ///
+    /// # Returns
+    /// The inner security's expiration date if the inner contract is a [`SecOption`] or [`SecFuture`], `None` otherwise
+    pub fn expiration_date(&self) -> Option<NaiveDate> {
+        match_poly!(self;
+            Contract::SecOption(s) | Contract::SecFuture(s) => Some(s.expiration_date()),
+            _ => None
+        )
+    }
+
+    #[inline]
+    /// Attempt to get the underlying security's expiration date.
+    ///
+    /// # Returns
+    /// The inner security's underlying contract ID if the inner contract is a [`SecOption`] or [`SecFuture`], `None` otherwise
+    pub fn underlying_contract_id(&self) -> Option<ContractId> {
+        match_poly!(self;
+            Contract::SecOption(s) | Contract::SecFuture(s) => Some(s.underlying_contract_id()),
+            _ => None
+        )
+    }
 }
 
 impl Serialize for Contract {
@@ -534,6 +584,16 @@ pub enum SecOption {
 impl SecOption {
     #[must_use]
     #[inline]
+    /// Construct a new option from its class and inner contract
+    pub fn from_components(class: SecOptionClass, inner: SecOptionInner) -> Self {
+        match class {
+            SecOptionClass::Call => SecOption::Call(inner),
+            SecOptionClass::Put => SecOption::Put(inner),
+        }
+    }
+
+    #[must_use]
+    #[inline]
     /// Return `true` if the option is a call option.
     pub fn is_call(&self) -> bool {
         matches!(self, SecOption::Call(_))
@@ -548,7 +608,17 @@ impl SecOption {
 
     #[must_use]
     #[inline]
-    /// Get a reference to the underlying contract's specifications.
+    /// Get the option's class
+    pub fn class(&self) -> SecOptionClass {
+        match self {
+            SecOption::Call(_) => SecOptionClass::Call,
+            SecOption::Put(_) => SecOptionClass::Put,
+        }
+    }
+
+    #[must_use]
+    #[inline]
+    /// Get a reference to the inner contract's specifications.
     pub fn as_inner_ref(&self) -> &SecOptionInner {
         let (SecOption::Call(inner) | SecOption::Put(inner)) = self;
         inner
@@ -556,10 +626,80 @@ impl SecOption {
 
     #[must_use]
     #[inline]
-    /// Transform the option into its underlying specification
+    /// Transform the option into the inner contract
     pub fn into_inner(self) -> SecOptionInner {
         let (SecOption::Call(inner) | SecOption::Put(inner)) = self;
         inner
+    }
+
+    #[must_use]
+    #[inline]
+    /// Unfold the option into its class and inner contract
+    pub fn unfold(self) -> (SecOptionClass, SecOptionInner) {
+        (self.class(), self.into_inner())
+    }
+
+    #[must_use]
+    #[inline]
+    /// Get the inner contract's exchange
+    pub fn exchange(&self) -> Routing {
+        self.as_inner_ref().exchange
+    }
+
+    #[must_use]
+    #[inline]
+    /// Get the inner contract's strike price
+    pub fn strike(&self) -> f64 {
+        self.as_inner_ref().strike
+    }
+
+    #[must_use]
+    #[inline]
+    /// Get the inner contract's multiplier
+    pub fn multiplier(&self) -> u32 {
+        self.as_inner_ref().multiplier
+    }
+
+    #[must_use]
+    #[inline]
+    /// Get the inner contract's expiration date
+    pub fn expiration_date(&self) -> NaiveDate {
+        self.as_inner_ref().expiration_date
+    }
+
+    #[must_use]
+    #[inline]
+    /// Get the underlying security's contract ID for the inner contract
+    pub fn underlying_contract_id(&self) -> ContractId {
+        self.as_inner_ref().contract_id
+    }
+
+    #[must_use]
+    #[inline]
+    /// Get a reference to the inner contract's sector
+    pub fn sector(&self) -> &str {
+        &self.as_inner_ref().sector
+    }
+
+    #[must_use]
+    #[inline]
+    /// Get a reference to the inner contract's trading class
+    pub fn trading_class(&self) -> &str {
+        &self.as_inner_ref().trading_class
+    }
+}
+
+impl From<(SecOptionClass, SecOptionInner)> for SecOption {
+    #[inline]
+    fn from(value: (SecOptionClass, SecOptionInner)) -> Self {
+        Self::from_components(value.0, value.1)
+    }
+}
+
+impl From<(SecOptionInner, SecOptionClass)> for SecOption {
+    #[inline]
+    fn from(value: (SecOptionInner, SecOptionClass)) -> Self {
+        Self::from_components(value.1, value.0)
     }
 }
 
@@ -640,13 +780,16 @@ struct SerProxyHelp {
     primary_exchange: Option<Primary>,
     expiration_date: Option<NaiveDate>,
     multiplier: Option<u32>,
-    option_type: Option<SecOptionType>,
+    option_type: Option<SecOptionClass>,
     strike: Option<f64>,
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
-enum SecOptionType {
+/// The possible option classes
+pub enum SecOptionClass {
+    /// A call option
     Call,
+    /// A put option
     Put,
 }
 
@@ -673,9 +816,9 @@ impl<S: Security + Clone> From<Proxy<S>> for SerProxyHelp {
             },
             Contract::SecOption(opt) => {
                 let option_type = Some(if opt.is_call() {
-                    SecOptionType::Call
+                    SecOptionClass::Call
                 } else {
-                    SecOptionType::Put
+                    SecOptionClass::Put
                 });
                 let opt = opt.into_inner();
                 Self {
@@ -889,8 +1032,8 @@ impl<S: Security + Clone> TryFrom<SerProxyHelp> for Proxy<S> {
                     valid_exchanges: Vec::default(),
                 };
                 match option_type.ok_or(anyhow::anyhow!("Missing data"))? {
-                    SecOptionType::Call => SecOption::Call(inner),
-                    SecOptionType::Put => SecOption::Put(inner),
+                    SecOptionClass::Call => SecOption::Call(inner),
+                    SecOptionClass::Put => SecOption::Put(inner),
                 }
                 .try_into()
                 .map_err(|_| ())
