@@ -23,10 +23,11 @@ use crate::tick::{
 /// Re-export of [`tokio_util::sync::CancellationToken`]
 pub type CancelToken = tokio_util::sync::CancellationToken;
 
-#[trait_variant::make(Remote: Send)]
+#[allow(clippy::module_name_repetitions)]
+#[trait_variant::make(Wrapper: Send)]
 #[debug_trait]
 /// Contains the "callback functions" that correspond to the requests made by a [`crate::client::Client`].
-pub trait Local {
+pub trait LocalWrapper {
     /// The callback that corresponds to any error that encounters after an API request.
     ///
     /// Errors sent by the TWS are received here.
@@ -181,7 +182,7 @@ pub trait Local {
     fn execution(&mut self, req_id: i64, execution: Execution) -> impl Future {}
 }
 
-#[trait_variant::make(RemoteRecurring: Send)]
+#[trait_variant::make(Recurring: Send)]
 /// A trait with a single method that will be called in the main message loop.
 pub trait LocalRecurring {
     /// A method that is called in the body of the main message loop. The method is called in
@@ -192,16 +193,16 @@ pub trait LocalRecurring {
     fn cycle(&mut self) -> impl Future<Output = ()>;
 }
 
-impl RemoteRecurring for () {
+impl Recurring for () {
     async fn cycle(&mut self) {
         tokio::task::yield_now().await;
     }
 }
 
-/// An initializer for a new [`Local`] wrapper.
+/// An initializer for a new [`LocalWrapper`].
 pub trait LocalInitializer {
     /// The wrapper
-    type Wrap<'c>: Local;
+    type Wrap<'c>: LocalWrapper;
     /// The recurring struct, which mediates repeated calls in the main client loop.
     type Recur<'c>: LocalRecurring;
     /// The method to build the wrapper
@@ -212,12 +213,12 @@ pub trait LocalInitializer {
     ) -> impl Future<Output = (Self::Wrap<'_>, Self::Recur<'_>)>;
 }
 
-/// An initializer for a new [`Remote`] wrapper.
-pub trait RemoteInitializer: Send {
+/// An initializer for a new [`Wrapper`].
+pub trait Initializer: Send {
     /// The wrapper
-    type Wrap<'c>: Remote;
+    type Wrap<'c>: Wrapper;
     /// The recurring struct, which mediates repeated calls in the main client loop.
-    type Recur<'c>: RemoteRecurring;
+    type Recur<'c>: Recurring;
     /// The method to build the wrapper
     fn build(
         self,
@@ -226,15 +227,15 @@ pub trait RemoteInitializer: Send {
     ) -> impl Future<Output = (Self::Wrap<'_>, Self::Recur<'_>)> + Send;
 }
 
-impl<I: RemoteInitializer> LocalInitializer for I {
-    type Wrap<'c> = <I as RemoteInitializer>::Wrap<'c>;
-    type Recur<'c> = <I as RemoteInitializer>::Recur<'c>;
+impl<I: Initializer> LocalInitializer for I {
+    type Wrap<'c> = <I as Initializer>::Wrap<'c>;
+    type Recur<'c> = <I as Initializer>::Recur<'c>;
 
     fn build(
         self,
         client: &mut ActiveClient,
         cancel_loop: CancelToken,
     ) -> impl Future<Output = (Self::Wrap<'_>, Self::Recur<'_>)> {
-        <I as RemoteInitializer>::build(self, client, cancel_loop)
+        <I as Initializer>::build(self, client, cancel_loop)
     }
 }

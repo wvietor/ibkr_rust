@@ -1,17 +1,19 @@
-use ibapi::account::Tag;
-use ibapi::client::{ActiveClient, Builder, Host, Mode};
-use ibapi::wrapper::{CancelToken, Remote, RemoteInitializer};
 use std::future::Future;
+
 use tokio;
 
-struct Wrapper<'c>(&'c mut ActiveClient, CancelToken);
+use ibapi::account::Tag;
+use ibapi::client::{ActiveClient, Builder, Host, Mode};
+use ibapi::wrapper::{CancelToken, Initializer, Wrapper};
 
-impl Remote for Wrapper<'_> {}
+struct AccountDataWrapper<'c>(&'c mut ActiveClient, CancelToken);
+
+impl Wrapper for AccountDataWrapper<'_> {}
 
 struct AccountSummaryInitializer;
 
-impl RemoteInitializer for AccountSummaryInitializer {
-    type Wrap<'c> = Wrapper<'c>;
+impl Initializer for AccountSummaryInitializer {
+    type Wrap<'c> = AccountDataWrapper<'c>;
     type Recur<'c> = ();
 
     fn build(
@@ -56,7 +58,7 @@ impl RemoteInitializer for AccountSummaryInitializer {
                 .unwrap();
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             client.cancel_account_summary(id).await.unwrap();
-            (Wrapper(client, cancel_loop), ())
+            (AccountDataWrapper(client, cancel_loop), ())
         }
     }
 }
@@ -76,8 +78,8 @@ async fn account_summary() -> anyhow::Result<()> {
 
 struct AccountUpdateInitializer;
 
-impl RemoteInitializer for AccountUpdateInitializer {
-    type Wrap<'c> = Wrapper<'c>;
+impl Initializer for AccountUpdateInitializer {
+    type Wrap<'c> = AccountDataWrapper<'c>;
     type Recur<'c> = ();
 
     fn build(
@@ -89,7 +91,7 @@ impl RemoteInitializer for AccountUpdateInitializer {
             client.req_account_updates(None).await.unwrap();
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             client.cancel_account_updates(None).await.unwrap();
-            (Wrapper(client, cancel_loop), ())
+            (AccountDataWrapper(client, cancel_loop), ())
         }
     }
 }
@@ -109,8 +111,8 @@ async fn account_update() -> anyhow::Result<()> {
 
 struct PositionInitializer;
 
-impl RemoteInitializer for PositionInitializer {
-    type Wrap<'c> = Wrapper<'c>;
+impl Initializer for PositionInitializer {
+    type Wrap<'c> = AccountDataWrapper<'c>;
     type Recur<'c> = ();
     fn build(
         self,
@@ -121,7 +123,7 @@ impl RemoteInitializer for PositionInitializer {
             client.req_positions().await.unwrap();
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             client.cancel_positions().await.unwrap();
-            (Wrapper(client, cancel_loop), ())
+            (AccountDataWrapper(client, cancel_loop), ())
         }
     }
 }
@@ -141,8 +143,8 @@ async fn positions() -> anyhow::Result<()> {
 
 struct PnlInitializer;
 
-impl RemoteInitializer for PnlInitializer {
-    type Wrap<'c> = Wrapper<'c>;
+impl Initializer for PnlInitializer {
+    type Wrap<'c> = AccountDataWrapper<'c>;
     type Recur<'c> = ();
     fn build(
         self,
@@ -156,7 +158,7 @@ impl RemoteInitializer for PnlInitializer {
                 .unwrap();
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             client.cancel_pnl(id).await.unwrap();
-            (Wrapper(client, cancel_loop), ())
+            (AccountDataWrapper(client, cancel_loop), ())
         }
     }
 }

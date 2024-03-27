@@ -53,8 +53,8 @@ pub mod market_data;
 mod message;
 /// Contains types and traits related to orders.
 pub mod order;
-/// Contains the types that are parsed from API callbacks. They are used in the [`wrapper::Local`] and
-/// [`wrapper::Remote`] callback functions.
+/// Contains the types that are parsed from API callbacks. They are used in the [`wrapper::LocalWrapper`] and
+/// [`wrapper::Wrapper`] callback functions.
 pub mod payload;
 /// Convenience module containing commonly-used types, functions, and modules.
 pub mod prelude;
@@ -70,11 +70,11 @@ mod reader;
 /// IBKR groups these ticks into several distinct types. Some of these groups are sensible; others
 /// are far too broad. Therefore, our version of the API groups these "ticks" differently. Inside
 ///this module, each of our groups gets its own submodule and corresponds one-to-one with a
-/// [`wrapper::Local`] or [`wrapper::Remote`] method.
+/// [`wrapper::LocalWrapper`] or [`wrapper::Wrapper`] method.
 pub mod tick;
 /// Contains a [`chrono::TimeZone`] enum to represent all the possible timezones available in the API.
 pub mod timezone;
-/// Contains the definition of the [`wrapper::Local`] and [`wrapper::Remote`] traits. Implementing these traits for a
+/// Contains the definition of the [`wrapper::LocalWrapper`] and [`wrapper::Wrapper`] traits. Implementing these traits for a
 /// type allows users to customize callback behavior.
 pub mod wrapper;
 

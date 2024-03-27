@@ -45,6 +45,8 @@ pub enum Contract {
 
 macro_rules! contract_impl {
     ($sec_type: ty, $pat: pat_param => $exp: expr, $func_name_ref: ident, $func_name: ident) => {
+        #[inline]
+        #[must_use]
         #[doc=concat!("Try to coerce a contract reference to a ", stringify!($sec_type), " reference.")]
         ///
         /// # Returns
@@ -55,6 +57,8 @@ macro_rules! contract_impl {
                 _ => None,
             }
         }
+        #[inline]
+        #[must_use]
         #[doc=concat!("Try to coerce the contract to a ", stringify!($sec_type))]
         ///
         /// # Returns
@@ -78,6 +82,7 @@ impl Contract {
     contract_impl!(Commodity, Self::Commodity(t) => Some(t), commodity_ref, commodity);
 
     #[inline]
+    #[must_use]
     /// Attempt to get the inner security's exchange.
     ///
     /// # Returns
@@ -91,6 +96,7 @@ impl Contract {
     }
 
     #[inline]
+    #[must_use]
     /// Attempt to get the inner security's trading class.
     ///
     /// # Returns
@@ -104,6 +110,7 @@ impl Contract {
     }
 
     #[inline]
+    #[must_use]
     /// Attempt to get the inner security's multiplier.
     ///
     /// # Returns
@@ -116,6 +123,7 @@ impl Contract {
     }
 
     #[inline]
+    #[must_use]
     /// Attempt to get the inner security's expiration date.
     ///
     /// # Returns
@@ -128,6 +136,7 @@ impl Contract {
     }
 
     #[inline]
+    #[must_use]
     /// Attempt to get the underlying security's expiration date.
     ///
     /// # Returns
@@ -671,7 +680,7 @@ impl SecOption {
     #[inline]
     /// Get the underlying security's contract ID for the inner contract
     pub fn underlying_contract_id(&self) -> ContractId {
-        self.as_inner_ref().contract_id
+        self.as_inner_ref().underlying_contract_id
     }
 
     #[must_use]
@@ -726,6 +735,8 @@ impl From<(SecOptionInner, SecOptionClass)> for SecOption {
 
 macro_rules! proxy_impl {
     ($sec_type: ty, $pat: pat_param => $exp: expr, $func_name: ident) => {
+        #[inline]
+        #[must_use]
         #[doc=concat!("Coerce the `Proxy<Contract>` to a `Proxy<", stringify!($sec_type), ">`.")]
         ///
         /// # Returns

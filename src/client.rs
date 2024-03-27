@@ -1,8 +1,9 @@
+use std::fmt::Formatter;
+use std::sync::Arc;
+
 use anyhow::Context;
 use crossbeam::queue::SegQueue;
 use serde::{Deserialize, Serialize};
-use std::fmt::Formatter;
-use std::sync::Arc;
 use tokio::net::tcp::OwnedReadHalf;
 use tokio::task::JoinHandle;
 use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
@@ -14,7 +15,7 @@ use crate::market_data::{
     updating_historical_bar,
 };
 use crate::message::{In, Out, ToClient, ToWrapper};
-use crate::wrapper::{CancelToken, Local, LocalInitializer, Remote, RemoteInitializer};
+use crate::wrapper::{CancelToken, Initializer, LocalInitializer, LocalWrapper, Wrapper};
 use crate::{
     account::Tag,
     comm::Writer,
@@ -305,7 +306,7 @@ async fn decode_msg_remote<W>(
     tx: &mut mpsc::Sender<ToClient>,
     rx: &mut mpsc::Receiver<ToWrapper>,
 ) where
-    W: Remote,
+    W: Wrapper,
 {
     let status = match fields.first() {
         None => Err(anyhow::Error::msg("Empty fields received from reader")),
@@ -716,7 +717,7 @@ async fn decode_msg_local<W>(
     tx: &mut mpsc::Sender<ToClient>,
     rx: &mut mpsc::Receiver<ToWrapper>,
 ) where
-    W: Local,
+    W: LocalWrapper,
 {
     let status = match fields.first() {
         None => Err(anyhow::Error::msg("Empty fields received from reader")),
@@ -1102,10 +1103,13 @@ async fn decode_msg_local<W>(
 }
 
 pub(crate) mod indicators {
-    use super::Reader;
-    use crate::message::{ToClient, ToWrapper};
     use std::collections::HashSet;
+
     use tokio::{net::tcp::OwnedReadHalf, sync::mpsc, task::JoinHandle};
+
+    use crate::message::{ToClient, ToWrapper};
+
+    use super::Reader;
 
     pub trait Status {}
 
@@ -1343,7 +1347,7 @@ impl Client<indicators::Inactive> {
     /// * `disconnect_token` - If provided, the client will disconnect when this token is cancelled.
     ///
     /// # Returns
-    /// Does not return until the loop is terminated from within a [`Local`] wrapper method using the [`CancelToken`]
+    /// Does not return until the loop is terminated from within a [`LocalWrapper`] wrapper method using the [`CancelToken`]
     /// provided to the [`LocalInitializer`] in the [`LocalInitializer::build`] method or the `disconnect_token` passed
     /// to this method.
     ///
@@ -1392,12 +1396,12 @@ impl Client<indicators::Inactive> {
     /// Initiates the main message loop and spawns all helper threads to manage the application.
     ///
     /// # Arguments
-    /// * `init` - A [`RemoteInitializer`], which defines how incoming data from the IBKR trading systems
+    /// * `init` - An [`Initializer`], which defines how incoming data from the IBKR trading systems
     /// should be handled.
     ///
     /// # Returns
     /// A [`CancelToken`] that can be used to terminate the main loop and disconnect the client.
-    pub async fn remote<I: RemoteInitializer + 'static>(self, init: I) -> CancelToken {
+    pub async fn remote<I: Initializer + 'static>(self, init: I) -> CancelToken {
         let (mut client, tx, rx, queue, backlog) = self.into_active().await;
 
         let temp = CancelToken::new();
@@ -1408,7 +1412,7 @@ impl Client<indicators::Inactive> {
 
         tokio::spawn(async move {
             let (mut wrapper, mut recur) =
-                RemoteInitializer::build(init, &mut client, break_loop_inner.clone()).await;
+                Initializer::build(init, &mut client, break_loop_inner.clone()).await;
             temp.cancel();
             drop(temp);
             let (queue, mut tx, mut rx, mut backlog) = con_fut.await?;
@@ -1428,7 +1432,7 @@ impl Client<indicators::Inactive> {
                         } else {
                             tokio::task::yield_now().await;
                         }
-                        crate::wrapper::RemoteRecurring::cycle(&mut recur).await;
+                        crate::wrapper::Recurring::cycle(&mut recur).await;
                     } => (),
                 }
             }
@@ -1443,11 +1447,11 @@ impl Client<indicators::Inactive> {
     /// Initiates the main message loop and spawns all helper threads to manage the application.
     ///
     /// # Arguments
-    /// * `wrapper` - A `Remote` wrapper that defines how incoming data from the IBKR trading systems should be handled.
+    /// * `wrapper` - A [`Wrapper`] that defines how incoming data from the IBKR trading systems should be handled.
     ///
     /// # Returns
     /// An active [`Client`] that can be used to make API requests.
-    pub async fn disaggregated<W: Remote + Send + 'static>(
+    pub async fn disaggregated<W: Wrapper + Send + 'static>(
         self,
         mut wrapper: W,
     ) -> Client<indicators::Active> {
@@ -1479,14 +1483,14 @@ impl Client<indicators::Inactive> {
     /// Initiates the main message loop and spawns all helper threads to manage the application.
     ///
     /// # Arguments
-    /// * `wrapper` - A `Local` wrapper that defines how incoming data from the IBKR trading systems should be handled.
+    /// * `wrapper` - A [`LocalWrapper`] that defines how incoming data from the IBKR trading systems should be handled.
     ///
     /// # Returns
     /// An active [`Client`] that can be used to make API requests.
     ///
     /// # Panics
     /// This function will panic if called from inside `tokio::spawn`.
-    pub async fn disaggregated_local<W: Local + 'static>(
+    pub async fn disaggregated_local<W: LocalWrapper + 'static>(
         self,
         mut wrapper: W,
     ) -> Client<indicators::Active> {

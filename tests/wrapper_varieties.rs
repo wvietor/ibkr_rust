@@ -1,13 +1,14 @@
+use std::future::Future;
+
 use ibapi::client::{ActiveClient, Builder, Host, Mode};
 use ibapi::wrapper::CancelToken;
-use std::future::Future;
 
 #[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 struct SendWrapper;
 
-impl ibapi::wrapper::Remote for SendWrapper {}
+impl ibapi::wrapper::Wrapper for SendWrapper {}
 
-impl ibapi::wrapper::RemoteInitializer for SendWrapper {
+impl ibapi::wrapper::Initializer for SendWrapper {
     type Wrap<'c> = SendWrapper;
     type Recur<'c> = ();
 
@@ -25,7 +26,7 @@ struct NonSendWrapper {
     non_send: std::rc::Rc<i64>,
 }
 
-impl ibapi::wrapper::Local for NonSendWrapper {}
+impl ibapi::wrapper::LocalWrapper for NonSendWrapper {}
 
 impl ibapi::wrapper::LocalInitializer for NonSendWrapper {
     type Wrap<'c> = NonSendWrapper;

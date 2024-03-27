@@ -89,8 +89,8 @@ macro_rules! impl_seg_variants {
     };
 }
 
-#[ibapi_macros::make_send(Remote(Send): wrapper::Remote)]
-pub trait Local: wrapper::Local {
+#[ibapi_macros::make_send(Remote(Send): wrapper::Wrapper)]
+pub trait Local: wrapper::LocalWrapper {
     #[inline]
     fn tick_price_msg(
         fields: &mut Fields,
@@ -2305,9 +2305,9 @@ pub trait Local: wrapper::Local {
     }
 }
 
-impl<W: wrapper::Local> Local for W {}
+impl<W: wrapper::LocalWrapper> Local for W {}
 
-impl<W: wrapper::Remote> Remote for W {}
+impl<W: wrapper::Wrapper> Remote for W {}
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct MissingInputData;
