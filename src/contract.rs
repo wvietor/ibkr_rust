@@ -726,20 +726,14 @@ impl From<(SecOptionInner, SecOptionClass)> for SecOption {
 
 macro_rules! proxy_impl {
     ($sec_type: ty, $pat: pat_param => $exp: expr, $func_name: ident) => {
-        #[doc=concat!("Coerce the contract to a ", stringify!($sec_type))]
+        #[doc=concat!("Coerce the `Proxy<Contract>` to a `Proxy<", stringify!($sec_type), ">`.")]
         ///
         /// # Returns
-        #[doc=concat!("The underlying ", stringify!($sec_type))]
-        ///
-        /// # Errors
-        #[doc=concat!("Will error if the underlying contract is not a ", stringify!($sec_type))]
-        pub fn $func_name(self) -> anyhow::Result<Proxy<$sec_type>> {
+        #[doc=concat!("A new `Proxy<", stringify!($sec_type), ">`, if the underlying contract is a ", stringify!($sec_type), " otherwise, `None`.")]
+        pub fn $func_name(self) -> Option<Proxy<$sec_type>> {
             match self.inner {
-                $pat => Ok($exp),
-                _ => Err(anyhow::anyhow!(
-                    "Expected {}; found other contract type.",
-                    stringify!($func_name)
-                )),
+                $pat => Some($exp),
+                _ => None,
             }
         }
     };
