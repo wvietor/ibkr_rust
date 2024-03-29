@@ -1,7 +1,7 @@
 use core::future::Future;
 
-use anyhow::Context;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
+use thiserror::Error;
 
 use crate::account::{self, Tag, TagValue};
 use crate::contract::{
@@ -21,6 +21,7 @@ use crate::tick::{
     RealTimeVolumeBase, SecOptionCalculationResults, SecOptionCalculationSource,
     SecOptionCalculations, SecOptionVolume, Size, SummaryVolume, TimeStamp, Volatility, Yield,
 };
+use crate::timezone::ParseTimezoneError;
 use crate::{
     currency::Currency,
     exchange::Routing,
@@ -31,18 +32,25 @@ use crate::{
 type Tx = tokio::sync::mpsc::Sender<ToClient>;
 type Rx = tokio::sync::mpsc::Receiver<ToWrapper>;
 type Fields = std::vec::IntoIter<String>;
+type DecodeResult = Result<(), DecodeError>;
 
 macro_rules! decode_fields {
-    ($fields: expr => $ind: literal: String) => {
-        nth($fields, $ind).with_context(|| format!("Expected {:?}, found none", &$fields))?
+    ($fields: expr => $f_name: ident @ $ind: literal: String) => {
+        let $f_name = nth($fields, $ind, stringify!($f_name))?;
     };
-    ($fields: expr => $ind: literal: $f_type: ty) => {
-        nth($fields, $ind).with_context(|| format!("Expected {:?}, found none", &$fields))?
-            .parse::<$f_type>().with_context(|| format!("Invalid value for {:?}", $fields))?
+    ($fields: expr => $f_name: ident @ $ind: literal: Option<$op_f_type: ty>) => {
+        let $f_name = match nth($fields, $ind, stringify!($f_name))?.as_str() {
+            "" => None::<$op_f_type>,
+            s => Some(s.parse::<$op_f_type>().map_err(|e| (stringify!($f_name), e).into())?)
+        };
+    };
+    ($fields: expr => $f_name: ident @ $ind: literal: $f_type: ty) => {
+        let $f_name = nth($fields, $ind, stringify!($f_name))?
+            .parse::<$f_type>().map_err(|e| (stringify!($f_name), e).into())?;
     };
     ($fields: expr => $($f_name: ident @ $ind: literal: $f_type: ty ),* $(,)?) => {
         $(
-            let $f_name = decode_fields!($fields => $ind: $f_type);
+            decode_fields!($fields => $f_name @ $ind: $f_type);
         )*
     };
 }
@@ -62,25 +70,25 @@ macro_rules! impl_seg_variants {
             $root_name => account::Segment::Total(
                 $value
                     .parse()
-                    .with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?,
+                    .map_err(|e| ($name, account::AttributeError(e.to_string())))?,
             ),
             concat!($root_name, "-C") => account::Segment::Commodity(
                 $value
                     .parse()
-                    .with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?,
+                    .map_err(|e| ($name, account::AttributeError(e.to_string())))?,
             ),
             concat!($root_name, "-P") => account::Segment::Paxos(
                 $value
                     .parse()
-                    .with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?,
+                    .map_err(|e| ($name, account::AttributeError(e.to_string())))?,
             ),
             concat!($root_name, "-S") => account::Segment::Security(
                 $value
                     .parse()
-                    .with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?,
+                    .map_err(|e| ($name, account::AttributeError(e.to_string())))?,
             ),
             _ => {
-                return Err(anyhow::Error::msg(format!(
+                return Err(DecodeError::Other(format!(
                     "Could not match {} in {} segment parsing",
                     $name, $root_name
                 )))
@@ -95,26 +103,17 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_price_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
             fields =>
                 req_id @ 2: i64,
                 tick_type @ 0: u16,
                 price @ 0: f64,
-                size @ 0: String,
+                size @ 0: Option<f64>,
                 _attr_mask @ 0: u8
             );
 
-            let size = if size.is_empty() {
-                None
-            } else {
-                Some(
-                    size.as_str()
-                        .parse()
-                        .with_context(|| "Invalid value for size")?,
-                )
-            };
             if (price + 1.0).abs() < f64::EPSILON || (price == 0.0 && size == Some(0.0)) {
                 return Ok(());
             }
@@ -210,7 +209,7 @@ pub trait Local: wrapper::LocalWrapper {
                     wrapper.etf_nav(req_id, nav).await;
                 }
                 t => {
-                    return Err(anyhow::Error::msg(format!(
+                    return Err(DecodeError::Other(format!(
                         "Unexpected price market data request: {t}"
                     )))
                 }
@@ -223,7 +222,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_size_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -239,7 +238,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn order_status_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -252,20 +251,10 @@ pub trait Local: wrapper::LocalWrapper {
                     parent_id @ 0: i64,
                     last_price @ 0: f64,
                     client_id @ 0: i64,
-                    why_held @ 0: String,
+                    why_held @ 0: Option<crate::payload::Locate>,
                     market_cap_price @ 0: f64
             );
 
-            let why_held = match why_held.as_str() {
-                "locate" => Some(crate::payload::Locate),
-                "" => None,
-                s => {
-                    return Err(anyhow::anyhow!(
-                        "Invalid Locate string. Expected \"locate\" or \"\", got {}",
-                        s
-                    ))
-                }
-            };
             let market_cap_price = if market_cap_price == 0.0 {
                 None
             } else {
@@ -295,20 +284,10 @@ pub trait Local: wrapper::LocalWrapper {
                 why_held,
                 market_cap_price,
             };
-            let status = match status.as_str() {
-                "ApiPending" => OrderStatus::ApiPending(core),
-                "PendingSubmit" => OrderStatus::PendingSubmit(core),
-                "PendingCancel" => OrderStatus::PendingCancel(core),
-                "PreSubmitted" => OrderStatus::PreSubmitted(core),
-                "Submitted" => OrderStatus::Submitted(core),
-                "ApiCancelled" => OrderStatus::ApiCancelled(core),
-                "Cancelled" => OrderStatus::Cancelled(core),
-                "Filled" => OrderStatus::Filled(core),
-                "Inactive" => OrderStatus::Inactive(core),
-                s => return Err(anyhow::anyhow!("Invalid order status string. Expected \"PendingSubmit\", \"PendingCancel\", \"PreSubmitted\", \"Submitted\", \"ApiCancelled\", \"Cancelled\", \"Filled\", or \"Inactive\". Got {}", s)),
-            };
 
-            wrapper.order_status(status).await;
+            wrapper
+                .order_status((status.as_str(), core).try_into()?)
+                .await;
 
             Ok(())
         }
@@ -316,10 +295,7 @@ pub trait Local: wrapper::LocalWrapper {
 
     #[inline]
     // todo: Implement a proper Error Enum
-    fn err_msg_msg(
-        fields: &mut Fields,
-        wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    fn err_msg_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -339,18 +315,18 @@ pub trait Local: wrapper::LocalWrapper {
     fn open_order_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
-                    order_id @ 1: i64
+                    order_id @ 1: i64,
             );
             let proxy = deserialize_contract_proxy(fields)?;
             decode_fields!(
                 fields =>
                     client_id @ 10: i64,
                     permanent_id @ 0: i64,
-                    parent_id @ 32: i64
+                    parent_id @ 32: i64,
             );
             let parent_id = if parent_id == 0 {
                 None
@@ -427,7 +403,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn acct_value_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -439,257 +415,536 @@ pub trait Local: wrapper::LocalWrapper {
             let attribute = match name.as_str() {
                 "AccountCode" => account::Attribute::AccountCode(value),
                 "AccountOrGroup" => match value.as_str() {
-                    "All" => {
-                        account::Attribute::AccountOrGroup(account::Group::All, currency.parse()?)
-                    }
+                    "All" => account::Attribute::AccountOrGroup(
+                        account::Group::All,
+                        currency.parse().map_err(|e| {
+                            ("AccountOrGroup", account::AttributeError(e.to_string())).into()
+                        })?,
+                    ),
                     name => account::Attribute::AccountOrGroup(
                         account::Group::Name(name.to_owned()),
-                        currency.parse()?,
+                        currency.parse().map_err(|e| {
+                            (name.as_str(), account::AttributeError(e.to_string())).into()
+                        })?,
                     ),
                 },
-                "AccountReady" => account::Attribute::AccountReady(value.parse()?),
+                "AccountReady" => account::Attribute::AccountReady(value.parse().map_err(|e| {
+                    ("AccountReady", account::AttributeError(e.to_string())).into()
+                })?),
                 "AccountType" => account::Attribute::AccountType(value),
                 expand_seg_variants!("AccruedCash") => account::Attribute::AccruedCash(
                     impl_seg_variants!("AccruedCash", name, value),
-                    currency.parse()?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
                 ),
                 expand_seg_variants!("AccruedDividend") => account::Attribute::AccruedDividend(
                     impl_seg_variants!("AccruedDividend", name, value),
-                    currency.parse()?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
                 ),
                 expand_seg_variants!("AvailableFunds") => account::Attribute::AvailableFunds(
                     impl_seg_variants!("AvailableFunds", name, value),
-                    currency.parse()?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
                 ),
                 expand_seg_variants!("Billable") => account::Attribute::Billable(
                     impl_seg_variants!("Billable", name, value),
-                    currency.parse()?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
                 ),
-                "BuyingPower" => account::Attribute::BuyingPower(value.parse()?, currency.parse()?),
-                "CashBalance" => account::Attribute::CashBalance(value.parse()?, currency.parse()?),
+                "BuyingPower" => account::Attribute::BuyingPower(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })??,
+                ),
+                "CashBalance" => account::Attribute::CashBalance(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
                 expand_seg_variants!("ColumnPrio") => {
                     account::Attribute::ColumnPrio(impl_seg_variants!("ColumnPrio", name, value))
                 }
-                "CorporateBondValue" => {
-                    account::Attribute::CorporateBondValue(value.parse()?, currency.parse()?)
+                "CorporateBondValue" => account::Attribute::CorporateBondValue(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "Cryptocurrency" => account::Attribute::Cryptocurrency(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "Currency" => {
+                    account::Attribute::Currency(value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?)
                 }
-                "Cryptocurrency" => {
-                    account::Attribute::Cryptocurrency(value.parse()?, currency.parse()?)
+                "Cushion" => {
+                    account::Attribute::Cushion(value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?)
                 }
-                "Currency" => account::Attribute::Currency(value.parse()?),
-                "Cushion" => account::Attribute::Cushion(value.parse()?),
-                "DayTradesRemaining" => account::Attribute::DayTradesRemaining(value.parse()?),
+                "DayTradesRemaining" => {
+                    account::Attribute::DayTradesRemaining(value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?)
+                }
                 "DayTradesRemainingT+1" => {
-                    account::Attribute::DayTradesRemainingTPlus1(value.parse()?)
+                    account::Attribute::DayTradesRemainingTPlus1(value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?)
                 }
                 "DayTradesRemainingT+2" => {
-                    account::Attribute::DayTradesRemainingTPlus2(value.parse()?)
+                    account::Attribute::DayTradesRemainingTPlus2(value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?)
                 }
                 "DayTradesRemainingT+3" => {
-                    account::Attribute::DayTradesRemainingTPlus3(value.parse()?)
+                    account::Attribute::DayTradesRemainingTPlus3(value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?)
                 }
                 "DayTradesRemainingT+4" => {
-                    account::Attribute::DayTradesRemainingTPlus4(value.parse()?)
+                    account::Attribute::DayTradesRemainingTPlus4(value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?)
                 }
                 "DayTradingStatus-S" => account::Attribute::DayTradingStatus(value),
                 expand_seg_variants!("EquityWithLoanValue") => {
                     account::Attribute::EquityWithLoanValue(
                         impl_seg_variants!("EquityWithLoanValue", name, value),
-                        currency.parse()?,
+                        currency.parse().map_err(|e| {
+                            (name.as_str(), account::AttributeError(e.to_string())).into()
+                        })?,
                     )
                 }
                 expand_seg_variants!("ExcessLiquidity") => account::Attribute::ExcessLiquidity(
                     impl_seg_variants!("ExcessLiquidity", name, value),
-                    currency.parse()?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
                 ),
-                "ExchangeRate" => {
-                    account::Attribute::ExchangeRate(value.parse()?, currency.parse()?)
-                }
+                "ExchangeRate" => account::Attribute::ExchangeRate(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
                 expand_seg_variants!("FullAvailableFunds") => {
                     account::Attribute::FullAvailableFunds(
                         impl_seg_variants!("FullAvailableFunds", name, value),
-                        currency.parse()?,
+                        currency.parse().map_err(|e| {
+                            (name.as_str(), account::AttributeError(e.to_string())).into()
+                        })?,
                     )
                 }
                 expand_seg_variants!("FullExcessLiquidity") => {
                     account::Attribute::FullExcessLiquidity(
                         impl_seg_variants!("FullExcessLiquidity", name, value),
-                        currency.parse()?,
+                        currency.parse().map_err(|e| {
+                            (name.as_str(), account::AttributeError(e.to_string())).into()
+                        })?,
                     )
                 }
                 expand_seg_variants!("FullInitMarginReq") => account::Attribute::FullInitMarginReq(
                     impl_seg_variants!("FullInitMarginReq", name, value),
-                    currency.parse()?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
                 ),
                 expand_seg_variants!("FullMaintMarginReq") => {
                     account::Attribute::FullMaintenanceMarginReq(
                         impl_seg_variants!("FullMaintMarginReq", name, value),
-                        currency.parse()?,
+                        currency.parse().map_err(|e| {
+                            (name.as_str(), account::AttributeError(e.to_string())).into()
+                        })?,
                     )
                 }
-                "FundValue" => account::Attribute::FundValue(value.parse()?, currency.parse()?),
-                "FutureOptionValue" => {
-                    account::Attribute::FutureOptionValue(value.parse()?, currency.parse()?)
-                }
-                "FuturesPNL" => account::Attribute::FuturesPnl(value.parse()?, currency.parse()?),
-                "FxCashBalance" => {
-                    account::Attribute::FxCashBalance(value.parse()?, currency.parse()?)
-                }
-                "GrossPositionValue" => {
-                    account::Attribute::GrossPositionValue(value.parse()?, currency.parse()?)
-                }
+                "FundValue" => account::Attribute::FundValue(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "FutureOptionValue" => account::Attribute::FutureOptionValue(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "FuturesPNL" => account::Attribute::FuturesPnl(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "FxCashBalance" => account::Attribute::FxCashBalance(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "GrossPositionValue" => account::Attribute::GrossPositionValue(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
                 "GrossPositionValue-S" => account::Attribute::GrossPositionValueSecurity(
-                    value.parse()?,
-                    currency.parse()?,
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
                 ),
                 expand_seg_variants!("Guarantee") => account::Attribute::Guarantee(
                     impl_seg_variants!("Guarantee", name, value),
-                    currency.parse()?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
                 ),
                 expand_seg_variants!("IndianStockHaircut") => {
                     account::Attribute::IndianStockHaircut(
                         impl_seg_variants!("IndianStockHaircut", name, value),
-                        currency.parse()?,
+                        currency.parse().map_err(|e| {
+                            (name.as_str(), account::AttributeError(e.to_string())).into()
+                        })?,
                     )
                 }
                 expand_seg_variants!("InitMarginReq") => account::Attribute::InitMarginReq(
                     impl_seg_variants!("InitMarginReq", name, value),
-                    currency.parse()?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
                 ),
-                "IssuerOptionValue" => {
-                    account::Attribute::IssuerOptionValue(value.parse()?, currency.parse()?)
+                "IssuerOptionValue" => account::Attribute::IssuerOptionValue(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "Leverage-S" => {
+                    account::Attribute::LeverageSecurity(value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?)
                 }
-                "Leverage-S" => account::Attribute::LeverageSecurity(value.parse()?),
                 expand_seg_variants!("LookAheadAvailableFunds") => {
                     account::Attribute::LookAheadAvailableFunds(
                         impl_seg_variants!("LookAheadAvailableFunds", name, value),
-                        currency.parse()?,
+                        currency.parse().map_err(|e| {
+                            (name.as_str(), account::AttributeError(e.to_string())).into()
+                        })?,
                     )
                 }
                 expand_seg_variants!("LookAheadExcessLiquidity") => {
                     account::Attribute::LookAheadExcessLiquidity(
                         impl_seg_variants!("LookAheadExcessLiquidity", name, value),
-                        currency.parse()?,
+                        currency.parse().map_err(|e| {
+                            (name.as_str(), account::AttributeError(e.to_string())).into()
+                        })?,
                     )
                 }
                 expand_seg_variants!("LookAheadInitMarginReq") => {
                     account::Attribute::LookAheadInitMarginReq(
                         impl_seg_variants!("LookAheadInitMarginReq", name, value),
-                        currency.parse()?,
+                        currency.parse().map_err(|e| {
+                            (name.as_str(), account::AttributeError(e.to_string())).into()
+                        })?,
                     )
                 }
                 expand_seg_variants!("LookAheadMaintMarginReq") => {
                     account::Attribute::LookAheadMaintenanceMarginReq(
                         impl_seg_variants!("LookAheadMaintMarginReq", name, value),
-                        currency.parse()?,
+                        currency.parse().map_err(|e| {
+                            (name.as_str(), account::AttributeError(e.to_string())).into()
+                        })?,
                     )
                 }
                 "LookAheadNextChange" => account::Attribute::LookAheadNextChange(value.parse()?),
                 expand_seg_variants!("MaintMarginReq") => account::Attribute::MaintenanceMarginReq(
                     impl_seg_variants!("MaintMarginReq", name, value),
-                    currency.parse()?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
                 ),
-                "MoneyMarketFundValue" => {
-                    account::Attribute::MoneyMarketFundValue(value.parse()?, currency.parse()?)
+                "MoneyMarketFundValue" => account::Attribute::MoneyMarketFundValue(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "MutualFundValue" => account::Attribute::MutualFundValue(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "NLVAndMarginInReview" => {
+                    account::Attribute::NlvAndMarginInReview(value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?)
                 }
-                "MutualFundValue" => {
-                    account::Attribute::MutualFundValue(value.parse()?, currency.parse()?)
-                }
-                "NLVAndMarginInReview" => account::Attribute::NlvAndMarginInReview(value.parse()?),
-                "NetDividend" => account::Attribute::NetDividend(value.parse()?, currency.parse()?),
+                "NetDividend" => account::Attribute::NetDividend(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
                 expand_seg_variants!("NetLiquidation") => account::Attribute::NetLiquidation(
                     impl_seg_variants!("NetLiquidation", name, value),
-                    currency.parse()?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
                 ),
-                "NetLiquidationByCurrency" => {
-                    account::Attribute::NetLiquidationByCurrency(value.parse()?, currency.parse()?)
-                }
-                "NetLiquidationUncertainty" => {
-                    account::Attribute::NetLiquidationUncertainty(value.parse()?, currency.parse()?)
-                }
-                "OptionMarketValue" => {
-                    account::Attribute::OptionMarketValue(value.parse()?, currency.parse()?)
-                }
+                "NetLiquidationByCurrency" => account::Attribute::NetLiquidationByCurrency(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "NetLiquidationUncertainty" => account::Attribute::NetLiquidationUncertainty(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "OptionMarketValue" => account::Attribute::OptionMarketValue(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
                 expand_seg_variants!("PASharesValue") => account::Attribute::PaSharesValue(
                     impl_seg_variants!("PASharesValue", name, value),
-                    currency.parse()?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
                 ),
                 expand_seg_variants!("PhysicalCertificateValue") => {
                     account::Attribute::PhysicalCertificateValue(
                         impl_seg_variants!("PhysicalCertificateValue", name, value),
-                        currency.parse()?,
+                        currency.parse().map_err(|e| {
+                            (name.as_str(), account::AttributeError(e.to_string())).into()
+                        })?,
                     )
                 }
                 expand_seg_variants!("PostExpirationExcess") => {
                     account::Attribute::PostExpirationExcess(
                         impl_seg_variants!("PostExpirationExcess", name, value),
-                        currency.parse()?,
+                        currency.parse().map_err(|e| {
+                            (name.as_str(), account::AttributeError(e.to_string())).into()
+                        })?,
                     )
                 }
                 expand_seg_variants!("PostExpirationMargin") => {
                     account::Attribute::PostExpirationMargin(
                         impl_seg_variants!("PostExpirationMargin", name, value),
-                        currency.parse()?,
+                        currency.parse().map_err(|e| {
+                            (name.as_str(), account::AttributeError(e.to_string())).into()
+                        })?,
                     )
                 }
                 "PreviousDayEquityWithLoanValue" => {
                     account::Attribute::PreviousDayEquityWithLoanValue(
-                        value.parse()?,
-                        currency.parse()?,
+                        value.parse().map_err(|e| {
+                            (name.as_str(), account::AttributeError(e.to_string())).into()
+                        })?,
+                        currency.parse().map_err(|e| {
+                            (name.as_str(), account::AttributeError(e.to_string())).into()
+                        })?,
                     )
                 }
                 "PreviousDayEquityWithLoanValue-S" => {
                     account::Attribute::PreviousDayEquityWithLoanValueSecurity(
-                        value.parse()?,
-                        currency.parse()?,
+                        value.parse().map_err(|e| {
+                            (name.as_str(), account::AttributeError(e.to_string())).into()
+                        })?,
+                        currency.parse().map_err(|e| {
+                            (name.as_str(), account::AttributeError(e.to_string())).into()
+                        })?,
                     )
                 }
-                "RealCurrency" => account::Attribute::RealCurrency(currency.parse()?),
-                "RealizedPnL" => account::Attribute::RealizedPnL(value.parse()?, currency.parse()?),
-                "RegTEquity" => account::Attribute::RegTEquity(value.parse()?, currency.parse()?),
-                "RegTEquity-S" => {
-                    account::Attribute::RegTEquitySecurity(value.parse()?, currency.parse()?)
+                "RealCurrency" => {
+                    account::Attribute::RealCurrency(currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?)
                 }
-                "RegTMargin" => account::Attribute::RegTMargin(value.parse()?, currency.parse()?),
-                "RegTMargin-S" => {
-                    account::Attribute::RegTMarginSecurity(value.parse()?, currency.parse()?)
-                }
-                "SMA" => account::Attribute::Sma(value.parse()?, currency.parse()?),
-                "SMA-S" => account::Attribute::SmaSecurity(value.parse()?, currency.parse()?),
-                "StockMarketValue" => {
-                    account::Attribute::StockMarketValue(value.parse()?, currency.parse()?)
-                }
-                "TBillValue" => account::Attribute::TBillValue(value.parse()?, currency.parse()?),
-                "TBondValue" => account::Attribute::TBondValue(value.parse()?, currency.parse()?),
-                "TotalCashBalance" => {
-                    account::Attribute::TotalCashBalance(value.parse()?, currency.parse()?)
-                }
+                "RealizedPnL" => account::Attribute::RealizedPnL(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "RegTEquity" => account::Attribute::RegTEquity(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "RegTEquity-S" => account::Attribute::RegTEquitySecurity(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "RegTMargin" => account::Attribute::RegTMargin(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "RegTMargin-S" => account::Attribute::RegTMarginSecurity(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "SMA" => account::Attribute::Sma(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "SMA-S" => account::Attribute::SmaSecurity(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "StockMarketValue" => account::Attribute::StockMarketValue(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "TBillValue" => account::Attribute::TBillValue(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "TBondValue" => account::Attribute::TBondValue(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "TotalCashBalance" => account::Attribute::TotalCashBalance(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
                 expand_seg_variants!("TotalCashValue") => account::Attribute::TotalCashValue(
                     impl_seg_variants!("TotalCashValue", name, value),
-                    currency.parse()?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
                 ),
                 expand_seg_variants!("TotalDebitCardPendingCharges") => {
                     account::Attribute::TotalDebitCardPendingCharges(
                         impl_seg_variants!("TotalDebitCardPendingCharges", name, value),
-                        currency.parse()?,
+                        currency.parse().map_err(|e| {
+                            (name.as_str(), account::AttributeError(e.to_string())).into()
+                        })?,
                     )
                 }
                 "TradingType-S" => account::Attribute::TradingTypeSecurity(value),
-                "UnrealizedPnL" => {
-                    account::Attribute::UnrealizedPnL(value.parse()?, currency.parse()?)
+                "UnrealizedPnL" => account::Attribute::UnrealizedPnL(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "WarrantValue" => account::Attribute::WarrantValue(
+                    value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                    currency.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?,
+                ),
+                "WhatIfPMEnabled" => {
+                    account::Attribute::WhatIfPMEnabled(value.parse().map_err(|e| {
+                        (name.as_str(), account::AttributeError(e.to_string())).into()
+                    })?)
                 }
-                "WarrantValue" => {
-                    account::Attribute::WarrantValue(value.parse()?, currency.parse()?)
-                }
-                "WhatIfPMEnabled" => account::Attribute::WhatIfPMEnabled(value.parse()?),
                 expand_seg_variants!("SegmentTitle") => {
                     if name.ends_with('C') || name.ends_with('P') || name.ends_with('S') {
                         return Ok(());
                     }
-                    return Err(anyhow::Error::msg("Unexpected segment title encountered.  This may mandate an API update: currently-supported values are C, P, and S as outlined in the account::Segment type."));
+                    return Err(DecodeError::Other("Unexpected segment title encountered.  This may mandate an API update: currently-supported values are C, P, and S as outlined in the account::Segment type.".to_owned()));
                 }
                 _ => {
-                    return Err(anyhow::Error::msg(format!(
+                    return Err(DecodeError::Other(format!(
                         "Invalid account attribute encountered: {name}"
                     )))
                 }
@@ -703,7 +958,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn portfolio_value_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             let _ = fields.nth(1);
             let proxy = deserialize_contract_proxy(fields)?;
@@ -737,7 +992,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn acct_update_time_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -756,7 +1011,7 @@ pub trait Local: wrapper::LocalWrapper {
         _wrapper: &mut Self,
         _tx: &mut Tx,
         _rx: &mut Rx,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move { Ok(()) }
     }
 
@@ -766,7 +1021,7 @@ pub trait Local: wrapper::LocalWrapper {
         _wrapper: &mut Self,
         tx: &mut Tx,
         rx: &mut Rx,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move { decode_contract_no_wrapper(fields, tx, rx).await }
     }
 
@@ -774,7 +1029,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn execution_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -834,7 +1089,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn market_depth_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -858,7 +1113,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn market_depth_l2_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -898,7 +1153,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn news_bulletins_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -910,7 +1165,7 @@ pub trait Local: wrapper::LocalWrapper {
         _wrapper: &mut Self,
         _tx: &mut Tx,
         _rx: &mut Rx,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move { Ok(()) }
     }
 
@@ -918,7 +1173,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn receive_fa_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -929,7 +1184,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn historical_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -978,7 +1233,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn bond_contract_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -989,7 +1244,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn scanner_parameters_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1000,7 +1255,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn scanner_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1011,7 +1266,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_option_computation_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1074,7 +1329,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_generic_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1090,7 +1345,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_string_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1243,7 +1498,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_efp_msg(
         _fields: &mut Fields,
         _wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             unimplemented!();
         }
@@ -1253,7 +1508,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn current_time_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1279,7 +1534,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn real_time_bars_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1320,7 +1575,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn fundamental_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1331,7 +1586,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn contract_data_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(fields => req_id @ 2: i64);
             wrapper.contract_data_end(req_id).await;
@@ -1343,7 +1598,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn open_order_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             wrapper.open_order_end().await;
             Ok(())
@@ -1354,7 +1609,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn acct_download_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields => account_number @ 2: String
@@ -1368,7 +1623,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn execution_data_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
 
@@ -1380,7 +1635,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn delta_neutral_validation_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1391,7 +1646,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_snapshot_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1402,7 +1657,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn market_data_type_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1418,7 +1673,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn commission_report_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1429,7 +1684,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn position_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1457,7 +1712,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn position_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             wrapper.position_end().await;
             Ok(())
@@ -1468,7 +1723,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn account_summary_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1498,7 +1753,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn account_summary_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields => req_id @ 2: i64
@@ -1512,7 +1767,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn verify_message_api_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1523,7 +1778,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn verify_completed_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1534,7 +1789,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn display_group_list_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1545,7 +1800,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn display_group_updated_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1556,7 +1811,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn verify_and_auth_message_api_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1567,7 +1822,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn verify_and_auth_completed_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1578,7 +1833,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn position_multi_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1589,7 +1844,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn position_multi_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1600,7 +1855,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn account_update_multi_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1611,7 +1866,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn account_update_multi_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1622,7 +1877,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn security_definition_option_parameter_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1633,7 +1888,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn security_definition_option_parameter_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1644,7 +1899,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn soft_dollar_tiers_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1655,7 +1910,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn family_codes_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1666,7 +1921,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn symbol_samples_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1677,7 +1932,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn mkt_depth_exchanges_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1688,7 +1943,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_req_params_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1708,7 +1963,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn smart_components_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1719,7 +1974,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn news_article_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1730,7 +1985,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_news_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1741,7 +1996,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn news_providers_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1752,7 +2007,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn historical_news_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1763,7 +2018,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn historical_news_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1774,7 +2029,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn head_timestamp_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1796,7 +2051,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn histogram_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1824,7 +2079,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn historical_data_update_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1866,7 +2121,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn reroute_mkt_data_req_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1877,7 +2132,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn reroute_mkt_depth_req_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1888,7 +2143,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn market_rule_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1896,10 +2151,7 @@ pub trait Local: wrapper::LocalWrapper {
     }
 
     #[inline]
-    fn pnl_msg(
-        fields: &mut Fields,
-        wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    fn pnl_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1922,7 +2174,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn pnl_single_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1949,7 +2201,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn historical_ticks_midpoint_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1979,7 +2231,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn historical_ticks_bid_ask_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -2012,7 +2264,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn historical_ticks_last_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -2044,7 +2296,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_by_tick_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -2092,7 +2344,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn order_bound_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -2103,7 +2355,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn completed_order_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -2114,7 +2366,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn completed_orders_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -2125,7 +2377,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn replace_fa_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -2136,7 +2388,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn wsh_meta_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -2147,7 +2399,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn wsh_event_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -2158,7 +2410,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn historical_schedule_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -2169,7 +2421,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn user_info_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -2182,7 +2434,7 @@ pub trait Local: wrapper::LocalWrapper {
         tick_type: u16,
         value: f64,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             match tick_type {
                 0 | 3 | 5 => {
@@ -2309,35 +2561,13 @@ impl<W: wrapper::LocalWrapper> Local for W {}
 
 impl<W: wrapper::Wrapper> Remote for W {}
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct MissingInputData;
-
-impl std::fmt::Display for MissingInputData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Missing value encountered while decoding an API callback"
-        )
-    }
-}
-
-impl std::error::Error for MissingInputData {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-
-    fn description(&self) -> &str {
-        "description() is deprecated; use Display"
-    }
-
-    fn cause(&self) -> Option<&dyn std::error::Error> {
-        self.source()
-    }
-}
-
 #[inline]
-pub(crate) fn nth(fields: &mut Fields, n: usize) -> Result<String, MissingInputData> {
-    fields.nth(n).ok_or(MissingInputData)
+pub(crate) fn nth(
+    fields: &mut Fields,
+    n: usize,
+    field_name: &'static str,
+) -> Result<String, DecodeError> {
+    fields.nth(n).ok_or(DecodeError::MissingData { field_name })
 }
 
 #[inline]
@@ -2670,10 +2900,10 @@ fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<Proxy<Contr
                 "C" => SecOption::Call(op_inner),
                 "P" => SecOption::Put(op_inner),
                 other => {
-                    return Err(anyhow::anyhow!(
+                    return Err(DecodeError::Other(format!(
                         "Unexpected option right. Expected \'C\' or \'P\'. Found {}.",
                         other
-                    ))
+                    )))
                 }
             };
             Contract::SecOption(op_outer)
@@ -2681,4 +2911,154 @@ fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<Proxy<Contr
     };
 
     Ok(Proxy { inner })
+}
+
+#[derive(Debug, Clone, Error)]
+pub(crate) enum DecodeError {
+    #[error("Missing data for field {field_name}.")]
+    /// The data is missing from the API callback
+    MissingData { field_name: &'static str },
+    #[error("Failed to parse integer field {field_name}. Cause: {int_error}")]
+    /// Failed to parse integer field
+    ParseIntError {
+        field_name: &'static str,
+        int_error: std::num::ParseIntError,
+    },
+    #[error("Failed to parse float field {field_name}. Cause: {float_error}")]
+    /// Failed to parse floating point field
+    ParseFloatError {
+        field_name: &'static str,
+        float_error: std::num::ParseFloatError,
+    },
+    #[error("Failed to parse currency field {field_name}. Cause: {currency_error}")]
+    /// Failed to parse [`Currency`] field
+    ParseCurrencyError {
+        field_name: &'static str,
+        currency_error: crate::currency::ParseCurrencyError,
+    },
+    #[error("Failed to parse exchange field {field_name}. Cause: {exchange_error}")]
+    /// Failed to parse [`Routing`] or [`Primary`] field
+    ParseExchangeError {
+        field_name: &'static str,
+        exchange_error: crate::exchange::ParseExchangeError,
+    },
+    #[error("Failed to parse contract ID field {field_name}. Cause: {contract_id_error}")]
+    /// Failed to parse [`ContractId`] field
+    ParseContractIdError {
+        field_name: &'static str,
+        contract_id_error: crate::contract::ParseContractIdError,
+    },
+    #[error("Failed to parse contract type field {field_name}. Cause: {contract_type_error}")]
+    /// Failed to parse [`ContractType`] field
+    ParseContractTypeError {
+        field_name: &'static str,
+        contract_type_error: crate::contract::ParseContractTypeError,
+    },
+    #[error("Failed to parse payload {field_name}. Cause: {payload_error}")]
+    /// Failed to parse any value in the [`crate::payload`] module
+    ParsePayloadError {
+        field_name: &'static str,
+        payload_error: crate::payload::ParsePayloadError,
+    },
+    #[error("Failed to parse attribute {attribute_name}. Cause: {attribute_error}")]
+    /// Failed to parse an [`account::Attribute`] value
+    ParseAttributeError {
+        attribute_name: &'static str,
+        attribute_error: account::ParseAttributeError,
+    },
+    #[error("Failed to parse datetime field {field_name}. Cause: {datetime_error}")]
+    /// Failed to parse an [`account::Attribute`] value
+    ParseDateTimeError {
+        field_name: &'static str,
+        datetime_error: ParseTimezoneError,
+    },
+    #[error("{0}")]
+    Other(String),
+}
+
+impl From<(&'static str, std::num::ParseIntError)> for DecodeError {
+    fn from(value: (&'static str, std::num::ParseIntError)) -> Self {
+        Self::ParseIntError {
+            field_name: value.0,
+            int_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, std::num::ParseFloatError)> for DecodeError {
+    fn from(value: (&'static str, std::num::ParseFloatError)) -> Self {
+        Self::ParseFloatError {
+            field_name: value.0,
+            float_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, crate::currency::ParseCurrencyError)> for DecodeError {
+    fn from(value: (&'static str, crate::currency::ParseCurrencyError)) -> Self {
+        Self::ParseCurrencyError {
+            field_name: value.0,
+            currency_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, crate::exchange::ParseExchangeError)> for DecodeError {
+    fn from(value: (&'static str, crate::exchange::ParseExchangeError)) -> Self {
+        Self::ParseExchangeError {
+            field_name: value.0,
+            exchange_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, crate::contract::ParseContractIdError)> for DecodeError {
+    fn from(value: (&'static str, crate::contract::ParseContractIdError)) -> Self {
+        Self::ParseContractIdError {
+            field_name: value.0,
+            contract_id_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, crate::contract::ParseContractTypeError)> for DecodeError {
+    fn from(value: (&'static str, crate::contract::ParseContractTypeError)) -> Self {
+        Self::ParseContractTypeError {
+            field_name: value.0,
+            contract_type_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, crate::payload::ParsePayloadError)> for DecodeError {
+    fn from(value: (&'static str, crate::payload::ParsePayloadError)) -> Self {
+        Self::ParsePayloadError {
+            field_name: value.0,
+            payload_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, account::ParseAttributeError)> for DecodeError {
+    fn from(value: (&'static str, account::ParseAttributeError)) -> Self {
+        Self::ParseAttributeError {
+            attribute_name: value.0,
+            attribute_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, ParseTimezoneError)> for DecodeError {
+    fn from(value: (&'static str, ParseTimezoneError)) -> Self {
+        Self::ParseDateTimeError {
+            field_name: value.0,
+            datetime_error: value.1,
+        }
+    }
+}
+
+impl<E: std::error::Error> From<E> for DecodeError {
+    fn from(value: E) -> Self {
+        Self::Other(value.to_string())
+    }
 }

@@ -18,7 +18,7 @@ serde = { version = "1.0.197", features = ["derive"] }
 chrono = { version = "0.4.35", features = ["serde"] }
 crossbeam = "0.8.4"
 bytes = "1.5.0"
-anyhow = "1.0.81"
 itoa = "1.0.10"
 ryu = "1.0.17"
 trait-variant = "0.1.1"
+thiserror = "1.0.58"

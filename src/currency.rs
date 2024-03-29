@@ -1,6 +1,7 @@
 use core::str::FromStr;
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 // === Type definitions ===
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -60,56 +61,14 @@ pub enum Currency {
     UsDollar,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-/// An error type returned when a given currency code cannot be matched with a valid [`Currency`]
+#[derive(Error, Default, Debug, Clone)]
+#[error(
+    "Invalid value encountered when attempting to parse currency. No such currency symbol: {0}"
+)]
+/// An error returned when parsing a [`Currency`] fails.
 pub struct ParseCurrencyError(pub String);
 
-impl std::fmt::Display for ParseCurrencyError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Invalid currency {}", self.0)
-    }
-}
-
-impl std::error::Error for ParseCurrencyError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-
-    fn description(&self) -> &str {
-        "description() is deprecated; use Display"
-    }
-
-    fn cause(&self) -> Option<&dyn std::error::Error> {
-        self.source()
-    }
-}
-
 // === Type implementations ===
-
-impl ToString for Currency {
-    fn to_string(&self) -> String {
-        match *self {
-            Self::AustralianDollar => "AUD",
-            Self::BritishPound => "GBP",
-            Self::CanadianDollar => "CAD",
-            Self::ChineseYuan => "CNH",
-            Self::DanishKrone => "DKK",
-            Self::Euro => "EUR",
-            Self::HongKongDollar => "HKD",
-            Self::IndianRupee => "INR",
-            Self::IsraeliNewShekel => "ILS",
-            Self::JapaneseYen => "JPY",
-            Self::KoreanWon => "KRW",
-            Self::MexicanPeso => "MXN",
-            Self::NewZealandDollar => "NZD",
-            Self::NorwegianKrone => "NOK",
-            Self::SwedishKrona => "SEK",
-            Self::SwissFranc => "CHF",
-            Self::UsDollar => "USD",
-        }
-        .to_owned()
-    }
-}
 
 impl FromStr for Currency {
     type Err = ParseCurrencyError;

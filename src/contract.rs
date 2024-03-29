@@ -4,6 +4,7 @@ use std::{num::ParseIntError, str::FromStr};
 use chrono::NaiveDate;
 use ibapi_macros::{make_getters, Security};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use thiserror::Error;
 
 use crate::figi::{Figi, InvalidFigi};
 use crate::{
@@ -319,6 +320,15 @@ pub async fn new<S: Security>(
     .map_err(|()| anyhow::anyhow!("Failed to create contract from {:?}: ", query))
 }
 
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Error)]
+#[eror("Unexpected security type. Expected {expected:?}. Found {found:?}")]
+/// An error type that's returned when a [`Security`] of type `S` is requested, but a security of
+/// another type is received from the API
+pub struct UnexpectedSecurityType {
+    expected: ContractType,
+    found: ContractType,
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
 /// A type used to represent a query for a new contract, which can be made by providing either an
 /// IBKR contract ID, or a FIGI.
@@ -330,63 +340,33 @@ pub enum Query {
     Figi(Figi),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Error)]
 /// An error type representing the potential ways that a [`Query`] can be invalid.
-pub enum InvalidQuery {
+pub enum ParseQueryError {
+    #[error("Invalid value when parsing IBKR contract ID. Cause: {0}")]
     /// An invalid [`Query::IbContractId`]
     IbContractId(ParseIntError),
+    #[error("Invalid value when parsing FIGI. Cause: {0}")]
     /// AN invalid [`Query::Figi`]
     Figi(InvalidFigi),
+    #[error("Cannot construct query from empty string.")]
     /// Invalid in a way such that it's impossible to tell whether it was intended to be an [`Query::IbContractId`] or a [`'Query::Figi`].
     Empty,
 }
 
-impl std::fmt::Display for InvalidQuery {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Invalid query. {self:?}")
-    }
-}
-
-impl std::error::Error for InvalidQuery {}
-
 impl FromStr for Query {
-    type Err = InvalidQuery;
+    type Err = ParseQueryError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // A FIGI always begin with a letter
-        if s.chars().nth(0).ok_or(InvalidQuery::Empty)?.is_numeric() {
+        if s.chars().nth(0).ok_or(ParseQueryError::Empty)?.is_numeric() {
             Ok(Self::IbContractId(
-                s.parse().map_err(InvalidQuery::IbContractId)?,
+                s.parse().map_err(ParseQueryError::IbContractId)?,
                 Routing::Smart,
             ))
         } else {
-            Ok(Self::Figi(s.parse().map_err(InvalidQuery::Figi)?))
+            Ok(Self::Figi(s.parse().map_err(ParseQueryError::Figi)?))
         }
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
-/// An error caused when a call to [`new`] returns a contract that differs from
-/// the type defined in the initial call.
-pub struct UnexpectedSecurityType(&'static str);
-
-impl std::fmt::Display for UnexpectedSecurityType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::error::Error for UnexpectedSecurityType {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-
-    fn description(&self) -> &str {
-        "description() is deprecated; use Display"
-    }
-
-    fn cause(&self) -> Option<&dyn std::error::Error> {
-        self.source()
     }
 }
 
@@ -396,11 +376,16 @@ impl std::error::Error for UnexpectedSecurityType {
 /// contract.
 pub struct ContractId(pub i64);
 
+#[derive(Debug, Clone, Error)]
+#[error("Invalid value encountered when attempting to parse contract ID. Cause: {0}")]
+/// An error returned when parsing a [`ContractId`] fails.
+pub struct ParseContractIdError(pub ParseIntError);
+
 impl FromStr for ContractId {
-    type Err = ParseIntError;
+    type Err = ParseContractIdError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse().map(Self)
+        s.parse().map(Self).map_err(Self::Err)
     }
 }
 
@@ -1240,8 +1225,16 @@ pub enum ContractType {
     //StructuredProduct,
 }
 
+#[derive(Debug, Clone, Error)]
+#[error(
+    "Invalid value encountered when attempting to parse contract type. No such contract type: {0}"
+)]
+/// An error returned when parsing a [`ContractType`] fails.
+pub struct ParseContractTypeError(pub String);
+
 impl FromStr for ContractType {
-    type Err = anyhow::Error;
+    type Err = ParseContractTypeError;
+
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
             "CASH" => Self::Forex,
@@ -1251,7 +1244,7 @@ impl FromStr for ContractType {
             "FUT" => Self::SecFuture,
             "OPT" => Self::SecOption,
             "CMDTY" => Self::Commodity,
-            v => return Err(anyhow::anyhow!("Invalid contract type {}", v)),
+            v => return Err(ParseContractTypeError(v.to_owned())),
         })
     }
 }

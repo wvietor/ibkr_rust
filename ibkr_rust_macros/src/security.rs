@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::quote;
 use syn::{parse_str, Ident};
 use SecType::*;
 
@@ -70,13 +70,15 @@ fn impl_try_from_other_contracts(name: &Ident) -> TokenStream {
 
     let mut out = Vec::new();
     for ident in idents {
-        let error_message = format!("Expected {} found {}", name, format_ident!("{}", ident));
         out.push(quote! {
             impl TryFrom<#ident> for #name {
                 type Error = UnexpectedSecurityType;
 
                 fn try_from(_: #ident) -> Result<Self, Self::Error> {
-                    Err(UnexpectedSecurityType(#error_message))
+                    Err(UnexpectedSecurityType {
+                        expected: ContractType::#name,
+                        found: ContractType::#ident,
+                    })
                 }
             }
         });

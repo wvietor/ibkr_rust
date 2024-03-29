@@ -1105,7 +1105,7 @@ impl From<IbTimeZone> for FixedOffset {
 }
 
 impl std::str::FromStr for IbTimeZone {
-    type Err = InvalidTimeZone;
+    type Err = ParseTimezoneError;
 
     #[allow(clippy::too_many_lines)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -1640,7 +1640,7 @@ impl std::str::FromStr for IbTimeZone {
             "EST" => Self::Est,
             "HST" => Self::Hst,
             "MST" => Self::Mst,
-            s => return Err(InvalidTimeZone(s.to_owned())),
+            s => return Err(ParseTimezoneError(s.to_owned())),
         })
     }
 }
@@ -2186,18 +2186,18 @@ impl std::fmt::Display for IbTimeZone {
 
 #[derive(Debug, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 /// An error from attempting to parse an [`IbTimeZone`]
-pub struct InvalidTimeZone(pub String);
+pub struct ParseTimezoneError(pub String);
 
-impl From<ParseError> for InvalidTimeZone {
+impl From<ParseError> for ParseTimezoneError {
     fn from(value: ParseError) -> Self {
         Self(format!("{value}"))
     }
 }
 
-impl std::fmt::Display for InvalidTimeZone {
+impl std::fmt::Display for ParseTimezoneError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Invalid time zone encountered: {}", self.0)
     }
 }
 
-impl std::error::Error for InvalidTimeZone {}
+impl std::error::Error for ParseTimezoneError {}
