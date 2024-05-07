@@ -169,10 +169,10 @@ pub trait LocalWrapper {
     /// The callback message that contains order status data from [`crate::client::Client::req_place_order`].
     fn order_status(&mut self, status: OrderStatus) -> impl Future {}
     /// The callback message that contains information about currently open orders from [`crate::client::Client::req_place_order`].
-    fn open_order(
+    fn open_order<E>(
         &mut self,
         order_id: i64,
-        proxy: Proxy<Contract>,
+        proxy: Proxy<Contract, E>,
         client_id: i64,
         parent_id: Option<i64>,
         permanent_id: i64,

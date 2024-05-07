@@ -205,6 +205,41 @@ pub enum ParseAttributeError {
         attribute_name: &'static str,
         denomination_error: ParseCurrencyError,
     },
+    #[error(
+        "No such attribute {0}"
+    )]
+    NoSuchAttribute(String),
+}
+
+
+impl From<(&'static str, ParseFloatError)> for ParseAttributeError {
+    fn from(value: (&'static str, ParseFloatError)) -> Self {
+        Self::Float { attribute_name: value.0, float_error: value.1 }
+    }
+}
+
+impl From<(&'static str, ParseIntError)> for ParseAttributeError {
+    fn from(value: (&'static str, ParseIntError)) -> Self {
+        Self::Int { attribute_name: value.0, int_error: value.1 }
+    }
+}
+
+impl From<(&'static str, ParseDayTradesError)> for ParseAttributeError {
+    fn from(value: (&'static str, ParseDayTradesError)) -> Self {
+        Self::DayTrades { attribute_name: value.0, day_trades_error: value.1 }
+    }
+}
+
+impl From<(&'static str, ParseBoolError)> for ParseAttributeError {
+    fn from(value: (&'static str, ParseBoolError)) -> Self {
+        Self::Bool { attribute_name: value.0, bool_error: value. 1 }
+    }
+}
+
+impl From<(&'static str, ParseCurrencyError)> for ParseAttributeError {
+    fn from(value: (&'static str, ParseCurrencyError)) -> Self {
+        Self::Denomination { attribute_name: value.0, denomination_error: value.1 }
+    }
 }
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]

@@ -3,11 +3,8 @@ use core::future::Future;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 use thiserror::Error;
 
-use crate::account::{self, Tag, TagValue};
-use crate::contract::{
-    Commodity, Contract, ContractId, ContractType, Crypto, Forex, Index, Proxy, SecFuture,
-    SecOption, SecOptionInner, SecurityId, Stock,
-};
+use crate::account::{self, ParseAttributeError, Tag, TagValue};
+use crate::contract::{Commodity, Contract, ContractId, ContractType, Crypto, ExchangeProxy, Forex, Index, NoExchangeProxy, Proxy, SecFuture, SecOption, SecOptionInner, SecurityId, Stock};
 use crate::exchange::Primary;
 use crate::execution::{Exec, Execution, OrderSide};
 use crate::payload::{
@@ -41,17 +38,29 @@ macro_rules! decode_fields {
     ($fields: expr => $f_name: ident @ $ind: literal: Option<$op_f_type: ty>) => {
         let $f_name = match nth($fields, $ind, stringify!($f_name))?.as_str() {
             "" => None::<$op_f_type>,
-            s => Some(s.parse::<$op_f_type>().map_err(|e| (stringify!($f_name), e).into())?)
+            s => Some(s.parse::<$op_f_type>().map_err(|e| DecodeError::from((stringify!($f_name), e)))?)
         };
     };
     ($fields: expr => $f_name: ident @ $ind: literal: $f_type: ty) => {
         let $f_name = nth($fields, $ind, stringify!($f_name))?
-            .parse::<$f_type>().map_err(|e| (stringify!($f_name), e).into())?;
+            .parse::<$f_type>().map_err(|e| DecodeError::from((stringify!($f_name), e)))?;
     };
     ($fields: expr => $($f_name: ident @ $ind: literal: $f_type: ty ),* $(,)?) => {
         $(
             decode_fields!($fields => $f_name @ $ind: $f_type);
         )*
+    };
+}
+
+macro_rules! decode_account_attr {
+    ($attr_var: ident, $value: expr, $currency: expr) => {
+        account::Attribute::$attr_var(
+            $value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+            $currency.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?
+        )
+    };
+    ($attr_var: ident, $value: expr) => {
+        account::Attribute::$attr_var($value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?)
     };
 }
 
@@ -65,33 +74,61 @@ macro_rules! expand_seg_variants {
 }
 
 macro_rules! impl_seg_variants {
-    ($root_name: literal, $name: expr, $value: expr) => {
-        match $name.as_str() {
-            $root_name => account::Segment::Total(
-                $value
-                    .parse()
-                    .map_err(|e| ($name, account::AttributeError(e.to_string())))?,
-            ),
-            concat!($root_name, "-C") => account::Segment::Commodity(
-                $value
-                    .parse()
-                    .map_err(|e| ($name, account::AttributeError(e.to_string())))?,
-            ),
-            concat!($root_name, "-P") => account::Segment::Paxos(
-                $value
-                    .parse()
-                    .map_err(|e| ($name, account::AttributeError(e.to_string())))?,
-            ),
-            concat!($root_name, "-S") => account::Segment::Security(
-                $value
-                    .parse()
-                    .map_err(|e| ($name, account::AttributeError(e.to_string())))?,
-            ),
-            _ => {
-                return Err(DecodeError::Other(format!(
-                    "Could not match {} in {} segment parsing",
-                    $name, $root_name
-                )))
+    ($root_name: literal, $attr_var: ident, $name: expr, $value: expr, $currency: expr) => {
+        {
+            match $name.as_str() {
+                stringify!($root_name) => {
+                     account::Attribute::$attr_var(
+                         account::Segment::Total($value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?),
+                         $currency.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?
+                     )
+                }
+                concat!($root_name, "-C") => {
+                     account::Attribute::$attr_var(
+                         account::Segment::Commodity($value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?),
+                         $currency.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?
+                     )
+                }
+                concat!($root_name, "-P") => {
+                     account::Attribute::$attr_var(
+                         account::Segment::Paxos($value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?),
+                         $currency.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?
+                     )
+                }
+                concat!($root_name, "-S") => {
+                     account::Attribute::$attr_var(
+                         account::Segment::Security($value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?),
+                         $currency.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?
+                     )
+                }
+                _ => unreachable!()
+            }
+        }
+    };
+    ($root_name: literal, $attr_var: ident, $name: expr, $value: expr) => {
+        {
+            match $name.as_str() {
+                stringify!($attr_var) => {
+                     account::Attribute::$attr_var(
+                         account::Segment::Total($value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?),
+                     )
+                }
+                concat!(stringify!($attr_var), "-C") => {
+                     account::Attribute::$attr_var(
+                         account::Segment::Commodity($value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?),
+                     )
+                }
+                concat!(stringify!($attr_var), "-P") => {
+                     account::Attribute::$attr_var(
+                         account::Segment::Paxos($value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?),
+                     )
+                }
+                concat!(stringify!($attr_var), "-S") => {
+                     account::Attribute::$attr_var(
+                         account::Segment::Security($value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?),
+                     )
+                }
+                _ => unreachable!()
             }
         }
     };
@@ -414,539 +451,90 @@ pub trait Local: wrapper::LocalWrapper {
             );
             let attribute = match name.as_str() {
                 "AccountCode" => account::Attribute::AccountCode(value),
-                "AccountOrGroup" => match value.as_str() {
-                    "All" => account::Attribute::AccountOrGroup(
-                        account::Group::All,
-                        currency.parse().map_err(|e| {
-                            ("AccountOrGroup", account::AttributeError(e.to_string())).into()
-                        })?,
-                    ),
-                    name => account::Attribute::AccountOrGroup(
-                        account::Group::Name(name.to_owned()),
-                        currency.parse().map_err(|e| {
-                            (name.as_str(), account::AttributeError(e.to_string())).into()
-                        })?,
-                    ),
-                },
-                "AccountReady" => account::Attribute::AccountReady(value.parse().map_err(|e| {
-                    ("AccountReady", account::AttributeError(e.to_string())).into()
-                })?),
+                "AccountOrGroup" => decode_account_attr!(AccountOrGroup, value, currency),
+                "AccountReady" => decode_account_attr!(AccountReady, value),
                 "AccountType" => account::Attribute::AccountType(value),
-                expand_seg_variants!("AccruedCash") => account::Attribute::AccruedCash(
-                    impl_seg_variants!("AccruedCash", name, value),
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                expand_seg_variants!("AccruedDividend") => account::Attribute::AccruedDividend(
-                    impl_seg_variants!("AccruedDividend", name, value),
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                expand_seg_variants!("AvailableFunds") => account::Attribute::AvailableFunds(
-                    impl_seg_variants!("AvailableFunds", name, value),
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                expand_seg_variants!("Billable") => account::Attribute::Billable(
-                    impl_seg_variants!("Billable", name, value),
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "BuyingPower" => account::Attribute::BuyingPower(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })??,
-                ),
-                "CashBalance" => account::Attribute::CashBalance(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                expand_seg_variants!("ColumnPrio") => {
-                    account::Attribute::ColumnPrio(impl_seg_variants!("ColumnPrio", name, value))
-                }
-                "CorporateBondValue" => account::Attribute::CorporateBondValue(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "Cryptocurrency" => account::Attribute::Cryptocurrency(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "Currency" => {
-                    account::Attribute::Currency(value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?)
-                }
-                "Cushion" => {
-                    account::Attribute::Cushion(value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?)
-                }
-                "DayTradesRemaining" => {
-                    account::Attribute::DayTradesRemaining(value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?)
-                }
-                "DayTradesRemainingT+1" => {
-                    account::Attribute::DayTradesRemainingTPlus1(value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?)
-                }
-                "DayTradesRemainingT+2" => {
-                    account::Attribute::DayTradesRemainingTPlus2(value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?)
-                }
-                "DayTradesRemainingT+3" => {
-                    account::Attribute::DayTradesRemainingTPlus3(value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?)
-                }
-                "DayTradesRemainingT+4" => {
-                    account::Attribute::DayTradesRemainingTPlus4(value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?)
-                }
+                expand_seg_variants!("AccruedCash") => impl_seg_variants!("AccruedCash", AccruedCash, name, value, currency),
+                expand_seg_variants!("AccruedDividend") => impl_seg_variants!("AccruedDividend", AccruedDividend, name, value, currency),
+                expand_seg_variants!("AvailableFunds") => impl_seg_variants!("AvailableFunds", AvailableFunds, name, value, currency),
+                expand_seg_variants!("Billable") => impl_seg_variants!("Billable", Billable, name, value, currency),
+                "BuyingPower" => decode_account_attr!(BuyingPower, value, currency),
+                "CashBalance" => decode_account_attr!(CashBalance, value, currency),
+                expand_seg_variants!("ColumnPrio") => impl_seg_variants!("ColumnPrio", ColumnPrio, name, value),
+                "CorporateBondValue" => decode_account_attr!(CorporateBondValue, value, currency),
+                "Cryptocurrency" => decode_account_attr!(Cryptocurrency, value, currency),
+                "Currency" => decode_account_attr!(Currency, value),
+                "Cushion" => decode_account_attr!(Cushion, value),
+                "DayTradesRemaining" => decode_account_attr!(DayTradesRemaining, value),
+                "DayTradesRemainingT+1" => decode_account_attr!(DayTradesRemainingTPlus1, value),
+                "DayTradesRemainingT+2" => decode_account_attr!(DayTradesRemainingTPlus2, value),
+                "DayTradesRemainingT+3" => decode_account_attr!(DayTradesRemainingTPlus3, value),
+                "DayTradesRemainingT+4" => decode_account_attr!(DayTradesRemainingTPlus4, value),
                 "DayTradingStatus-S" => account::Attribute::DayTradingStatus(value),
-                expand_seg_variants!("EquityWithLoanValue") => {
-                    account::Attribute::EquityWithLoanValue(
-                        impl_seg_variants!("EquityWithLoanValue", name, value),
-                        currency.parse().map_err(|e| {
-                            (name.as_str(), account::AttributeError(e.to_string())).into()
-                        })?,
-                    )
-                }
-                expand_seg_variants!("ExcessLiquidity") => account::Attribute::ExcessLiquidity(
-                    impl_seg_variants!("ExcessLiquidity", name, value),
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "ExchangeRate" => account::Attribute::ExchangeRate(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                expand_seg_variants!("FullAvailableFunds") => {
-                    account::Attribute::FullAvailableFunds(
-                        impl_seg_variants!("FullAvailableFunds", name, value),
-                        currency.parse().map_err(|e| {
-                            (name.as_str(), account::AttributeError(e.to_string())).into()
-                        })?,
-                    )
-                }
-                expand_seg_variants!("FullExcessLiquidity") => {
-                    account::Attribute::FullExcessLiquidity(
-                        impl_seg_variants!("FullExcessLiquidity", name, value),
-                        currency.parse().map_err(|e| {
-                            (name.as_str(), account::AttributeError(e.to_string())).into()
-                        })?,
-                    )
-                }
-                expand_seg_variants!("FullInitMarginReq") => account::Attribute::FullInitMarginReq(
-                    impl_seg_variants!("FullInitMarginReq", name, value),
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                expand_seg_variants!("FullMaintMarginReq") => {
-                    account::Attribute::FullMaintenanceMarginReq(
-                        impl_seg_variants!("FullMaintMarginReq", name, value),
-                        currency.parse().map_err(|e| {
-                            (name.as_str(), account::AttributeError(e.to_string())).into()
-                        })?,
-                    )
-                }
-                "FundValue" => account::Attribute::FundValue(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "FutureOptionValue" => account::Attribute::FutureOptionValue(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "FuturesPNL" => account::Attribute::FuturesPnl(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "FxCashBalance" => account::Attribute::FxCashBalance(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "GrossPositionValue" => account::Attribute::GrossPositionValue(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "GrossPositionValue-S" => account::Attribute::GrossPositionValueSecurity(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                expand_seg_variants!("Guarantee") => account::Attribute::Guarantee(
-                    impl_seg_variants!("Guarantee", name, value),
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                expand_seg_variants!("IndianStockHaircut") => {
-                    account::Attribute::IndianStockHaircut(
-                        impl_seg_variants!("IndianStockHaircut", name, value),
-                        currency.parse().map_err(|e| {
-                            (name.as_str(), account::AttributeError(e.to_string())).into()
-                        })?,
-                    )
-                }
-                expand_seg_variants!("InitMarginReq") => account::Attribute::InitMarginReq(
-                    impl_seg_variants!("InitMarginReq", name, value),
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "IssuerOptionValue" => account::Attribute::IssuerOptionValue(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "Leverage-S" => {
-                    account::Attribute::LeverageSecurity(value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?)
-                }
-                expand_seg_variants!("LookAheadAvailableFunds") => {
-                    account::Attribute::LookAheadAvailableFunds(
-                        impl_seg_variants!("LookAheadAvailableFunds", name, value),
-                        currency.parse().map_err(|e| {
-                            (name.as_str(), account::AttributeError(e.to_string())).into()
-                        })?,
-                    )
-                }
-                expand_seg_variants!("LookAheadExcessLiquidity") => {
-                    account::Attribute::LookAheadExcessLiquidity(
-                        impl_seg_variants!("LookAheadExcessLiquidity", name, value),
-                        currency.parse().map_err(|e| {
-                            (name.as_str(), account::AttributeError(e.to_string())).into()
-                        })?,
-                    )
-                }
-                expand_seg_variants!("LookAheadInitMarginReq") => {
-                    account::Attribute::LookAheadInitMarginReq(
-                        impl_seg_variants!("LookAheadInitMarginReq", name, value),
-                        currency.parse().map_err(|e| {
-                            (name.as_str(), account::AttributeError(e.to_string())).into()
-                        })?,
-                    )
-                }
-                expand_seg_variants!("LookAheadMaintMarginReq") => {
-                    account::Attribute::LookAheadMaintenanceMarginReq(
-                        impl_seg_variants!("LookAheadMaintMarginReq", name, value),
-                        currency.parse().map_err(|e| {
-                            (name.as_str(), account::AttributeError(e.to_string())).into()
-                        })?,
-                    )
-                }
-                "LookAheadNextChange" => account::Attribute::LookAheadNextChange(value.parse()?),
-                expand_seg_variants!("MaintMarginReq") => account::Attribute::MaintenanceMarginReq(
-                    impl_seg_variants!("MaintMarginReq", name, value),
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "MoneyMarketFundValue" => account::Attribute::MoneyMarketFundValue(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "MutualFundValue" => account::Attribute::MutualFundValue(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "NLVAndMarginInReview" => {
-                    account::Attribute::NlvAndMarginInReview(value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?)
-                }
-                "NetDividend" => account::Attribute::NetDividend(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                expand_seg_variants!("NetLiquidation") => account::Attribute::NetLiquidation(
-                    impl_seg_variants!("NetLiquidation", name, value),
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "NetLiquidationByCurrency" => account::Attribute::NetLiquidationByCurrency(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "NetLiquidationUncertainty" => account::Attribute::NetLiquidationUncertainty(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "OptionMarketValue" => account::Attribute::OptionMarketValue(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                expand_seg_variants!("PASharesValue") => account::Attribute::PaSharesValue(
-                    impl_seg_variants!("PASharesValue", name, value),
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                expand_seg_variants!("PhysicalCertificateValue") => {
-                    account::Attribute::PhysicalCertificateValue(
-                        impl_seg_variants!("PhysicalCertificateValue", name, value),
-                        currency.parse().map_err(|e| {
-                            (name.as_str(), account::AttributeError(e.to_string())).into()
-                        })?,
-                    )
-                }
-                expand_seg_variants!("PostExpirationExcess") => {
-                    account::Attribute::PostExpirationExcess(
-                        impl_seg_variants!("PostExpirationExcess", name, value),
-                        currency.parse().map_err(|e| {
-                            (name.as_str(), account::AttributeError(e.to_string())).into()
-                        })?,
-                    )
-                }
-                expand_seg_variants!("PostExpirationMargin") => {
-                    account::Attribute::PostExpirationMargin(
-                        impl_seg_variants!("PostExpirationMargin", name, value),
-                        currency.parse().map_err(|e| {
-                            (name.as_str(), account::AttributeError(e.to_string())).into()
-                        })?,
-                    )
-                }
-                "PreviousDayEquityWithLoanValue" => {
-                    account::Attribute::PreviousDayEquityWithLoanValue(
-                        value.parse().map_err(|e| {
-                            (name.as_str(), account::AttributeError(e.to_string())).into()
-                        })?,
-                        currency.parse().map_err(|e| {
-                            (name.as_str(), account::AttributeError(e.to_string())).into()
-                        })?,
-                    )
-                }
-                "PreviousDayEquityWithLoanValue-S" => {
-                    account::Attribute::PreviousDayEquityWithLoanValueSecurity(
-                        value.parse().map_err(|e| {
-                            (name.as_str(), account::AttributeError(e.to_string())).into()
-                        })?,
-                        currency.parse().map_err(|e| {
-                            (name.as_str(), account::AttributeError(e.to_string())).into()
-                        })?,
-                    )
-                }
-                "RealCurrency" => {
-                    account::Attribute::RealCurrency(currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?)
-                }
-                "RealizedPnL" => account::Attribute::RealizedPnL(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "RegTEquity" => account::Attribute::RegTEquity(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "RegTEquity-S" => account::Attribute::RegTEquitySecurity(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "RegTMargin" => account::Attribute::RegTMargin(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "RegTMargin-S" => account::Attribute::RegTMarginSecurity(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "SMA" => account::Attribute::Sma(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "SMA-S" => account::Attribute::SmaSecurity(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "StockMarketValue" => account::Attribute::StockMarketValue(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "TBillValue" => account::Attribute::TBillValue(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "TBondValue" => account::Attribute::TBondValue(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "TotalCashBalance" => account::Attribute::TotalCashBalance(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                expand_seg_variants!("TotalCashValue") => account::Attribute::TotalCashValue(
-                    impl_seg_variants!("TotalCashValue", name, value),
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                expand_seg_variants!("TotalDebitCardPendingCharges") => {
-                    account::Attribute::TotalDebitCardPendingCharges(
-                        impl_seg_variants!("TotalDebitCardPendingCharges", name, value),
-                        currency.parse().map_err(|e| {
-                            (name.as_str(), account::AttributeError(e.to_string())).into()
-                        })?,
-                    )
-                }
+                expand_seg_variants!("EquityWithLoanValue") => impl_seg_variants!("EquityWithLoanValue", EquityWithLoanValue, name, value, currency),
+                expand_seg_variants!("ExcessLiquidity") => impl_seg_variants!("ExcessLiquidity", ExcessLiquidity, name, value, currency),
+                "ExchangeRate" => decode_account_attr!(ExchangeRate, value, currency),
+                expand_seg_variants!("FullAvailableFunds") => impl_seg_variants!("FullAvailableFunds", FullAvailableFunds, name, value, currency),
+                expand_seg_variants!("FullExcessLiquidity") => impl_seg_variants!("FullExcessLiquidity", FullExcessLiquidity, name, value, currency),
+                expand_seg_variants!("FullInitMarginReq") => impl_seg_variants!("FullInitMarginReq", FullInitMarginReq, name, value, currency),
+                expand_seg_variants!("FullMaintMarginReq") => impl_seg_variants!("FullMaintMarginReq", FullMaintenanceMarginReq, name, value, currency),
+                "FundValue" => decode_account_attr!(FundValue, value, currency),
+                "FutureOptionValue" => decode_account_attr!(FutureOptionValue, value, currency),
+                "FuturesPNL" => decode_account_attr!(FuturesPnl, value, currency),
+                "FxCashBalance" => decode_account_attr!(FxCashBalance, value, currency),
+                "GrossPositionValue" => decode_account_attr!(GrossPositionValue, value, currency),
+                "GrossPositionValue-S" => decode_account_attr!(GrossPositionValueSecurity, value, currency),
+                expand_seg_variants!("Guarantee") => impl_seg_variants!("Guarantee", Guarantee, name, value, currency),
+                expand_seg_variants!("IndianStockHaircut") => impl_seg_variants!("IndianStockHaircut", IndianStockHaircut, name, value, currency),
+                expand_seg_variants!("InitMarginReq") => impl_seg_variants!("InitMarginReq", InitMarginReq, name, value, currency),
+                "IssuerOptionValue" => decode_account_attr!(IssuerOptionValue, value, currency),
+                "Leverage-S" => decode_account_attr!(LeverageSecurity, value),
+                "LookAheadNextChange" => decode_account_attr!(LookAheadNextChange, value.parse()),
+                expand_seg_variants!("LookAheadAvailableFunds") => impl_seg_variants!("LookAheadAvailableFunds", LookAheadAvailableFunds, name, value, currency),
+                expand_seg_variants!("LookAheadExcessLiquidity") => impl_seg_variants!("LookAheadExcessLiquidity", LookAheadExcessLiquidity, name, value, currency),
+                expand_seg_variants!("LookAheadInitMarginReq") => impl_seg_variants!("LookAheadInitMarginReq", LookAheadInitMarginReq, name, value, currency),
+                expand_seg_variants!("LookAheadMaintMarginReq") =>  impl_seg_variants!("LookAheadMaintMarginReq", LookAheadMaintenanceMarginReq, name, value, currency),
+                expand_seg_variants!("MaintMarginReq") => impl_seg_variants!("MaintMarginReq", MaintenanceMarginReq, name, value, currency),
+                "MoneyMarketFundValue" => decode_account_attr!(MoneyMarketFundValue, value, currency),
+                "MutualFundValue" => decode_account_attr!(MutualFundValue, value, currency),
+                "NLVAndMarginInReview" => decode_account_attr!(NlvAndMarginInReview, value),
+                "NetDividend" => decode_account_attr!(NetDividend, value, currency),
+                expand_seg_variants!("NetLiquidation") => impl_seg_variants!("NetLiquidation", NetLiquidation, name, value, currency),
+                "NetLiquidationByCurrency" => decode_account_attr!(NetLiquidationByCurrency, value, currency),
+                "NetLiquidationUncertainty" => decode_account_attr!(NetLiquidationUncertainty, value, currency),
+                "OptionMarketValue" => decode_account_attr!(OptionMarketValue, value, currency),
+                expand_seg_variants!("PASharesValue") => impl_seg_variants!("PASharesValue", PaSharesValue, name, value, currency),
+                expand_seg_variants!("PhysicalCertificateValue") => impl_seg_variants!("PhysicalCertificateValue", PhysicalCertificateValue, name, value, currency),
+                expand_seg_variants!("PostExpirationExcess") => impl_seg_variants!("PostExpirationExcess", PostExpirationExcess, name, value, currency),
+                expand_seg_variants!("PostExpirationMargin") => impl_seg_variants!("PostExpirationMargin", PostExpirationMargin, name, value, currency),
+                "PreviousDayEquityWithLoanValue" => decode_account_attr!(PreviousDayEquityWithLoanValue, value, currency),
+                "PreviousDayEquityWithLoanValue-S" => decode_account_attr!(PreviousDayEquityWithLoanValueSecurity, value, currency),
+                "RealCurrency" => decode_account_attr!(RealCurrency, value),
+                "RealizedPnL" => decode_account_attr!(RealizedPnL, value, currency),
+                "RegTEquity" => decode_account_attr!(RegTEquity, value),
+                "RegTEquity-S" => decode_account_attr!(RegTEquitySecurity, value, currency),
+                "RegTMargin" => decode_account_attr!(RegTMargin, value, currency),
+                "RegTMargin-S" => decode_account_attr!(RegTMarginSecurity, value, currency),
+                "SMA" => decode_account_attr!(Sma, value, currency),
+                "SMA-S" => decode_account_attr!(SmaSecurity, value, currency),
+                "StockMarketValue" => decode_account_attr!(StockMarketValue, value, currency),
+                "TBillValue" => decode_account_attr!(TBillValue, value, currency),
+                "TBondValue" => decode_account_attr!(TBondValue, value, currency),
+                "TotalCashBalance" => decode_account_attr!(TotalCashBalance, value, currency),
+                expand_seg_variants!("TotalCashValue") => impl_seg_variants!("TotalCashValue", TotalCashValue, name, value, currency),
+                expand_seg_variants!("TotalDebitCardPendingCharges") => impl_seg_variants!("TotalDebitCardPendingCharges", TotalDebitCardPendingCharges, name, value, currency),
                 "TradingType-S" => account::Attribute::TradingTypeSecurity(value),
-                "UnrealizedPnL" => account::Attribute::UnrealizedPnL(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "WarrantValue" => account::Attribute::WarrantValue(
-                    value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                    currency.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?,
-                ),
-                "WhatIfPMEnabled" => {
-                    account::Attribute::WhatIfPMEnabled(value.parse().map_err(|e| {
-                        (name.as_str(), account::AttributeError(e.to_string())).into()
-                    })?)
-                }
+                "UnrealizedPnL" => decode_account_attr!(UnrealizedPnL, value, currency),
+                "WarrantValue" => decode_account_attr!(WarrantValue, value, currency),
+                "WhatIfPMEnabled" => decode_account_attr!(WhatIfPMEnabled, value),
                 expand_seg_variants!("SegmentTitle") => {
                     if name.ends_with('C') || name.ends_with('P') || name.ends_with('S') {
                         return Ok(());
                     }
-                    return Err(DecodeError::Other("Unexpected segment title encountered.  This may mandate an API update: currently-supported values are C, P, and S as outlined in the account::Segment type.".to_owned()));
+                    return Err(ParseAttributeError::NoSuchAttribute(format!("Unexpected segment title \"{}\" encountered. This may mandate an API update: currently-supported values are C, P, and S as outlined in the account::Segment type.", name)));
                 }
                 _ => {
-                    return Err(DecodeError::Other(format!(
-                        "Invalid account attribute encountered: {name}"
-                    )))
+                    return Err(ParseAttributeError::NoSuchAttribute(name))
                 }
             };
             wrapper.account_attribute(attribute, account_number).await;
@@ -1058,7 +646,7 @@ pub trait Local: wrapper::LocalWrapper {
             let datetime = dt
                 .and_local_timezone(tz.parse::<timezone::IbTimeZone>()?)
                 .single()
-                .ok_or(anyhow::anyhow!("Invalid timezone in execution data."))?
+                .ok_or(ParseDateTimeError::Single)?
                 .to_utc();
             let exec = Execution::from((
                 Exec {
@@ -1391,24 +979,16 @@ pub trait Local: wrapper::LocalWrapper {
                     let base = RealTimeVolumeBase {
                         last_price: vols
                             .next()
-                            .ok_or(MissingInputData)
-                            .with_context(|| "No last price in real time volume message")?
-                            .parse()
-                            .with_context(|| "Invalid value in RealTimeVolume last_price decode")?,
+                            .ok_or(DecodeError::MissingData { field_name: "last_price" })?
+                            .parse()?,
                         last_size: vols
                             .next()
-                            .ok_or(MissingInputData)
-                            .with_context(|| "No last size in real time volume message")?
-                            .parse()
-                            .with_context(|| "Invalid value in RealTimeVolume last_size decode")?,
+                            .ok_or(DecodeError::MissingData { field_name: "last_size" })?
+                            .parse()?,
                         last_time: DateTime::from_timestamp(
                             vols.next()
-                                .ok_or(MissingInputData)
-                                .with_context(|| "No last time in real time volume message")?
-                                .parse()
-                                .with_context(|| {
-                                    "Invalid value in RealTimeVolume last_time decode"
-                                })?,
+                                .ok_or(DecodeError::MissingData { field_name: "last_time" })?
+                                .parse()?,
                             0,
                         )
                         .ok_or_else(|| {
@@ -1418,24 +998,17 @@ pub trait Local: wrapper::LocalWrapper {
                         })?,
                         day_volume: vols
                             .next()
-                            .ok_or(MissingInputData)
-                            .with_context(|| "No day volume in real time volume message")?
-                            .parse()
-                            .with_context(|| "Invalid value in RealTimeVolume day_volume decode")?,
+                            .ok_or(DecodeError::MissingData { field_name: "day_volume" })?
+                            .parse()?,
                         vwap: vols
                             .next()
-                            .ok_or(MissingInputData)
-                            .with_context(|| "No VWAP in real time volume message")?
-                            .parse()
-                            .with_context(|| "Invalid value in RealTimeVolume vwap decode")?,
+                            .ok_or(DecodeError::MissingData)
+                            .ok_or(DecodeError::MissingData { field_name: "vwap" })?
+                            .parse()?,
                         single_mm: vols
                             .next()
-                            .ok_or(MissingInputData)
-                            .with_context(|| {
-                                "No single market maker parameter in real time volume message"
-                            })?
-                            .parse()
-                            .with_context(|| "Invalid value in RealTimeVolume single_mm decode")?,
+                            .ok_or(DecodeError::MissingData { field_name: "single_mm" })?
+                            .parse()?,
                     };
                     let volume = match tick_type {
                         48 => RealTimeVolume::All(base),
@@ -1449,34 +1022,23 @@ pub trait Local: wrapper::LocalWrapper {
                     let dividends = Dividends {
                         trailing_year: divs
                             .next()
-                            .ok_or(MissingInputData)
-                            .with_context(|| "No trailing year in dividend message")?
-                            .parse()
-                            .with_context(|| "Invalid value in Dividends trailing_year decode")?,
+                            .ok_or(DecodeError::MissingData { field_name: "trailing_year" })?
+                            .parse()?,
                         forward_year: divs
                             .next()
-                            .ok_or(MissingInputData)
-                            .with_context(|| "No forward year in dividend message")?
-                            .parse()
-                            .with_context(|| "Invalid value in Dividends forward_year decode")?,
+                            .ok_or(DecodeError::MissingData { field_name: "forward_year" })?
+                            .parse()?,
                         next_dividend: (
                             NaiveDate::parse_and_remainder(
                                 divs.next()
-                                    .ok_or(MissingInputData)
-                                    .with_context(|| "No next dividend date in dividend message")?,
+                                    .ok_or(DecodeError::MissingData { field_name: "next_dividend" })??,
                                 "%Y%m%d",
-                            )
-                            .with_context(|| {
-                                "Invalid value in Dividends next_dividend decode datetime"
-                            })?
+                            )?
                             .0,
                             divs.next()
-                                .ok_or(MissingInputData)
-                                .with_context(|| "No next price in dividend message")?
-                                .parse()
-                                .with_context(|| {
-                                    "Invalid value in Dividends next_dividend decode value"
-                                })?,
+                                .ok_or(DecodeError::MissingData)
+                                .ok_or(DecodeError::MissingData { field_name: "next_price" })?
+                                .parse()?,
                         ),
                     };
                     wrapper.dividends(req_id, dividends).await;
@@ -2040,7 +1602,7 @@ pub trait Local: wrapper::LocalWrapper {
                 .head_timestamp(
                     req_id,
                     DateTime::from_timestamp(timestamp, 0)
-                        .ok_or(anyhow::anyhow!("Invalid timestamp."))?,
+                        .ok_or(ParseDateTimeError::Timestamp)?,
                 )
                 .await;
             Ok(())
@@ -2774,7 +2336,7 @@ pub(crate) async fn decode_contract_no_wrapper(
 }
 
 #[inline]
-fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<Proxy<Contract>> {
+fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<NoExchangeProxy<Contract>> {
     decode_fields!(
         fields =>
             contract_id @ 0: ContractId,
@@ -2784,131 +2346,37 @@ fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<Proxy<Contr
             strike @ 0: String,
             right @ 0: String,
             multiplier @ 0: String,
-            primary_exchange @ 0: String,
+            exchange @ 0: String,
             currency @ 0: Currency,
             local_symbol @ 0: String,
             trading_class @ 0: String
     );
 
-    let inner = match sec_type {
-        ContractType::Stock => Contract::Stock(Stock {
-            contract_id,
-            min_tick: f64::default(),
-            symbol,
-            exchange: Routing::Smart,
-            primary_exchange: primary_exchange
-                .parse()
-                .with_context(|| "Invalid primary exchange in STK proxy")?,
-            stock_type: String::default(),
-            security_ids: Vec::default(),
-            sector: String::default(),
-            trading_class,
-            currency,
-            local_symbol,
-            long_name: String::default(),
-            order_types: Vec::default(),
-            valid_exchanges: Vec::default(),
-        }),
-        ContractType::Crypto => Contract::Crypto(Crypto {
-            contract_id,
-            min_tick: f64::default(),
-            symbol,
-            trading_class,
-            currency,
-            local_symbol,
-            long_name: String::default(),
-            order_types: Vec::default(),
-            valid_exchanges: Vec::default(),
-        }),
-        ContractType::Index => Contract::Index(Index {
-            contract_id,
-            min_tick: f64::default(),
-            symbol,
-            exchange: Routing::Smart,
-            currency,
-            local_symbol,
-            long_name: String::default(),
-            order_types: Vec::default(),
-            valid_exchanges: Vec::default(),
-        }),
-        ContractType::Commodity => Contract::Commodity(Commodity {
-            contract_id,
-            min_tick: f64::default(),
-            symbol,
-            exchange: Routing::Smart,
-            trading_class,
-            currency,
-            local_symbol,
-            long_name: String::default(),
-            order_types: Vec::default(),
-            valid_exchanges: Vec::default(),
-        }),
-        ContractType::Forex => Contract::Forex(Forex {
-            contract_id,
-            min_tick: f64::default(),
-            symbol,
-            exchange: Routing::Smart,
-            trading_class,
-            currency,
-            local_symbol,
-            long_name: String::default(),
-            order_types: Vec::default(),
-            valid_exchanges: Vec::default(),
-        }),
-        ContractType::SecFuture => Contract::SecFuture(SecFuture {
-            contract_id,
-            min_tick: f64::default(),
-            symbol,
-            exchange: Routing::Smart,
-            multiplier: multiplier
-                .parse()
-                .with_context(|| "Invalid multiplier in FUT proxy")?,
-            expiration_date: NaiveDate::parse_and_remainder(expiration_date.as_str(), "%Y%m%d")
-                .with_context(|| "Invalid expiration date in OPT proxy")?
-                .0,
-            trading_class,
-            underlying_contract_id: contract_id,
-            currency,
-            local_symbol,
-            long_name: String::default(),
-            order_types: Vec::default(),
-            valid_exchanges: Vec::default(),
-        }),
-        ContractType::SecOption => {
-            let op_inner = SecOptionInner {
-                contract_id,
-                min_tick: f64::default(),
-                symbol,
-                exchange: Routing::Smart,
-                strike: strike.parse().with_context(|| "Invalid strike")?,
-                multiplier: multiplier
-                    .parse()
-                    .with_context(|| "Invalid multiplier in OPT proxy")?,
-                expiration_date: NaiveDate::parse_and_remainder(expiration_date.as_str(), "%Y%m%d")
-                    .with_context(|| "Invalid expiration date in OPT proxy")?
-                    .0,
-                underlying_contract_id: contract_id,
-                sector: String::default(),
-                trading_class,
-                currency,
-                local_symbol,
-                long_name: String::default(),
-                order_types: Vec::default(),
-                valid_exchanges: Vec::default(),
-            };
-            let op_outer = match right.as_str() {
-                "C" => SecOption::Call(op_inner),
-                "P" => SecOption::Put(op_inner),
-                other => {
-                    return Err(DecodeError::Other(format!(
-                        "Unexpected option right. Expected \'C\' or \'P\'. Found {}.",
-                        other
-                    )))
-                }
-            };
-            Contract::SecOption(op_outer)
-        }
-    };
+    let inner
+
+
+    Ok(Proxy { inner })
+}
+
+
+#[inline]
+fn deserialize_contract_proxy_exchange(fields: &mut Fields) -> anyhow::Result<ExchangeProxy<Contract>> {
+    decode_fields!(
+        fields =>
+            contract_id @ 0: ContractId,
+            symbol @ 0: String,
+            sec_type @ 0: ContractType,
+            expiration_date @ 0: String,
+            strike @ 0: String,
+            right @ 0: String,
+            multiplier @ 0: String,
+            exchange @ 0: String,
+            currency @ 0: Currency,
+            local_symbol @ 0: String,
+            trading_class @ 0: String
+    );
+
+
 
     Ok(Proxy { inner })
 }
@@ -2960,17 +2428,14 @@ pub(crate) enum DecodeError {
         field_name: &'static str,
         payload_error: crate::payload::ParsePayloadError,
     },
-    #[error("Failed to parse attribute {attribute_name}. Cause: {attribute_error}")]
+    #[error("Failed to parse attribute: {0}")]
     /// Failed to parse an [`account::Attribute`] value
-    ParseAttributeError {
-        attribute_name: &'static str,
-        attribute_error: account::ParseAttributeError,
-    },
+    ParseAttributeError(ParseAttributeError),
     #[error("Failed to parse datetime field {field_name}. Cause: {datetime_error}")]
-    /// Failed to parse an [`account::Attribute`] value
+    /// Failed to parse an datetime value
     ParseDateTimeError {
         field_name: &'static str,
-        datetime_error: ParseTimezoneError,
+        datetime_error: ParseDateTimeError,
     },
     #[error("{0}")]
     Other(String),
@@ -3039,17 +2504,14 @@ impl From<(&'static str, crate::payload::ParsePayloadError)> for DecodeError {
     }
 }
 
-impl From<(&'static str, account::ParseAttributeError)> for DecodeError {
-    fn from(value: (&'static str, account::ParseAttributeError)) -> Self {
-        Self::ParseAttributeError {
-            attribute_name: value.0,
-            attribute_error: value.1,
-        }
+impl From<ParseAttributeError> for DecodeError {
+    fn from(value: ParseAttributeError) -> Self {
+        Self::ParseAttributeError(value)
     }
 }
 
-impl From<(&'static str, ParseTimezoneError)> for DecodeError {
-    fn from(value: (&'static str, ParseTimezoneError)) -> Self {
+impl From<(&'static str, ParseDateTimeError)> for DecodeError {
+    fn from(value: (&'static str, ParseDateTimeError)) -> Self {
         Self::ParseDateTimeError {
             field_name: value.0,
             datetime_error: value.1,
@@ -3057,8 +2519,23 @@ impl From<(&'static str, ParseTimezoneError)> for DecodeError {
     }
 }
 
-impl<E: std::error::Error> From<E> for DecodeError {
-    fn from(value: E) -> Self {
-        Self::Other(value.to_string())
-    }
+// impl<E: std::error::Error> From<E> for DecodeError {
+//     fn from(value: E) -> Self {
+//         Self::Other(value.to_string())
+//     }
+// }
+
+#[derive(Debug, Clone, Error)]
+/// An error returned when parsing a datetime fails.
+pub enum ParseDateTimeError {
+    /// Failed to parse an [`IbTimeZone`]
+    #[error("Failed to parse timezone")]
+    Timezone(#[from] ParseTimezoneError),
+    /// Invalid timestamp
+    #[error("Invalid timestamp: out-of-range number of seconds and/or invalid nanosecond")]
+    Timestamp,
+    /// Failed to resolve single timezone
+    #[error("Failed to resolve a single timezone from provided information")]
+    Single
 }
+

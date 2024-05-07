@@ -1,5 +1,5 @@
-use std::fmt::Formatter;
 use std::{num::ParseIntError, str::FromStr};
+use std::hash::Hash;
 
 use chrono::NaiveDate;
 use ibapi_macros::{make_getters, Security};
@@ -12,6 +12,7 @@ use crate::{
     exchange::{Primary, Routing},
     match_poly,
 };
+use crate::contract::proxy_indicators::{HasExchange, NoExchange};
 
 // =========================================================
 // === Utility Types and Functions for Contract Creation ===
@@ -321,7 +322,7 @@ pub async fn new<S: Security>(
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Error)]
-#[eror("Unexpected security type. Expected {expected:?}. Found {found:?}")]
+#[error("Unexpected security type. Expected {expected:?}. Found {found:?}")]
 /// An error type that's returned when a [`Security`] of type `S` is requested, but a security of
 /// another type is received from the API
 pub struct UnexpectedSecurityType {
@@ -726,8 +727,8 @@ macro_rules! proxy_impl {
         ///
         /// # Returns
         #[doc=concat!("A new `Proxy<", stringify!($sec_type), ">`, if the underlying contract is a ", stringify!($sec_type), " otherwise, `None`.")]
-        pub fn $func_name(self) -> Option<Proxy<$sec_type>> {
-            match self.inner {
+        pub fn $func_name(self) -> Option<Proxy<$sec_type, E>> {
+            match (self.inner, self._exch) {
                 $pat => Some($exp),
                 _ => None,
             }
@@ -738,24 +739,50 @@ macro_rules! proxy_impl {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 #[serde(into = "SerProxyHelp", try_from = "SerProxyHelp")]
 /// Holds information about a contract but lacks the information of a full [`Contract`].
-pub struct Proxy<S: Security + Clone> {
+pub struct Proxy<S: Security + Clone, E: ProxyExchange> {
     #[serde(serialize_with = "_dummy_ser", deserialize_with = "_dummy_de")]
     // Temporary until https://github.com/serde-rs/serde/pull/2239 is merged
     pub(crate) inner: S,
+    pub(crate) _exch: std::marker::PhantomData<E>,
+}
+
+pub type ExchangeProxy<S: Security + Clone> = Proxy<S, HasExchange>;
+pub type NoExchangeProxy<S: Security + Clone> = Proxy<S, NoExchange>;
+
+trait ProxyExchange: proxy_indicators::Valid {}
+
+mod proxy_indicators {
+    use super::ProxyExchange;
+
+    pub trait Valid {}
+
+    #[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+    pub struct HasExchange;
+
+    #[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+    pub struct NoExchange;
+
+    impl Valid for HasExchange {}
+
+    impl Valid for NoExchange {}
+
+    impl ProxyExchange for HasExchange {}
+
+    impl ProxyExchange for NoExchange {}
 }
 
 #[allow(clippy::needless_pass_by_value)]
-fn _dummy_ser<Sec: Security + Clone, Ser: Serializer>(
-    _t: &Proxy<Sec>,
+fn _dummy_ser<E: ProxyExchange, Sec: Security + Clone, Ser: Serializer>(
+    _t: &Proxy<Sec, E>,
     _ser: Ser,
 ) -> Result<Ser::Ok, Ser::Error> {
     unreachable!()
 }
 
 #[allow(clippy::needless_pass_by_value)]
-fn _dummy_de<'de, Sec: Security + Clone, De: Deserializer<'de>>(
+fn _dummy_de<'de, E: ProxyExchange, Sec: Security + Clone, De: Deserializer<'de>>(
     _de: De,
-) -> Result<Proxy<Sec>, De::Error> {
+) -> Result<Proxy<Sec, E>, De::Error> {
     unreachable!()
 }
 
@@ -766,6 +793,7 @@ struct SerProxyHelp {
     symbol: String,
     currency: Currency,
     local_symbol: String,
+    exchange: Option<Routing>,
     trading_class: Option<String>,
     primary_exchange: Option<Primary>,
     expiration_date: Option<NaiveDate>,
@@ -783,9 +811,9 @@ pub enum SecOptionClass {
     Put,
 }
 
-impl<S: Security + Clone> From<Proxy<S>> for SerProxyHelp {
+impl<S: Security + Clone, E> From<Proxy<S, E>> for SerProxyHelp {
     #[allow(clippy::too_many_lines)]
-    fn from(value: Proxy<S>) -> Self {
+    fn from(value: Proxy<S, E>) -> Self {
         let contract_type = value.contract_type();
         let contract_id = value.contract_id();
         let currency = value.currency();
@@ -894,7 +922,7 @@ impl<S: Security + Clone> From<Proxy<S>> for SerProxyHelp {
     }
 }
 
-impl<S: Security + Clone> TryFrom<SerProxyHelp> for Proxy<S> {
+impl<S: Security + Clone> TryFrom<SerProxyHelp> for Proxy<S, E> {
     type Error = anyhow::Error;
 
     #[allow(clippy::too_many_lines)]
@@ -922,8 +950,8 @@ impl<S: Security + Clone> TryFrom<SerProxyHelp> for Proxy<S> {
                 local_symbol,
                 long_name: String::default(),
                 order_types: Vec::default(),
-                trading_class: trading_class.ok_or(anyhow::anyhow!("Missing data"))?,
-                primary_exchange: primary_exchange.ok_or(anyhow::anyhow!("Missing data"))?,
+                trading_class: trading_class.ok_or(SerializeProxyError::MissingData("trading_class"))?,
+                primary_exchange: primary_exchange.ok_or(SerializeProxyError::MissingData("primary_exchange"))?,
                 stock_type: String::default(),
                 security_ids: Vec::default(),
                 exchange: Routing::Smart,
@@ -950,7 +978,7 @@ impl<S: Security + Clone> TryFrom<SerProxyHelp> for Proxy<S> {
                 min_tick: f64::default(),
                 symbol,
                 exchange: Routing::Smart,
-                trading_class: trading_class.ok_or(anyhow::anyhow!("Missing data"))?,
+                trading_class: trading_class.ok_or(SerializeProxyError::MissingData("trading_class"))?,
                 currency,
                 local_symbol,
                 long_name: String::default(),
@@ -963,7 +991,7 @@ impl<S: Security + Clone> TryFrom<SerProxyHelp> for Proxy<S> {
                 contract_id,
                 min_tick: f64::default(),
                 symbol,
-                trading_class: trading_class.ok_or(anyhow::anyhow!("Missing data"))?,
+                trading_class: trading_class.ok_or(SerializeProxyError::MissingData("trading_class"))?,
                 currency,
                 local_symbol,
                 long_name: String::default(),
@@ -977,7 +1005,7 @@ impl<S: Security + Clone> TryFrom<SerProxyHelp> for Proxy<S> {
                 min_tick: f64::default(),
                 symbol,
                 exchange: Routing::Smart,
-                trading_class: trading_class.ok_or(anyhow::anyhow!("Missing data"))?,
+                trading_class: trading_class.ok_or(SerializeProxyError::MissingData("trading_class"))?,
                 currency,
                 local_symbol,
                 long_name: String::default(),
@@ -991,9 +1019,9 @@ impl<S: Security + Clone> TryFrom<SerProxyHelp> for Proxy<S> {
                 min_tick: f64::default(),
                 symbol,
                 exchange: Routing::Smart,
-                multiplier: multiplier.ok_or(anyhow::anyhow!("Missing data"))?,
-                expiration_date: expiration_date.ok_or(anyhow::anyhow!("Missing data"))?,
-                trading_class: trading_class.ok_or(anyhow::anyhow!("Missing data"))?,
+                multiplier: multiplier.ok_or(SerializeProxyError::MissingData("multiplier"))?,
+                expiration_date: expiration_date.ok_or(SerializeProxyError::MissingData("expiration_date"))?,
+                trading_class: trading_class.ok_or(SerializeProxyError::MissingData("trading_class"))?,
                 underlying_contract_id: contract_id,
                 currency,
                 local_symbol,
@@ -1009,19 +1037,19 @@ impl<S: Security + Clone> TryFrom<SerProxyHelp> for Proxy<S> {
                     min_tick: f64::default(),
                     symbol,
                     exchange: Routing::Smart,
-                    strike: strike.ok_or(anyhow::anyhow!("Missing data"))?,
-                    multiplier: multiplier.ok_or(anyhow::anyhow!("Missing data"))?,
-                    expiration_date: expiration_date.ok_or(anyhow::anyhow!("Missing data"))?,
+                    strike: strike.ok_or(SerializeProxyError::MissingData("strike"))?,
+                    multiplier: multiplier.ok_or(SerializeProxyError::MissingData("multiplier"))?,
+                    expiration_date: expiration_date.ok_or(SerializeProxyError::MissingData("expiration_date"))?,
                     underlying_contract_id: contract_id,
                     sector: String::default(),
-                    trading_class: trading_class.ok_or(anyhow::anyhow!("Missing data"))?,
+                    trading_class: trading_class.ok_or(SerializeProxyError::MissingData("trading_class"))?,
                     currency,
                     local_symbol,
                     long_name: String::default(),
                     order_types: Vec::default(),
                     valid_exchanges: Vec::default(),
                 };
-                match option_type.ok_or(anyhow::anyhow!("Missing data"))? {
+                match option_type.ok_or(SerializeProxyError::MissingData("option_type"))? {
                     SecOptionClass::Call => SecOption::Call(inner),
                     SecOptionClass::Put => SecOption::Put(inner),
                 }
@@ -1035,13 +1063,13 @@ impl<S: Security + Clone> TryFrom<SerProxyHelp> for Proxy<S> {
     }
 }
 
-impl<S: Security + Clone> From<Proxy<S>> for ContractId {
-    fn from(value: Proxy<S>) -> Self {
+impl<S: Security + Clone, E: ProxyExchange> From<Proxy<S, E>> for ContractId {
+    fn from(value: Proxy<S, E>) -> Self {
         value.inner.contract_id()
     }
 }
 
-impl<S: Security + Clone> Proxy<S> {
+impl<S: Security + Clone, E: ProxyExchange> Proxy<S, E> {
     #[inline]
     /// Get the type of contract.
     pub fn contract_type(&self) -> ContractType {
@@ -1072,17 +1100,17 @@ impl<S: Security + Clone> Proxy<S> {
     }
 }
 
-impl Proxy<Contract> {
-    proxy_impl!(Forex, Contract::Forex(t) => Proxy::<Forex> { inner: t }, forex);
-    proxy_impl!(Crypto, Contract::Crypto(t) => Proxy::<Crypto> { inner: t }, crypto);
-    proxy_impl!(Stock, Contract::Stock(t) => Proxy::<Stock> { inner: t }, stock);
-    proxy_impl!(Index, Contract::Index(t) => Proxy::<Index> { inner: t }, index);
-    proxy_impl!(Commodity, Contract::Commodity(t) => Proxy::<Commodity> { inner: t }, commodity);
-    proxy_impl!(SecFuture, Contract::SecFuture(t) => Proxy::<SecFuture> { inner: t }, sec_future);
-    proxy_impl!(SecOption, Contract::SecOption(t) => Proxy::<SecOption> { inner: t }, sec_option);
+impl<E: ProxyExchange> Proxy<Contract, E> {
+    proxy_impl!(Forex, (Contract::Forex(t), e) => Proxy::<Forex, E> { inner: t, _exch: e }, forex);
+    proxy_impl!(Crypto, (Contract::Crypto(t), e) => Proxy::<Crypto, E> { inner: t, _exch: e }, crypto);
+    proxy_impl!(Stock, (Contract::Stock(t), e) => Proxy::<Stock, E> { inner: t, _exch: e }, stock);
+    proxy_impl!(Index, (Contract::Index(t), e) => Proxy::<Index, E> { inner: t, _exch: e }, index);
+    proxy_impl!(Commodity, (Contract::Commodity(t), e) => Proxy::<Commodity, E> { inner: t, _exch: e }, commodity);
+    proxy_impl!(SecFuture, (Contract::SecFuture(t), e) => Proxy::<SecFuture, E> { inner: t, _exch: e }, sec_future);
+    proxy_impl!(SecOption, (Contract::SecOption(t), e) => Proxy::<SecOption, E> { inner: t, _exch: e }, sec_option);
 }
 
-impl Proxy<Forex> {
+impl<E: ProxyExchange> Proxy<Forex, E> {
     #[inline]
     #[must_use]
     /// Get the [`Forex`] trading class.
@@ -1091,7 +1119,7 @@ impl Proxy<Forex> {
     }
 }
 
-impl Proxy<Crypto> {
+impl<E: ProxyExchange> Proxy<Crypto, E> {
     #[inline]
     #[must_use]
     /// Get the [`Crypto`] trading class.
@@ -1100,7 +1128,7 @@ impl Proxy<Crypto> {
     }
 }
 
-impl Proxy<Stock> {
+impl<E: ProxyExchange> Proxy<Stock, E> {
     #[inline]
     #[must_use]
     /// Get the [`Stock`] trading class.
@@ -1116,7 +1144,7 @@ impl Proxy<Stock> {
     }
 }
 
-impl Proxy<Commodity> {
+impl<E: ProxyExchange> Proxy<Commodity, E> {
     #[inline]
     #[must_use]
     /// Get the [`Commodity`] trading class.
@@ -1125,7 +1153,7 @@ impl Proxy<Commodity> {
     }
 }
 
-impl Proxy<SecFuture> {
+impl<E: ProxyExchange> Proxy<SecFuture, E> {
     #[inline]
     #[must_use]
     /// Get the [`SecFuture`] trading class.
@@ -1148,7 +1176,7 @@ impl Proxy<SecFuture> {
     }
 }
 
-impl Proxy<SecOption> {
+impl<E: ProxyExchange> Proxy<SecOption, E> {
     #[inline]
     #[must_use]
     /// Get the [`SecOption`] trading class.
@@ -1189,6 +1217,36 @@ impl Proxy<SecOption> {
     /// Get the [`SecOption`] `multiplier`.
     pub fn multiplier(&self) -> u32 {
         self.inner.as_inner_ref().multiplier
+    }
+}
+
+impl Proxy<Forex, HasExchange> {
+    pub fn exchange(&self) -> Routing {
+        self.exchange()
+    }
+}
+
+impl Proxy<Stock, HasExchange> {
+    pub fn exchange(&self) -> Routing {
+        self.exchange()
+    }
+}
+
+impl Proxy<Commodity, HasExchange> {
+    pub fn exchange(&self) -> Routing {
+        self.exchange()
+    }
+}
+
+impl Proxy<SecFuture, HasExchange> {
+    pub fn exchange(&self) -> Routing {
+        self.exchange()
+    }
+}
+
+impl Proxy<SecOption, HasExchange> {
+    pub fn exchange(&self) -> Routing {
+        self.exchange()
     }
 }
 
@@ -1247,4 +1305,15 @@ impl FromStr for ContractType {
             v => return Err(ParseContractTypeError(v.to_owned())),
         })
     }
+}
+
+#[derive(Debug,Clone, Copy, PartialOrd, PartialEq, Ord, Eq, Error)]
+/// An error type returned upon failure to serialize a [`Proxy`].
+pub enum SerializeProxyError {
+    #[error("Missing data for field {0}")]
+    /// Missing data
+    MissingData(&'static str),
+    #[error("Unexpected security type {0}")]
+    /// Unexpected security type
+    UnexpectedContractType(#[from] UnexpectedSecurityType),
 }

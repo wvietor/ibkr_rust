@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crossbeam::queue::SegQueue;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use tokio::net::tcp::OwnedReadHalf;
 use tokio::task::JoinHandle;
 use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
@@ -45,31 +46,24 @@ struct Config {
     ports: Ports,
 }
 
+#[derive(Debug, Error)]
+/// Error type representing the ways that a `config.toml` file can be invalid
+pub enum ParseConfigFileError {
+    #[error("Failed to read config.toml file. Cause: {0}")]
+    /// The OS failed to read the file
+    File(std::io::Error),
+    #[error("Failed to parse config.toml file. Cause: {0}")]
+    /// The required TOMl data was invalid or missing
+    Toml(toml::de::Error)
+}
+
 impl Config {
     #[inline]
-    fn new(path: &std::path::Path) -> anyhow::Result<Self> {
-        toml::from_str(
-            std::fs::read_to_string(path)
-                .with_context(|| format!("Invalid config file at path {}", path.display()))?
+    fn new(path: impl AsRef<std::path::Path>) -> Result<Self, ParseConfigFileError> {
+        Ok(toml::from_str(
+            std::fs::read_to_string(path)?
                 .as_str(),
-        )
-        .with_context(|| {
-            format!(
-                "Invalid TOML file at path {}.\n
-        # =========================\n
-        # === config.toml Usage ===\n
-        # =========================\n
-        address: std::net::Ipv4Addr\n
-        \n
-        [Ports]\n
-        tws_live: u16\n
-        tws_paper: u16\n
-        \n
-        gateway_live: u16\n
-        gateway_paper: u16\n",
-                path.display()
-            )
-        })
+        )?)
     }
 }
 
@@ -144,6 +138,22 @@ enum Inner {
     },
 }
 
+#[derive(Debug, Error)]
+/// An error type for potential failure of the initial connection to the IBKR API
+pub enum ConnectionError {
+    /// Failed to parse server version
+    ServerVersion,
+    /// Invalid timezone in connection time,
+    TimeZone,
+    /// Invalid datetime in connection time
+    DateTime,
+    /// IO error when attempting to initiate TCP connection
+    Io(std::io::Error),
+    /// Occurs if required buffer size exceeds `usize::MAX`
+    InvalidBufferSize,
+}
+
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// Facilitates the creation of a new connection to IBKR's trading systems.
 ///
@@ -169,7 +179,7 @@ impl Builder {
         mode: Mode,
         host: Host,
         path: Option<&std::path::Path>,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, ParseConfigFileError> {
         let config = Config::new(path.unwrap_or(std::path::Path::new("./config.toml")))?;
         Ok(Self(Inner::ConfigFile { mode, host, config }))
     }
@@ -204,7 +214,7 @@ impl Builder {
     /// # Returns
     /// An inactive [`Client`] that will become active upon calling [`Client::local`] or
     /// [`Client::remote`].
-    pub async fn connect(&self, client_id: i64) -> anyhow::Result<Client<indicators::Inactive>> {
+    pub async fn connect(&self, client_id: i64) -> Result<Client<indicators::Inactive>, std::io::Error> {
         let (mode, host, port, address) = match self.0 {
             Inner::ConfigFile { mode, host, config } => (
                 Some(mode),
@@ -231,31 +241,25 @@ impl Builder {
         ))?;
         writer.send().await?;
 
-        let mut buf = bytes::BytesMut::with_capacity(usize::try_from(reader.read_u32().await?)?);
+        let mut buf = bytes::BytesMut::with_capacity(usize::try_from(reader.read_u32().await?).map_err(|_| ConnectionError::InvalidBufferSize)?);
         reader.read_buf(&mut buf).await?;
         let resp = buf.into_iter().map(char::from).collect::<String>();
         let mut params = resp.split('\0');
 
         let server_version = params
             .next()
-            .ok_or_else(|| anyhow::Error::msg("Missing server version in IBKR handshake response"))?
+            .ok_or(ConnectionError::ServerVersion)?
             .parse()
-            .with_context(|| "Failed to parse server version")?;
+            .map_err(|_| ConnectionError::ServerVersion)?;
         let (conn_time, tz) = chrono::NaiveDateTime::parse_and_remainder(
-            params.next().ok_or_else(|| {
-                anyhow::Error::msg("Missing connection time in IBKR handshake response")
-            })?,
+            params.next().ok_or(ConnectionError::DateTime)?,
             "%Y%m%d %T",
-        )
-        .with_context(|| "Failed to parse connection time")?;
+            )
+            .map_err(|_| ConnectionError::DateTime)?;
         let conn_time = conn_time
-            .and_local_timezone(tz.trim().parse::<timezone::IbTimeZone>().map_err(|e| {
-                anyhow::anyhow!("Failed to parse timezone in connection time: {:?}", e)
-            })?)
+            .and_local_timezone(tz.trim().parse::<timezone::IbTimeZone>().map_err(|_| ConnectionError::TimeZone)?)
             .single()
-            .ok_or(anyhow::anyhow!(
-                "Failed to find unique timezone in connection time."
-            ))?;
+            .ok_or(ConnectionError::TimeZone)?;
 
         let mut client = Client {
             mode,
@@ -1265,7 +1269,7 @@ impl Client<indicators::Inactive> {
     // === Methods That Initiate the API Loop ===
     // ==========================================
 
-    async fn start_api(&mut self) -> Result<(), anyhow::Error> {
+    async fn start_api(&mut self) -> Result<(), std::io::Error> {
         const VERSION: u8 = 2;
 
         self.writer
@@ -1292,13 +1296,10 @@ impl Client<indicators::Inactive> {
                         );
                     }
                     Some(In::NextValidId) => {
-                        valid_id = decode::nth(&mut fields.into_iter(), 2)
-                            .with_context(|| "Expected ID, found none")
+                        valid_id = decode::nth(&mut fields.into_iter(), 2, "valid_id")
                             .ok()
                             .and_then(|t| {
-                                t.parse::<i64>()
-                                    .with_context(|| "Invalid value for ID")
-                                    .ok()
+                                t.parse::<i64>().ok()
                             });
                     }
                     Some(_) => backlog.push_back(fields),
@@ -2468,7 +2469,7 @@ impl Client<indicators::Active> {
     // === Contract Creation ===
 
     #[inline]
-    pub(crate) async fn send_contract_query(&mut self, query: Query) -> anyhow::Result<()> {
+    pub(crate) async fn send_contract_query(&mut self, query: Query) -> Result<(), std::io::Error> {
         const VERSION: u8 = 8;
         let req_id = self.get_next_req_id();
         self.status
