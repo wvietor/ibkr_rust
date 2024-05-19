@@ -39,7 +39,6 @@ pub mod currency;
     clippy::unused_async
 )]
 mod decode;
-mod error;
 /// Contains types related to security exchanges and trading venues available in the API.
 pub mod exchange;
 /// Contains types related to executions, which are produced after a trade is made.

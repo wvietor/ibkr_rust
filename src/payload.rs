@@ -4,21 +4,8 @@ use std::str::FromStr;
 use chrono::serde::ts_seconds;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
 use crate::contract::{Contract, Proxy};
-
-#[derive(Debug, Clone, Error)]
-#[error("Invalid value encountered when attempting to parse a payload value.")]
-/// An error returned when parsing any value in the [`crate::payload`] module fails.
-pub enum ParsePayloadError {
-    /// Invalid locate
-    #[error("Invalid value encountered when attempting to parse locate. Expected \"locate\", found: {0}")]
-    Locate(String),
-    /// Invalid order status
-    #[error("Invalid value encountered when attempting to parse order status. No such order status: {0}")]
-    OrderStatus(String),
-}
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 /// The result of a [`crate::client::Client::req_market_data`] request, which contains an identifier that can be passed to
@@ -375,25 +362,6 @@ pub enum OrderStatus {
     Inactive(OrderStatusCore),
 }
 
-impl TryFrom<(&str, OrderStatusCore)> for OrderStatus {
-    type Error = ParsePayloadError;
-
-    fn try_from(value: (&str, OrderStatusCore)) -> Result<Self, Self::Error> {
-        Ok(match value.0 {
-            "ApiPending" => OrderStatus::ApiPending(value.1),
-            "PendingSubmit" => OrderStatus::PendingSubmit(value.1),
-            "PendingCancel" => OrderStatus::PendingCancel(value.1),
-            "PreSubmitted" => OrderStatus::PreSubmitted(value.1),
-            "Submitted" => OrderStatus::Submitted(value.1),
-            "ApiCancelled" => OrderStatus::ApiCancelled(value.1),
-            "Cancelled" => OrderStatus::Cancelled(value.1),
-            "Filled" => OrderStatus::Filled(value.1),
-            "Inactive" => OrderStatus::Inactive(value.1),
-            s => return Err(ParsePayloadError::OrderStatus(s.to_owned())),
-        })
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
 /// The core fields of an Order's Status
 pub struct OrderStatusCore {
@@ -429,17 +397,6 @@ pub struct Fill {
 #[derive(Debug, Default, Clone, Copy, PartialOrd, Eq, Ord, PartialEq, Serialize, Deserialize)]
 /// Indicates whether an order is being held because IBKR is trying to locate shares for a short sale.
 pub struct Locate;
-
-impl FromStr for Locate {
-    type Err = ParsePayloadError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "locate" => Ok(Locate),
-            s => Err(ParsePayloadError::Locate(s.to_owned())),
-        }
-    }
-}
 
 #[derive(Debug, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 /// An error that represents an invalid order status.

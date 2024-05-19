@@ -1,11 +1,7 @@
-use std::fmt::Formatter;
-use std::num::{ParseFloatError, ParseIntError};
-use std::str::{FromStr, ParseBoolError};
-
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
+use std::fmt::Formatter;
 
-use crate::currency::{Currency, ParseCurrencyError};
+use crate::currency::Currency;
 
 #[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "attribute", content = "data")]
@@ -169,44 +165,6 @@ pub enum Attribute {
     WhatIfPMEnabled(bool),
 }
 
-#[derive(Debug, Clone, Error)]
-#[error("Invalid value encountered when attempting to parse attribute. Cause: {0}")]
-/// An error returned when parsing an [`Attribute`] fails.
-pub enum ParseAttributeError {
-    #[error("Failed to parse floating point attribute {attribute_name}. Cause: {float_error}")]
-    /// Failed to parse float attribute
-    Float {
-        attribute_name: &'static str,
-        float_error: ParseFloatError,
-    },
-    #[error("Failed to parse integer attribute {attribute_name}. Cause: {int_error}")]
-    /// Failed to parse int attribute
-    Int {
-        attribute_name: &'static str,
-        int_error: ParseIntError,
-    },
-    #[error("Failed to parse day trades attribute {attribute_name}. Cause: {day_trades_error}")]
-    /// Failed to parse [`RemainingDayTrades`] attribute
-    DayTrades {
-        attribute_name: &'static str,
-        day_trades_error: ParseDayTradesError,
-    },
-    #[error("Failed to parse boolean attribute {attribute_name}. Cause: {bool_error}")]
-    /// Failed to parse [`bool`] attribute
-    Bool {
-        attribute_name: &'static str,
-        bool_error: ParseBoolError,
-    },
-    #[error(
-        "Failed to parse denomination attribute {attribute_name}. Cause: {denomination_error}"
-    )]
-    /// Failed to parse [`Denomination`] attribute
-    Denomination {
-        attribute_name: &'static str,
-        denomination_error: ParseCurrencyError,
-    },
-}
-
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 /// The particular account groups managed by a given client.
@@ -215,15 +173,6 @@ pub enum Group {
     All,
     /// A specific account.
     Name(String),
-}
-
-impl From<String> for Group {
-    fn from(value: String) -> Self {
-        match value.as_str() {
-            "All" => Self::All,
-            _ => Self::Name(value),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -250,8 +199,8 @@ pub enum Denomination {
     Specific(Currency),
 }
 
-impl FromStr for Denomination {
-    type Err = ParseCurrencyError;
+impl std::str::FromStr for Denomination {
+    type Err = crate::currency::ParseCurrencyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_uppercase().as_str() {

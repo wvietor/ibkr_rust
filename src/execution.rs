@@ -52,18 +52,16 @@ pub enum OrderSide {
     Sell,
 }
 
-#[derive(Debug, Default, Clone, thiserror::Error)]
-#[error("Invalid value encountered when attempting to parse an order side. No such order side: {0}. Valid order sides \"BOT\" or \"SLD\".")]
-/// An error returned when parsing an [`OrderSide`] fails.
-pub struct ParseOrderSideError(String);
-
 impl std::str::FromStr for OrderSide {
-    type Err = ParseOrderSideError;
+    type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "BOT" => Ok(Self::Buy),
             "SLD" => Ok(Self::Sell),
-            other => Err(ParseOrderSideError(other.to_owned())),
+            other => Err(anyhow::anyhow!(
+                "Invalid order side. Expected \'BOT\' or \'SLD\', found {}",
+                other
+            )),
         }
     }
 }
