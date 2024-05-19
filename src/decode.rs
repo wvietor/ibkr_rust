@@ -4,13 +4,16 @@ use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 use thiserror::Error;
 
 use crate::account::{self, ParseAttributeError, Tag, TagValue};
-use crate::contract::{Commodity, Contract, ContractId, ContractType, Crypto, ExchangeProxy, Forex, Index, NoExchangeProxy, Proxy, SecFuture, SecOption, SecOptionInner, SecurityId, Stock};
+use crate::contract::{
+    Commodity, Contract, ContractId, ContractType, Crypto, Forex, Index, Proxy, SecFuture,
+    SecOption, SecOptionInner, SecurityId, Stock,
+};
 use crate::exchange::Primary;
-use crate::execution::{Exec, Execution, OrderSide};
+use crate::execution::{Exec, Execution, OrderSide, ParseOrderSideError};
 use crate::payload::{
     market_depth::{CompleteEntry, Entry, Operation},
     Bar, BarCore, BidAsk, ExchangeId, Fill, HistogramEntry, Last, MarketDataClass, Midpoint,
-    OrderStatus, Pnl, PnlSingle, Position, PositionSummary, TickData, Trade,
+    ParsePayloadError, Pnl, PnlSingle, Position, PositionSummary, TickData, Trade,
 };
 use crate::tick::{
     Accessibility, AuctionData, CalculationResult, Class, Dividends, EtfNav, ExtremeValue, Ipo,
@@ -55,12 +58,20 @@ macro_rules! decode_fields {
 macro_rules! decode_account_attr {
     ($attr_var: ident, $value: expr, $currency: expr) => {
         account::Attribute::$attr_var(
-            $value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
-            $currency.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?
+            $value
+                .parse()
+                .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+            $currency
+                .parse()
+                .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
         )
     };
     ($attr_var: ident, $value: expr) => {
-        account::Attribute::$attr_var($value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?)
+        account::Attribute::$attr_var(
+            $value
+                .parse()
+                .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+        )
     };
 }
 
@@ -74,64 +85,82 @@ macro_rules! expand_seg_variants {
 }
 
 macro_rules! impl_seg_variants {
-    ($root_name: literal, $attr_var: ident, $name: expr, $value: expr, $currency: expr) => {
-        {
-            match $name.as_str() {
-                stringify!($root_name) => {
-                     account::Attribute::$attr_var(
-                         account::Segment::Total($value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?),
-                         $currency.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?
-                     )
-                }
-                concat!($root_name, "-C") => {
-                     account::Attribute::$attr_var(
-                         account::Segment::Commodity($value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?),
-                         $currency.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?
-                     )
-                }
-                concat!($root_name, "-P") => {
-                     account::Attribute::$attr_var(
-                         account::Segment::Paxos($value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?),
-                         $currency.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?
-                     )
-                }
-                concat!($root_name, "-S") => {
-                     account::Attribute::$attr_var(
-                         account::Segment::Security($value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?),
-                         $currency.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?
-                     )
-                }
-                _ => unreachable!()
-            }
+    ($root_name: literal, $attr_var: ident, $name: expr, $value: expr, $currency: expr) => {{
+        match $name.as_str() {
+            stringify!($root_name) => account::Attribute::$attr_var(
+                account::Segment::Total(
+                    $value
+                        .parse()
+                        .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+                ),
+                $currency
+                    .parse()
+                    .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+            ),
+            concat!($root_name, "-C") => account::Attribute::$attr_var(
+                account::Segment::Commodity(
+                    $value
+                        .parse()
+                        .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+                ),
+                $currency
+                    .parse()
+                    .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+            ),
+            concat!($root_name, "-P") => account::Attribute::$attr_var(
+                account::Segment::Paxos(
+                    $value
+                        .parse()
+                        .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+                ),
+                $currency
+                    .parse()
+                    .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+            ),
+            concat!($root_name, "-S") => account::Attribute::$attr_var(
+                account::Segment::Security(
+                    $value
+                        .parse()
+                        .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+                ),
+                $currency
+                    .parse()
+                    .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+            ),
+            _ => unreachable!(),
         }
-    };
-    ($root_name: literal, $attr_var: ident, $name: expr, $value: expr) => {
-        {
-            match $name.as_str() {
-                stringify!($attr_var) => {
-                     account::Attribute::$attr_var(
-                         account::Segment::Total($value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?),
-                     )
-                }
-                concat!(stringify!($attr_var), "-C") => {
-                     account::Attribute::$attr_var(
-                         account::Segment::Commodity($value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?),
-                     )
-                }
-                concat!(stringify!($attr_var), "-P") => {
-                     account::Attribute::$attr_var(
-                         account::Segment::Paxos($value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?),
-                     )
-                }
-                concat!(stringify!($attr_var), "-S") => {
-                     account::Attribute::$attr_var(
-                         account::Segment::Security($value.parse().map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?),
-                     )
-                }
-                _ => unreachable!()
+    }};
+    ($root_name: literal, $attr_var: ident, $name: expr, $value: expr) => {{
+        match $name.as_str() {
+            stringify!($attr_var) => account::Attribute::$attr_var(account::Segment::Total(
+                $value
+                    .parse()
+                    .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+            )),
+            concat!(stringify!($attr_var), "-C") => {
+                account::Attribute::$attr_var(account::Segment::Commodity(
+                    $value
+                        .parse()
+                        .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+                ))
             }
+            concat!(stringify!($attr_var), "-P") => {
+                account::Attribute::$attr_var(account::Segment::Paxos(
+                    $value
+                        .parse()
+                        .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+                ))
+            }
+            concat!(stringify!($attr_var), "-S") => {
+                account::Attribute::$attr_var(account::Segment::Security(
+                    $value
+                        .parse()
+                        .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+                ))
+            }
+            _ => unreachable!(),
         }
-    };
+    }};
 }
 
 #[ibapi_macros::make_send(Remote(Send): wrapper::Wrapper)]
@@ -146,9 +175,13 @@ pub trait Local: wrapper::LocalWrapper {
             fields =>
                 req_id @ 2: i64,
                 tick_type @ 0: u16,
-                price @ 0: f64,
-                size @ 0: Option<f64>,
-                _attr_mask @ 0: u8
+                price @ 0: f64
+            );
+            decode_fields!(
+                fields => size @ 0: Option<f64>
+            );
+            decode_fields!(
+                fields => _attr_mask @ 0: u8
             );
 
             if (price + 1.0).abs() < f64::EPSILON || (price == 0.0 && size == Some(0.0)) {
@@ -278,18 +311,22 @@ pub trait Local: wrapper::LocalWrapper {
     ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
-                fields =>
-                    order_id @ 1: i64,
-                    status @ 0: String,
-                    filled @ 0: f64,
-                    remaining @ 0: f64,
-                    average_price @ 0: f64,
-                    permanent_id @ 0: i64,
-                    parent_id @ 0: i64,
-                    last_price @ 0: f64,
-                    client_id @ 0: i64,
-                    why_held @ 0: Option<crate::payload::Locate>,
-                    market_cap_price @ 0: f64
+            fields =>
+                order_id @ 1: i64,
+                status @ 0: String,
+                filled @ 0: f64,
+                remaining @ 0: f64,
+                average_price @ 0: f64,
+                permanent_id @ 0: i64,
+                parent_id @ 0: i64,
+                last_price @ 0: f64,
+                client_id @ 0: i64
+            );
+            decode_fields!(
+                fields => why_held @ 0: Option<crate::payload::Locate>
+            );
+            decode_fields!(
+                fields => market_cap_price @ 0: f64
             );
 
             let market_cap_price = if market_cap_price == 0.0 {
@@ -323,7 +360,11 @@ pub trait Local: wrapper::LocalWrapper {
             };
 
             wrapper
-                .order_status((status.as_str(), core).try_into()?)
+                .order_status(
+                    (status.as_str(), core)
+                        .try_into()
+                        .map_err(|e| ("order_status", e))?,
+                )
                 .await;
 
             Ok(())
@@ -358,7 +399,9 @@ pub trait Local: wrapper::LocalWrapper {
                 fields =>
                     order_id @ 1: i64,
             );
-            let proxy = deserialize_contract_proxy(fields)?;
+            let proxy = deserialize_contract_proxy::<crate::contract::proxy_indicators::HasExchange>(
+                fields,
+            )?;
             decode_fields!(
                 fields =>
                     client_id @ 10: i64,
@@ -454,13 +497,23 @@ pub trait Local: wrapper::LocalWrapper {
                 "AccountOrGroup" => decode_account_attr!(AccountOrGroup, value, currency),
                 "AccountReady" => decode_account_attr!(AccountReady, value),
                 "AccountType" => account::Attribute::AccountType(value),
-                expand_seg_variants!("AccruedCash") => impl_seg_variants!("AccruedCash", AccruedCash, name, value, currency),
-                expand_seg_variants!("AccruedDividend") => impl_seg_variants!("AccruedDividend", AccruedDividend, name, value, currency),
-                expand_seg_variants!("AvailableFunds") => impl_seg_variants!("AvailableFunds", AvailableFunds, name, value, currency),
-                expand_seg_variants!("Billable") => impl_seg_variants!("Billable", Billable, name, value, currency),
+                expand_seg_variants!("AccruedCash") => {
+                    impl_seg_variants!("AccruedCash", AccruedCash, name, value, currency)
+                }
+                expand_seg_variants!("AccruedDividend") => {
+                    impl_seg_variants!("AccruedDividend", AccruedDividend, name, value, currency)
+                }
+                expand_seg_variants!("AvailableFunds") => {
+                    impl_seg_variants!("AvailableFunds", AvailableFunds, name, value, currency)
+                }
+                expand_seg_variants!("Billable") => {
+                    impl_seg_variants!("Billable", Billable, name, value, currency)
+                }
                 "BuyingPower" => decode_account_attr!(BuyingPower, value, currency),
                 "CashBalance" => decode_account_attr!(CashBalance, value, currency),
-                expand_seg_variants!("ColumnPrio") => impl_seg_variants!("ColumnPrio", ColumnPrio, name, value),
+                expand_seg_variants!("ColumnPrio") => {
+                    impl_seg_variants!("ColumnPrio", ColumnPrio, name, value)
+                }
                 "CorporateBondValue" => decode_account_attr!(CorporateBondValue, value, currency),
                 "Cryptocurrency" => decode_account_attr!(Cryptocurrency, value, currency),
                 "Currency" => decode_account_attr!(Currency, value),
@@ -471,47 +524,153 @@ pub trait Local: wrapper::LocalWrapper {
                 "DayTradesRemainingT+3" => decode_account_attr!(DayTradesRemainingTPlus3, value),
                 "DayTradesRemainingT+4" => decode_account_attr!(DayTradesRemainingTPlus4, value),
                 "DayTradingStatus-S" => account::Attribute::DayTradingStatus(value),
-                expand_seg_variants!("EquityWithLoanValue") => impl_seg_variants!("EquityWithLoanValue", EquityWithLoanValue, name, value, currency),
-                expand_seg_variants!("ExcessLiquidity") => impl_seg_variants!("ExcessLiquidity", ExcessLiquidity, name, value, currency),
+                expand_seg_variants!("EquityWithLoanValue") => impl_seg_variants!(
+                    "EquityWithLoanValue",
+                    EquityWithLoanValue,
+                    name,
+                    value,
+                    currency
+                ),
+                expand_seg_variants!("ExcessLiquidity") => {
+                    impl_seg_variants!("ExcessLiquidity", ExcessLiquidity, name, value, currency)
+                }
                 "ExchangeRate" => decode_account_attr!(ExchangeRate, value, currency),
-                expand_seg_variants!("FullAvailableFunds") => impl_seg_variants!("FullAvailableFunds", FullAvailableFunds, name, value, currency),
-                expand_seg_variants!("FullExcessLiquidity") => impl_seg_variants!("FullExcessLiquidity", FullExcessLiquidity, name, value, currency),
-                expand_seg_variants!("FullInitMarginReq") => impl_seg_variants!("FullInitMarginReq", FullInitMarginReq, name, value, currency),
-                expand_seg_variants!("FullMaintMarginReq") => impl_seg_variants!("FullMaintMarginReq", FullMaintenanceMarginReq, name, value, currency),
+                expand_seg_variants!("FullAvailableFunds") => impl_seg_variants!(
+                    "FullAvailableFunds",
+                    FullAvailableFunds,
+                    name,
+                    value,
+                    currency
+                ),
+                expand_seg_variants!("FullExcessLiquidity") => impl_seg_variants!(
+                    "FullExcessLiquidity",
+                    FullExcessLiquidity,
+                    name,
+                    value,
+                    currency
+                ),
+                expand_seg_variants!("FullInitMarginReq") => impl_seg_variants!(
+                    "FullInitMarginReq",
+                    FullInitMarginReq,
+                    name,
+                    value,
+                    currency
+                ),
+                expand_seg_variants!("FullMaintMarginReq") => impl_seg_variants!(
+                    "FullMaintMarginReq",
+                    FullMaintenanceMarginReq,
+                    name,
+                    value,
+                    currency
+                ),
                 "FundValue" => decode_account_attr!(FundValue, value, currency),
                 "FutureOptionValue" => decode_account_attr!(FutureOptionValue, value, currency),
                 "FuturesPNL" => decode_account_attr!(FuturesPnl, value, currency),
                 "FxCashBalance" => decode_account_attr!(FxCashBalance, value, currency),
                 "GrossPositionValue" => decode_account_attr!(GrossPositionValue, value, currency),
-                "GrossPositionValue-S" => decode_account_attr!(GrossPositionValueSecurity, value, currency),
-                expand_seg_variants!("Guarantee") => impl_seg_variants!("Guarantee", Guarantee, name, value, currency),
-                expand_seg_variants!("IndianStockHaircut") => impl_seg_variants!("IndianStockHaircut", IndianStockHaircut, name, value, currency),
-                expand_seg_variants!("InitMarginReq") => impl_seg_variants!("InitMarginReq", InitMarginReq, name, value, currency),
+                "GrossPositionValue-S" => {
+                    decode_account_attr!(GrossPositionValueSecurity, value, currency)
+                }
+                expand_seg_variants!("Guarantee") => {
+                    impl_seg_variants!("Guarantee", Guarantee, name, value, currency)
+                }
+                expand_seg_variants!("IndianStockHaircut") => impl_seg_variants!(
+                    "IndianStockHaircut",
+                    IndianStockHaircut,
+                    name,
+                    value,
+                    currency
+                ),
+                expand_seg_variants!("InitMarginReq") => {
+                    impl_seg_variants!("InitMarginReq", InitMarginReq, name, value, currency)
+                }
                 "IssuerOptionValue" => decode_account_attr!(IssuerOptionValue, value, currency),
                 "Leverage-S" => decode_account_attr!(LeverageSecurity, value),
-                "LookAheadNextChange" => decode_account_attr!(LookAheadNextChange, value.parse()),
-                expand_seg_variants!("LookAheadAvailableFunds") => impl_seg_variants!("LookAheadAvailableFunds", LookAheadAvailableFunds, name, value, currency),
-                expand_seg_variants!("LookAheadExcessLiquidity") => impl_seg_variants!("LookAheadExcessLiquidity", LookAheadExcessLiquidity, name, value, currency),
-                expand_seg_variants!("LookAheadInitMarginReq") => impl_seg_variants!("LookAheadInitMarginReq", LookAheadInitMarginReq, name, value, currency),
-                expand_seg_variants!("LookAheadMaintMarginReq") =>  impl_seg_variants!("LookAheadMaintMarginReq", LookAheadMaintenanceMarginReq, name, value, currency),
-                expand_seg_variants!("MaintMarginReq") => impl_seg_variants!("MaintMarginReq", MaintenanceMarginReq, name, value, currency),
-                "MoneyMarketFundValue" => decode_account_attr!(MoneyMarketFundValue, value, currency),
+                "LookAheadNextChange" => decode_account_attr!(LookAheadNextChange, value),
+                expand_seg_variants!("LookAheadAvailableFunds") => impl_seg_variants!(
+                    "LookAheadAvailableFunds",
+                    LookAheadAvailableFunds,
+                    name,
+                    value,
+                    currency
+                ),
+                expand_seg_variants!("LookAheadExcessLiquidity") => impl_seg_variants!(
+                    "LookAheadExcessLiquidity",
+                    LookAheadExcessLiquidity,
+                    name,
+                    value,
+                    currency
+                ),
+                expand_seg_variants!("LookAheadInitMarginReq") => impl_seg_variants!(
+                    "LookAheadInitMarginReq",
+                    LookAheadInitMarginReq,
+                    name,
+                    value,
+                    currency
+                ),
+                expand_seg_variants!("LookAheadMaintMarginReq") => impl_seg_variants!(
+                    "LookAheadMaintMarginReq",
+                    LookAheadMaintenanceMarginReq,
+                    name,
+                    value,
+                    currency
+                ),
+                expand_seg_variants!("MaintMarginReq") => impl_seg_variants!(
+                    "MaintMarginReq",
+                    MaintenanceMarginReq,
+                    name,
+                    value,
+                    currency
+                ),
+                "MoneyMarketFundValue" => {
+                    decode_account_attr!(MoneyMarketFundValue, value, currency)
+                }
                 "MutualFundValue" => decode_account_attr!(MutualFundValue, value, currency),
                 "NLVAndMarginInReview" => decode_account_attr!(NlvAndMarginInReview, value),
                 "NetDividend" => decode_account_attr!(NetDividend, value, currency),
-                expand_seg_variants!("NetLiquidation") => impl_seg_variants!("NetLiquidation", NetLiquidation, name, value, currency),
-                "NetLiquidationByCurrency" => decode_account_attr!(NetLiquidationByCurrency, value, currency),
-                "NetLiquidationUncertainty" => decode_account_attr!(NetLiquidationUncertainty, value, currency),
+                expand_seg_variants!("NetLiquidation") => {
+                    impl_seg_variants!("NetLiquidation", NetLiquidation, name, value, currency)
+                }
+                "NetLiquidationByCurrency" => {
+                    decode_account_attr!(NetLiquidationByCurrency, value, currency)
+                }
+                "NetLiquidationUncertainty" => {
+                    decode_account_attr!(NetLiquidationUncertainty, value, currency)
+                }
                 "OptionMarketValue" => decode_account_attr!(OptionMarketValue, value, currency),
-                expand_seg_variants!("PASharesValue") => impl_seg_variants!("PASharesValue", PaSharesValue, name, value, currency),
-                expand_seg_variants!("PhysicalCertificateValue") => impl_seg_variants!("PhysicalCertificateValue", PhysicalCertificateValue, name, value, currency),
-                expand_seg_variants!("PostExpirationExcess") => impl_seg_variants!("PostExpirationExcess", PostExpirationExcess, name, value, currency),
-                expand_seg_variants!("PostExpirationMargin") => impl_seg_variants!("PostExpirationMargin", PostExpirationMargin, name, value, currency),
-                "PreviousDayEquityWithLoanValue" => decode_account_attr!(PreviousDayEquityWithLoanValue, value, currency),
-                "PreviousDayEquityWithLoanValue-S" => decode_account_attr!(PreviousDayEquityWithLoanValueSecurity, value, currency),
+                expand_seg_variants!("PASharesValue") => {
+                    impl_seg_variants!("PASharesValue", PaSharesValue, name, value, currency)
+                }
+                expand_seg_variants!("PhysicalCertificateValue") => impl_seg_variants!(
+                    "PhysicalCertificateValue",
+                    PhysicalCertificateValue,
+                    name,
+                    value,
+                    currency
+                ),
+                expand_seg_variants!("PostExpirationExcess") => impl_seg_variants!(
+                    "PostExpirationExcess",
+                    PostExpirationExcess,
+                    name,
+                    value,
+                    currency
+                ),
+                expand_seg_variants!("PostExpirationMargin") => impl_seg_variants!(
+                    "PostExpirationMargin",
+                    PostExpirationMargin,
+                    name,
+                    value,
+                    currency
+                ),
+                "PreviousDayEquityWithLoanValue" => {
+                    decode_account_attr!(PreviousDayEquityWithLoanValue, value, currency)
+                }
+                "PreviousDayEquityWithLoanValue-S" => {
+                    decode_account_attr!(PreviousDayEquityWithLoanValueSecurity, value, currency)
+                }
                 "RealCurrency" => decode_account_attr!(RealCurrency, value),
                 "RealizedPnL" => decode_account_attr!(RealizedPnL, value, currency),
-                "RegTEquity" => decode_account_attr!(RegTEquity, value),
+                "RegTEquity" => decode_account_attr!(RegTEquity, value, currency),
                 "RegTEquity-S" => decode_account_attr!(RegTEquitySecurity, value, currency),
                 "RegTMargin" => decode_account_attr!(RegTMargin, value, currency),
                 "RegTMargin-S" => decode_account_attr!(RegTMarginSecurity, value, currency),
@@ -521,8 +680,16 @@ pub trait Local: wrapper::LocalWrapper {
                 "TBillValue" => decode_account_attr!(TBillValue, value, currency),
                 "TBondValue" => decode_account_attr!(TBondValue, value, currency),
                 "TotalCashBalance" => decode_account_attr!(TotalCashBalance, value, currency),
-                expand_seg_variants!("TotalCashValue") => impl_seg_variants!("TotalCashValue", TotalCashValue, name, value, currency),
-                expand_seg_variants!("TotalDebitCardPendingCharges") => impl_seg_variants!("TotalDebitCardPendingCharges", TotalDebitCardPendingCharges, name, value, currency),
+                expand_seg_variants!("TotalCashValue") => {
+                    impl_seg_variants!("TotalCashValue", TotalCashValue, name, value, currency)
+                }
+                expand_seg_variants!("TotalDebitCardPendingCharges") => impl_seg_variants!(
+                    "TotalDebitCardPendingCharges",
+                    TotalDebitCardPendingCharges,
+                    name,
+                    value,
+                    currency
+                ),
                 "TradingType-S" => account::Attribute::TradingTypeSecurity(value),
                 "UnrealizedPnL" => decode_account_attr!(UnrealizedPnL, value, currency),
                 "WarrantValue" => decode_account_attr!(WarrantValue, value, currency),
@@ -531,11 +698,9 @@ pub trait Local: wrapper::LocalWrapper {
                     if name.ends_with('C') || name.ends_with('P') || name.ends_with('S') {
                         return Ok(());
                     }
-                    return Err(ParseAttributeError::NoSuchAttribute(format!("Unexpected segment title \"{}\" encountered. This may mandate an API update: currently-supported values are C, P, and S as outlined in the account::Segment type.", name)));
+                    return Err(ParseAttributeError::NoSuchAttribute(format!("Unexpected segment title \"{}\" encountered. This may mandate an API update: currently-supported values are C, P, and S as outlined in the account::Segment type.", name)).into());
                 }
-                _ => {
-                    return Err(ParseAttributeError::NoSuchAttribute(name))
-                }
+                _ => return Err(ParseAttributeError::NoSuchAttribute(name).into()),
             };
             wrapper.account_attribute(attribute, account_number).await;
             Ok(())
@@ -587,7 +752,10 @@ pub trait Local: wrapper::LocalWrapper {
                     timestamp @ 2: String
             );
             wrapper
-                .account_attribute_time(NaiveTime::parse_from_str(timestamp.as_str(), "%H:%M")?)
+                .account_attribute_time(
+                    NaiveTime::parse_from_str(timestamp.as_str(), "%H:%M")
+                        .map_err(|e| ("timestamp", ParseDateTimeError::Timestamp))?,
+                )
                 .await;
             Ok(())
         }
@@ -642,11 +810,15 @@ pub trait Local: wrapper::LocalWrapper {
                     pending_price_revision @ 5: u8
             );
 
-            let (dt, tz) = NaiveDateTime::parse_and_remainder(datetime.as_str(), "%Y%m%d %T ")?;
+            let (dt, tz) = NaiveDateTime::parse_and_remainder(datetime.as_str(), "%Y%m%d %T ")
+                .map_err(|_| ("datetime", ParseDateTimeError::Timestamp))?;
             let datetime = dt
-                .and_local_timezone(tz.parse::<timezone::IbTimeZone>()?)
+                .and_local_timezone(
+                    tz.parse::<timezone::IbTimeZone>()
+                        .map_err(|e| ("datetime", ParseDateTimeError::Timezone(e)))?,
+                )
                 .single()
-                .ok_or(ParseDateTimeError::Single)?
+                .ok_or(("datetime", ParseDateTimeError::Single))?
                 .to_utc();
             let exec = Execution::from((
                 Exec {
@@ -689,8 +861,11 @@ pub trait Local: wrapper::LocalWrapper {
                     size @ 0: f64
             );
 
-            let entry = CompleteEntry::Ordinary(Entry::try_from((side, position, price, size))?);
-            let operation = Operation::try_from((operation, entry))?;
+            let entry = CompleteEntry::Ordinary(
+                Entry::try_from((side, position, price, size)).map_err(|e| ("entry", e))?,
+            );
+            let operation =
+                Operation::try_from((operation, entry)).map_err(|e| ("operation", e))?;
 
             wrapper.update_market_depth(req_id, operation).await;
             Ok(())
@@ -714,7 +889,7 @@ pub trait Local: wrapper::LocalWrapper {
                     size @ 0: f64,
                     is_smart @ 0: i32
             );
-            let entry = Entry::try_from((side, position, price, size))?;
+            let entry = Entry::try_from((side, position, price, size)).map_err(|e| ("entry", e))?;
             let entry = match is_smart {
                 0 => CompleteEntry::MarketMaker {
                     market_maker: market_maker
@@ -722,15 +897,16 @@ pub trait Local: wrapper::LocalWrapper {
                         .take(4)
                         .collect::<Vec<char>>()
                         .try_into()
-                        .map_err(|_| anyhow::Error::msg("Invalid Mpid encountered"))?,
+                        .map_err(|_| ("market_maker", ParsePayloadError::Mpid))?,
                     entry,
                 },
                 _ => CompleteEntry::SmartDepth {
-                    exchange: market_maker.parse()?,
+                    exchange: market_maker.parse().map_err(|e| ("exchange", e))?,
                     entry,
                 },
             };
-            let operation = Operation::try_from((operation, entry))?;
+            let operation =
+                Operation::try_from((operation, entry)).map_err(|e| ("operation", e))?;
 
             wrapper.update_market_depth(req_id, operation).await;
             Ok(())
@@ -784,27 +960,40 @@ pub trait Local: wrapper::LocalWrapper {
             let mut bars = Vec::with_capacity(count);
             for chunk in fields.collect::<Vec<String>>().chunks(8) {
                 if let [datetime_str, open, high, low, close, volume, wap, trade_count] = chunk {
-                    let (date, rem) = NaiveDate::parse_and_remainder(datetime_str, "%Y%m%d")?;
+                    let (date, rem) = NaiveDate::parse_and_remainder(datetime_str, "%Y%m%d")
+                        .map_err(|_| ("date", ParseDateTimeError::Timestamp))?;
                     let time = if rem.is_empty() {
                         NaiveTime::default()
                     } else {
-                        NaiveTime::parse_and_remainder(rem, " %T")?.0
+                        NaiveTime::parse_and_remainder(rem, " %T")
+                            .map_err(|_| ("time", ParseDateTimeError::Timestamp))?
+                            .0
                     };
                     let core = BarCore {
                         datetime: NaiveDateTime::new(date, time).and_utc(),
-                        open: open.parse()?,
-                        high: high.parse()?,
-                        low: low.parse()?,
-                        close: close.parse()?,
+                        open: open.parse().map_err(|e| ("open", e))?,
+                        high: high.parse().map_err(|e| ("high", e))?,
+                        low: low.parse().map_err(|e| ("low", e))?,
+                        close: close.parse().map_err(|e| ("close", e))?,
                     };
-                    let (volume, wap, trade_count) =
-                        (volume.parse()?, wap.parse()?, trade_count.parse::<i64>()?);
+                    let (volume, wap, trade_count) = (
+                        volume.parse().map_err(|e| ("volume", e))?,
+                        wap.parse().map_err(|e| ("wap", e))?,
+                        trade_count.parse::<i64>().map_err(|e| ("trade_count", e))?,
+                    );
                     let bar = if volume > 0. && wap > 0. && trade_count > 0 {
                         Bar::Trades(Trade {
                             bar: core,
                             volume,
                             wap,
-                            trade_count: trade_count.try_into()?,
+                            trade_count: trade_count.try_into().map_err(|_| {
+                                (
+                                    "trade_count",
+                                    DecodeError::UnexpectedData(
+                                        "Tradec count could not be converted to unsigned integer.",
+                                    ),
+                                )
+                            })?,
                         })
                     } else {
                         Bar::Ordinary(core)
@@ -979,15 +1168,21 @@ pub trait Local: wrapper::LocalWrapper {
                     let base = RealTimeVolumeBase {
                         last_price: vols
                             .next()
-                            .ok_or(DecodeError::MissingData { field_name: "last_price" })?
+                            .ok_or(DecodeError::MissingData {
+                                field_name: "last_price",
+                            })?
                             .parse()?,
                         last_size: vols
                             .next()
-                            .ok_or(DecodeError::MissingData { field_name: "last_size" })?
+                            .ok_or(DecodeError::MissingData {
+                                field_name: "last_size",
+                            })?
                             .parse()?,
                         last_time: DateTime::from_timestamp(
                             vols.next()
-                                .ok_or(DecodeError::MissingData { field_name: "last_time" })?
+                                .ok_or(DecodeError::MissingData {
+                                    field_name: "last_time",
+                                })?
                                 .parse()?,
                             0,
                         )
@@ -998,7 +1193,9 @@ pub trait Local: wrapper::LocalWrapper {
                         })?,
                         day_volume: vols
                             .next()
-                            .ok_or(DecodeError::MissingData { field_name: "day_volume" })?
+                            .ok_or(DecodeError::MissingData {
+                                field_name: "day_volume",
+                            })?
                             .parse()?,
                         vwap: vols
                             .next()
@@ -1007,7 +1204,9 @@ pub trait Local: wrapper::LocalWrapper {
                             .parse()?,
                         single_mm: vols
                             .next()
-                            .ok_or(DecodeError::MissingData { field_name: "single_mm" })?
+                            .ok_or(DecodeError::MissingData {
+                                field_name: "single_mm",
+                            })?
                             .parse()?,
                     };
                     let volume = match tick_type {
@@ -1022,22 +1221,28 @@ pub trait Local: wrapper::LocalWrapper {
                     let dividends = Dividends {
                         trailing_year: divs
                             .next()
-                            .ok_or(DecodeError::MissingData { field_name: "trailing_year" })?
+                            .ok_or(DecodeError::MissingData {
+                                field_name: "trailing_year",
+                            })?
                             .parse()?,
                         forward_year: divs
                             .next()
-                            .ok_or(DecodeError::MissingData { field_name: "forward_year" })?
+                            .ok_or(DecodeError::MissingData {
+                                field_name: "forward_year",
+                            })?
                             .parse()?,
                         next_dividend: (
                             NaiveDate::parse_and_remainder(
-                                divs.next()
-                                    .ok_or(DecodeError::MissingData { field_name: "next_dividend" })??,
+                                divs.next().ok_or(DecodeError::MissingData {
+                                    field_name: "next_dividend",
+                                })??,
                                 "%Y%m%d",
                             )?
                             .0,
                             divs.next()
-                                .ok_or(DecodeError::MissingData)
-                                .ok_or(DecodeError::MissingData { field_name: "next_price" })?
+                                .ok_or(DecodeError::MissingData {
+                                    field_name: "next_price",
+                                })?
                                 .parse()?,
                         ),
                     };
@@ -1297,12 +1502,26 @@ pub trait Local: wrapper::LocalWrapper {
             );
             let summary = match tag {
                 Tag::AccountType => TagValue::String(Tag::AccountType, value),
-                Tag::Cushion => TagValue::Float(Tag::Cushion, value.parse()?),
-                Tag::LookAheadNextChange => TagValue::Int(Tag::LookAheadNextChange, value.parse()?),
+                Tag::Cushion => {
+                    TagValue::Float(Tag::Cushion, value.parse().map_err(|e| ("summary", e))?)
+                }
+                Tag::LookAheadNextChange => TagValue::Int(
+                    Tag::LookAheadNextChange,
+                    value.parse().map_err(|e| ("summary", e))?,
+                ),
                 Tag::HighestSeverity => TagValue::String(Tag::HighestSeverity, value),
-                Tag::DayTradesRemaining => TagValue::Int(Tag::DayTradesRemaining, value.parse()?),
-                Tag::Leverage => TagValue::Float(Tag::Leverage, value.parse()?),
-                t => TagValue::Currency(t, value.parse()?, currency.parse()?),
+                Tag::DayTradesRemaining => TagValue::Int(
+                    Tag::DayTradesRemaining,
+                    value.parse().map_err(|e| ("summary", e))?,
+                ),
+                Tag::Leverage => {
+                    TagValue::Float(Tag::Leverage, value.parse().map_err(|e| ("summary", e))?)
+                }
+                t => TagValue::Currency(
+                    t,
+                    value.parse().map_err(|e| ("summary", e))?,
+                    currency.parse().map_err(|e| ("summary", e))?,
+                ),
             };
             wrapper
                 .account_summary(req_id, account_number, summary)
@@ -1601,8 +1820,7 @@ pub trait Local: wrapper::LocalWrapper {
             wrapper
                 .head_timestamp(
                     req_id,
-                    DateTime::from_timestamp(timestamp, 0)
-                        .ok_or(ParseDateTimeError::Timestamp)?,
+                    DateTime::from_timestamp(timestamp, 0).ok_or(ParseDateTimeError::Timestamp)?,
                 )
                 .await;
             Ok(())
@@ -1871,9 +2089,9 @@ pub trait Local: wrapper::LocalWrapper {
             let tick = match tick_type {
                 1 | 2 => TickData::Last(Last {
                     datetime,
-                    price: nth(fields, 0)?.parse()?,
-                    size: nth(fields, 0)?.parse()?,
-                    exchange: nth(fields, 1)?.parse()?,
+                    price: nth(fields, 0, "price")?.parse()?,
+                    size: nth(fields, 0, "size")?.parse()?,
+                    exchange: nth(fields, 1, "exchange")?.parse()?,
                 }),
                 3 => {
                     decode_fields!(
@@ -1893,7 +2111,7 @@ pub trait Local: wrapper::LocalWrapper {
                 }
                 4 => TickData::Midpoint(Midpoint {
                     datetime,
-                    price: nth(fields, 0)?.parse()?,
+                    price: nth(fields, 0, "price")?.parse()?,
                 }),
                 _ => Err(anyhow::Error::msg("Unexpected tick type"))?,
             };
@@ -2137,7 +2355,7 @@ pub(crate) async fn decode_contract_no_wrapper(
     fields: &mut Fields,
     tx: &mut Tx,
     rx: &mut Rx,
-) -> anyhow::Result<()> {
+) -> DecodeResult {
     decode_fields!(
         fields =>
             req_id @ 1: i64,
@@ -2170,44 +2388,32 @@ pub(crate) async fn decode_contract_no_wrapper(
         .split(',')
         .map(str::parse)
         .collect::<Result<_, _>>()
-        .with_context(|| "Invalid exchange in valid_exchanges")?;
+        .map_err(|e| ("valid_exchanges", e))?;
     let security_ids = (0..security_id_count)
-        .map(|_| {
-            match nth(fields, 0)
-                .with_context(|| "Expected number of security_ids but none found")?
-                .to_uppercase()
-                .as_str()
-            {
-                "CUSIP" => Ok(SecurityId::Cusip(
-                    nth(fields, 0).with_context(|| "Expected CUSIP but none found")?,
-                )),
-                "SEDOL" => Ok(SecurityId::Sedol(
-                    nth(fields, 0).with_context(|| "Expected SEDOL but none found")?,
-                )),
-                "ISIN" => Ok(SecurityId::Isin(
-                    nth(fields, 0).with_context(|| "Expected ISIN but none found")?,
-                )),
-                "RIC" => Ok(SecurityId::Ric(
-                    nth(fields, 0).with_context(|| "Expected RIC but none found")?,
-                )),
-                _ => Err(anyhow::Error::msg(
+        .map(
+            |_| match nth(fields, 0, "security_ids")?.to_uppercase().as_str() {
+                "CUSIP" => Ok(SecurityId::Cusip(nth(fields, 0, "security_id")?)),
+                "SEDOL" => Ok(SecurityId::Sedol(nth(fields, 0, "security_id")?)),
+                "ISIN" => Ok(SecurityId::Isin(nth(fields, 0, "security_id")?)),
+                "RIC" => Ok(SecurityId::Ric(nth(fields, 0, "security_id")?)),
+                _ => Err(DecodeError::UnexpectedData(
                     "Invalid security_id type found in STK contract_data_msg",
                 )),
-            }
-        })
+            },
+        )
         .collect::<Result<_, _>>()?;
 
     if let Ok(ToWrapper::ContractQuery((query_client, req_id_client))) = rx.try_recv() {
         if let crate::contract::Query::IbContractId(con_id_client, routing_client) = query_client {
             if con_id_client != contract_id {
-                return Err(anyhow::Error::msg("Unexpected contract ID"));
+                return Err(DecodeError::UnexpectedData("Unexpected contract ID"));
             }
             if exchange != routing_client {
-                return Err(anyhow::Error::msg("Unexpected routing exchange"));
+                return Err(DecodeError::UnexpectedData("Unexpected routing exchange"));
             }
         }
         if req_id_client != req_id {
-            return Err(anyhow::Error::msg("Unexpected request ID"));
+            return Err(DecodeError::UnexpectedData("Unexpected request ID"));
         }
         let contract = match sec_type {
             ContractType::Stock => Some(Contract::Stock(Stock {
@@ -2220,13 +2426,13 @@ pub(crate) async fn decode_contract_no_wrapper(
                 min_tick,
                 primary_exchange: primary_exchange
                     .parse()
-                    .with_context(|| "Invalid exchange in STK primary_exchange")?,
+                    .map_err(|e| ("primary_exchange", e))?,
                 long_name,
                 sector,
                 order_types,
                 valid_exchanges,
                 security_ids,
-                stock_type: nth(fields, 5).with_context(|| "Expected stock_type but none found")?,
+                stock_type: nth(fields, 5, "stock_type")?,
             })),
             ContractType::SecOption => {
                 let inner = SecOptionInner {
@@ -2235,14 +2441,12 @@ pub(crate) async fn decode_contract_no_wrapper(
                     symbol,
                     exchange,
                     strike,
-                    multiplier: multiplier
-                        .parse()
-                        .with_context(|| "Invalid multiplier in OPT multiplier")?,
+                    multiplier: multiplier.parse().map_err(|e| ("multiplier", e))?,
                     expiration_date: NaiveDate::parse_and_remainder(
                         expiration_date.as_str(),
                         "%Y%m%d",
                     )
-                    .with_context(|| "Invalid date string in OPT expiration_date")?
+                    .map_err(|_| ("expiration_date", ParseDateTimeError::Timestamp))?
                     .0,
                     underlying_contract_id,
                     sector,
@@ -2256,7 +2460,7 @@ pub(crate) async fn decode_contract_no_wrapper(
                 match class.as_str() {
                     "C" => Some(Contract::SecOption(SecOption::Call(inner))),
                     "P" => Some(Contract::SecOption(SecOption::Put(inner))),
-                    _ => return Err(anyhow::Error::msg("Unexpected option class")),
+                    _ => return Err(DecodeError::UnexpectedData("Unexpected option class")),
                 }
             }
             ContractType::Crypto => Some(Contract::Crypto(Crypto {
@@ -2298,11 +2502,9 @@ pub(crate) async fn decode_contract_no_wrapper(
                 min_tick,
                 symbol,
                 exchange,
-                multiplier: multiplier
-                    .parse()
-                    .with_context(|| "Invalid multiplier in FUT multiplier")?,
+                multiplier: multiplier.parse().map_err(|e| ("multiplier", e))?,
                 expiration_date: NaiveDate::parse_and_remainder(expiration_date.as_str(), "%Y%m%d")
-                    .with_context(|| "Invalid date string in OPT expiration_date")?
+                    .map_err(|_| ("expiration_date", ParseDateTimeError::Timestamp))?
                     .0,
                 trading_class,
                 underlying_contract_id,
@@ -2326,17 +2528,18 @@ pub(crate) async fn decode_contract_no_wrapper(
             })),
         };
 
-        tx.send(ToClient::NewContract(
-            contract.ok_or_else(|| anyhow::Error::msg("No contract was created"))?,
-        ))
-        .await
-        .with_context(|| "Failure when sending contract")?;
+        tx.send(ToClient::NewContract(contract.ok_or_else(|| {
+            DecodeError::UnexpectedData("No contract was created")
+        })?))
+        .await?;
     }
     Ok(())
 }
 
 #[inline]
-fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<NoExchangeProxy<Contract>> {
+fn deserialize_contract_proxy<E: crate::contract::ProxyExchange + Clone>(
+    fields: &mut Fields,
+) -> Result<Proxy<Contract, E>, DecodeError> {
     decode_fields!(
         fields =>
             contract_id @ 0: ContractId,
@@ -2346,39 +2549,131 @@ fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<NoExchangeP
             strike @ 0: String,
             right @ 0: String,
             multiplier @ 0: String,
-            exchange @ 0: String,
+            exch_or_priamry @ 0: String,
             currency @ 0: Currency,
             local_symbol @ 0: String,
             trading_class @ 0: String
     );
+    let (exchange, primary_exchange) = E::decode(exch_or_priamry)?;
 
-    let inner
+    let inner = match sec_type {
+        ContractType::Stock => Contract::Stock(Stock {
+            contract_id,
+            min_tick: f64::default(),
+            symbol,
+            exchange,
+            primary_exchange,
+            stock_type: String::default(),
+            security_ids: Vec::default(),
+            sector: String::default(),
+            trading_class,
+            currency,
+            local_symbol,
+            long_name: String::default(),
+            order_types: Vec::default(),
+            valid_exchanges: Vec::default(),
+        }),
+        ContractType::Crypto => Contract::Crypto(Crypto {
+            contract_id,
+            min_tick: f64::default(),
+            symbol,
+            trading_class,
+            currency,
+            local_symbol,
+            long_name: String::default(),
+            order_types: Vec::default(),
+            valid_exchanges: Vec::default(),
+        }),
+        ContractType::Index => Contract::Index(Index {
+            contract_id,
+            min_tick: f64::default(),
+            symbol,
+            exchange,
+            currency,
+            local_symbol,
+            long_name: String::default(),
+            order_types: Vec::default(),
+            valid_exchanges: Vec::default(),
+        }),
+        ContractType::Commodity => Contract::Commodity(Commodity {
+            contract_id,
+            min_tick: f64::default(),
+            symbol,
+            exchange,
+            trading_class,
+            currency,
+            local_symbol,
+            long_name: String::default(),
+            order_types: Vec::default(),
+            valid_exchanges: Vec::default(),
+        }),
+        ContractType::Forex => Contract::Forex(Forex {
+            contract_id,
+            min_tick: f64::default(),
+            symbol,
+            exchange,
+            trading_class,
+            currency,
+            local_symbol,
+            long_name: String::default(),
+            order_types: Vec::default(),
+            valid_exchanges: Vec::default(),
+        }),
+        ContractType::SecFuture => Contract::SecFuture(SecFuture {
+            contract_id,
+            min_tick: f64::default(),
+            symbol,
+            exchange,
+            multiplier: multiplier.parse().map_err(|e| ("multiplier", e))?,
+            expiration_date: NaiveDate::parse_and_remainder(expiration_date.as_str(), "%Y%m%d")
+                .map_err(|_| ("expiration_date", ParseDateTimeError::Timestamp))?
+                .0,
+            trading_class,
+            underlying_contract_id: contract_id,
+            currency,
+            local_symbol,
+            long_name: String::default(),
+            order_types: Vec::default(),
+            valid_exchanges: Vec::default(),
+        }),
+        ContractType::SecOption => {
+            let op_inner = SecOptionInner {
+                contract_id,
+                min_tick: f64::default(),
+                symbol,
+                exchange,
+                strike: strike.parse().map_err(|e| ("strike", e))?,
+                multiplier: multiplier.parse().map_err(|e| ("multiplier", e))?,
+                expiration_date: NaiveDate::parse_and_remainder(expiration_date.as_str(), "%Y%m%d")
+                    .map_err(|_| ("expiration_date", ParseDateTimeError::Timestamp))?
+                    .0,
+                underlying_contract_id: contract_id,
+                sector: String::default(),
+                trading_class,
+                currency,
+                local_symbol,
+                long_name: String::default(),
+                order_types: Vec::default(),
+                valid_exchanges: Vec::default(),
+            };
+            let op_outer = match right.as_str() {
+                "C" => SecOption::Call(op_inner),
+                "P" => SecOption::Put(op_inner),
+                other => {
+                    return Err(DecodeError::Other(format!(
+                        "Unexpected option right. Expected \'C\' or \'P\'. Found {}.",
+                        other
+                    )))
+                }
+            };
+            Contract::SecOption(op_outer)
+        }
+    };
 
-
-    Ok(Proxy { inner })
-}
-
-
-#[inline]
-fn deserialize_contract_proxy_exchange(fields: &mut Fields) -> anyhow::Result<ExchangeProxy<Contract>> {
-    decode_fields!(
-        fields =>
-            contract_id @ 0: ContractId,
-            symbol @ 0: String,
-            sec_type @ 0: ContractType,
-            expiration_date @ 0: String,
-            strike @ 0: String,
-            right @ 0: String,
-            multiplier @ 0: String,
-            exchange @ 0: String,
-            currency @ 0: Currency,
-            local_symbol @ 0: String,
-            trading_class @ 0: String
-    );
-
-
-
-    Ok(Proxy { inner })
+    Ok(Proxy {
+        inner,
+        _exch: Default::default(),
+    })
 }
 
 #[derive(Debug, Clone, Error)]
@@ -2437,6 +2732,15 @@ pub(crate) enum DecodeError {
         field_name: &'static str,
         datetime_error: ParseDateTimeError,
     },
+    #[error("Failed to parse order side field {field_name}")]
+    ParseOrderSideError {
+        field_name: &'static str,
+        order_side_error: ParseOrderSideError,
+    },
+    #[error("{0}")]
+    UnexpectedData(&'static str),
+    #[error("Error when sending data {0}")]
+    SendError(#[from] tokio::sync::mpsc::error::SendError<ToClient>),
     #[error("{0}")]
     Other(String),
 }
@@ -2504,6 +2808,15 @@ impl From<(&'static str, crate::payload::ParsePayloadError)> for DecodeError {
     }
 }
 
+impl From<(&'static str, crate::execution::ParseOrderSideError)> for DecodeError {
+    fn from(value: (&'static str, crate::execution::ParseOrderSideError)) -> Self {
+        Self::ParseOrderSideError {
+            field_name: value.0,
+            order_side_error: value.1,
+        }
+    }
+}
+
 impl From<ParseAttributeError> for DecodeError {
     fn from(value: ParseAttributeError) -> Self {
         Self::ParseAttributeError(value)
@@ -2516,6 +2829,12 @@ impl From<(&'static str, ParseDateTimeError)> for DecodeError {
             field_name: value.0,
             datetime_error: value.1,
         }
+    }
+}
+
+impl From<(&'static str, std::convert::Infallible)> for DecodeError {
+    fn from(value: (&'static str, ParseDateTimeError)) -> Self {
+        unreachable!()
     }
 }
 
@@ -2536,6 +2855,5 @@ pub enum ParseDateTimeError {
     Timestamp,
     /// Failed to resolve single timezone
     #[error("Failed to resolve a single timezone from provided information")]
-    Single
+    Single,
 }
-

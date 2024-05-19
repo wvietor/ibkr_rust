@@ -205,40 +205,58 @@ pub enum ParseAttributeError {
         attribute_name: &'static str,
         denomination_error: ParseCurrencyError,
     },
-    #[error(
-        "No such attribute {0}"
-    )]
+    #[error("No such attribute {0}")]
     NoSuchAttribute(String),
 }
 
-
 impl From<(&'static str, ParseFloatError)> for ParseAttributeError {
     fn from(value: (&'static str, ParseFloatError)) -> Self {
-        Self::Float { attribute_name: value.0, float_error: value.1 }
+        Self::Float {
+            attribute_name: value.0,
+            float_error: value.1,
+        }
     }
 }
 
 impl From<(&'static str, ParseIntError)> for ParseAttributeError {
     fn from(value: (&'static str, ParseIntError)) -> Self {
-        Self::Int { attribute_name: value.0, int_error: value.1 }
+        Self::Int {
+            attribute_name: value.0,
+            int_error: value.1,
+        }
     }
 }
 
 impl From<(&'static str, ParseDayTradesError)> for ParseAttributeError {
     fn from(value: (&'static str, ParseDayTradesError)) -> Self {
-        Self::DayTrades { attribute_name: value.0, day_trades_error: value.1 }
+        Self::DayTrades {
+            attribute_name: value.0,
+            day_trades_error: value.1,
+        }
     }
 }
 
 impl From<(&'static str, ParseBoolError)> for ParseAttributeError {
     fn from(value: (&'static str, ParseBoolError)) -> Self {
-        Self::Bool { attribute_name: value.0, bool_error: value. 1 }
+        Self::Bool {
+            attribute_name: value.0,
+            bool_error: value.1,
+        }
     }
 }
 
 impl From<(&'static str, ParseCurrencyError)> for ParseAttributeError {
     fn from(value: (&'static str, ParseCurrencyError)) -> Self {
-        Self::Denomination { attribute_name: value.0, denomination_error: value.1 }
+        Self::Denomination {
+            attribute_name: value.0,
+            denomination_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, std::convert::Infallible)> for ParseAttributeError {
+    fn from(_value: (&'static str, std::convert::Infallible)) -> Self {
+        unreachable!()
     }
 }
 
@@ -252,12 +270,14 @@ pub enum Group {
     Name(String),
 }
 
-impl From<String> for Group {
-    fn from(value: String) -> Self {
-        match value.as_str() {
+impl FromStr for Group {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
             "All" => Self::All,
-            _ => Self::Name(value),
-        }
+            _ => Self::Name(s.to_owned()),
+        })
     }
 }
 

@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::contract::{Contract, Proxy};
+use crate::contract::{Contract, ExchangeProxy};
 
 #[derive(Debug, Clone, Error)]
 #[error("Invalid value encountered when attempting to parse a payload value.")]
@@ -18,6 +18,12 @@ pub enum ParsePayloadError {
     /// Invalid order status
     #[error("Invalid value encountered when attempting to parse order status. No such order status: {0}")]
     OrderStatus(String),
+    #[error("Invalid int encountered while parsing entry side")]
+    Entry,
+    #[error("Invalid value encountered when attempting to parse MPID.")]
+    Mpid,
+    #[error("Invalid int encountered while parsing operation")]
+    Operation,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -71,6 +77,7 @@ pub mod market_depth {
     use serde::{de::Error, Deserialize, Serialize};
 
     use crate::exchange::Primary;
+    use crate::payload::ParsePayloadError;
 
     #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
     #[serde(tag = "operation")]
@@ -85,18 +92,14 @@ pub mod market_depth {
     }
 
     impl TryFrom<(i64, CompleteEntry)> for Operation {
-        type Error = anyhow::Error;
+        type Error = ParsePayloadError;
 
         fn try_from(value: (i64, CompleteEntry)) -> Result<Self, Self::Error> {
             Ok(match value.0 {
                 0 => Self::Insert(value.1),
                 1 => Self::Update(value.1),
                 2 => Self::Delete(value.1),
-                _ => {
-                    return Err(anyhow::Error::msg(
-                        "Invalid int encountered while parsing operation",
-                    ))
-                }
+                _ => return Err(ParsePayloadError::Operation),
             })
         }
     }
@@ -123,7 +126,7 @@ pub mod market_depth {
     }
 
     impl TryFrom<(u32, u64, f64, f64)> for Entry {
-        type Error = anyhow::Error;
+        type Error = ParsePayloadError;
 
         fn try_from(value: (u32, u64, f64, f64)) -> Result<Self, Self::Error> {
             Ok(match value.0 {
@@ -137,9 +140,7 @@ pub mod market_depth {
                     price: value.2,
                     size: value.3,
                 }),
-                _ => Err(anyhow::Error::msg(
-                    "Invalid int encountered while parsing side",
-                ))?,
+                _ => Err(ParsePayloadError::Entry)?,
             })
         }
     }
@@ -295,7 +296,7 @@ pub struct Last {
 /// A single position, comprising a single security and details about its current value, P&L, etc.
 pub struct Position {
     /// The ID of the underlying contract.
-    pub contract: Proxy<Contract>,
+    pub contract: ExchangeProxy<Contract>,
     /// The number of contracts owned.
     pub position: f64,
     /// The current market price of each contract.
@@ -316,7 +317,7 @@ pub struct Position {
 /// A single position, comprising a single security and a few details about its cost, account, etc.
 pub struct PositionSummary {
     /// The underlying contract
-    pub contract: Proxy<Contract>,
+    pub contract: ExchangeProxy<Contract>,
     /// The number of contracts owned.
     pub position: f64,
     /// The average cost per contract for the entire position.

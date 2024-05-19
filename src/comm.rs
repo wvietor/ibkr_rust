@@ -1,6 +1,7 @@
-use serde::Serialize;
 use std::fmt::{Display, Formatter};
 use std::io::{Error, Write};
+
+use serde::Serialize;
 
 #[derive(Debug)]
 pub(crate) struct Writer {
@@ -115,6 +116,8 @@ impl From<SerializeMessageError> for Error {
 // Don't worry about the allow. Our serializer doesn't need all of the fields it's given
 #[allow(unused_variables)]
 pub(crate) mod ser {
+    use std::io::Write;
+
     use serde::{
         ser::{
             SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant, SerializeTuple,
@@ -122,7 +125,6 @@ pub(crate) mod ser {
         },
         Serialize, Serializer,
     };
-    use std::io::Write;
 
     use super::{SerializeMessageError, Writer};
 
@@ -252,9 +254,9 @@ pub(crate) mod ser {
         }
 
         #[inline]
-        fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
+        fn serialize_some<T>(self, value: &T) -> Result<Self::Ok, Self::Error>
         where
-            T: Serialize,
+            T: ?Sized + Serialize,
         {
             value.serialize(self)
         }
@@ -280,19 +282,19 @@ pub(crate) mod ser {
         }
 
         #[inline]
-        fn serialize_newtype_struct<T: ?Sized>(
+        fn serialize_newtype_struct<T>(
             self,
             name: &'static str,
             value: &T,
         ) -> Result<Self::Ok, Self::Error>
         where
-            T: Serialize,
+            T: ?Sized + Serialize,
         {
             value.serialize(self)
         }
 
         #[inline]
-        fn serialize_newtype_variant<T: ?Sized>(
+        fn serialize_newtype_variant<T>(
             self,
             name: &'static str,
             variant_index: u32,
@@ -300,7 +302,7 @@ pub(crate) mod ser {
             value: &T,
         ) -> Result<Self::Ok, Self::Error>
         where
-            T: Serialize,
+            T: ?Sized + Serialize,
         {
             value.serialize(self)
         }
@@ -366,9 +368,9 @@ pub(crate) mod ser {
         type Error = <Self as Serializer>::Error;
 
         #[inline]
-        fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+        fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
         where
-            T: Serialize,
+            T: ?Sized + Serialize,
         {
             value.serialize(&mut **self)?;
             self.buf.splice(self.buf.len() - 1..self.buf.len(), *b",");
@@ -387,9 +389,9 @@ pub(crate) mod ser {
         type Error = <Self as Serializer>::Error;
 
         #[inline]
-        fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+        fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
         where
-            T: Serialize,
+            T: ?Sized + Serialize,
         {
             value.serialize(&mut **self)
         }
@@ -405,9 +407,9 @@ pub(crate) mod ser {
         type Error = <Self as Serializer>::Error;
 
         #[inline]
-        fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+        fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
         where
-            T: Serialize,
+            T: ?Sized + Serialize,
         {
             value.serialize(&mut **self)
         }
@@ -423,9 +425,9 @@ pub(crate) mod ser {
         type Error = <Self as Serializer>::Error;
 
         #[inline]
-        fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+        fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
         where
-            T: Serialize,
+            T: ?Sized + Serialize,
         {
             value.serialize(&mut **self)
         }
@@ -441,17 +443,17 @@ pub(crate) mod ser {
         type Error = <Self as Serializer>::Error;
 
         #[inline]
-        fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<(), Self::Error>
+        fn serialize_key<T>(&mut self, key: &T) -> Result<(), Self::Error>
         where
-            T: Serialize,
+            T: ?Sized + Serialize,
         {
             key.serialize(&mut **self)
         }
 
         #[inline]
-        fn serialize_value<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+        fn serialize_value<T>(&mut self, value: &T) -> Result<(), Self::Error>
         where
-            T: Serialize,
+            T: ?Sized + Serialize,
         {
             value.serialize(&mut **self)
         }
@@ -467,13 +469,9 @@ pub(crate) mod ser {
         type Error = <Self as Serializer>::Error;
 
         #[inline]
-        fn serialize_field<T: ?Sized>(
-            &mut self,
-            key: &'static str,
-            value: &T,
-        ) -> Result<(), Self::Error>
+        fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
         where
-            T: Serialize,
+            T: ?Sized + Serialize,
         {
             value.serialize(&mut **self)
         }
@@ -489,13 +487,9 @@ pub(crate) mod ser {
         type Error = <Self as Serializer>::Error;
 
         #[inline]
-        fn serialize_field<T: ?Sized>(
-            &mut self,
-            key: &'static str,
-            value: &T,
-        ) -> Result<(), Self::Error>
+        fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
         where
-            T: Serialize,
+            T: ?Sized + Serialize,
         {
             key.serialize(&mut **self)?;
             value.serialize(&mut **self)
