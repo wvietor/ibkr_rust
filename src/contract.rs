@@ -740,7 +740,7 @@ macro_rules! proxy_impl {
 #[derive(Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 #[serde(into = "SerProxyHelp", try_from = "SerProxyHelp")]
 /// Holds information about a contract but lacks the information of a full [`Contract`].
-pub struct Proxy<S: Security + Clone + Debug, E: ProxyExchange + Clone> {
+pub struct Proxy<S: Security + Clone + Debug, E: ProxyExchange> {
     #[serde(serialize_with = "_dummy_ser", deserialize_with = "_dummy_de")]
     // Temporary until https://github.com/serde-rs/serde/pull/2239 is merged
     pub(crate) inner: S,
@@ -749,16 +749,19 @@ pub struct Proxy<S: Security + Clone + Debug, E: ProxyExchange + Clone> {
     pub(crate) _exch: std::marker::PhantomData<E>,
 }
 
-impl<S: Security + Clone + Debug, E: ProxyExchange + Clone> Debug for Proxy<S, E> {
+impl<S: Security + Clone + Debug, E: ProxyExchange> Debug for Proxy<S, E> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Proxy({:?})", self.inner)
     }
 }
 
-pub type ExchangeProxy<S: Security + Clone> = Proxy<S, HasExchange>;
-pub type NoExchangeProxy<S: Security + Clone> = Proxy<S, NoExchange>;
+/// A proxy for an underlying contract where the contract has an exchange field
+pub type ExchangeProxy<S> = Proxy<S, HasExchange>;
+/// A proxy for an underlying contract where the contract does not have an exchange field
+pub type NoExchangeProxy<S> = Proxy<S, NoExchange>;
 
-pub(crate) trait ProxyExchange: proxy_indicators::Valid {}
+/// An indicator trait used to identify the two types of valid [`Proxy`] contracts
+pub trait ProxyExchange: proxy_indicators::Valid {}
 
 pub(crate) mod proxy_indicators {
     use crate::decode::DecodeError;
@@ -766,7 +769,9 @@ pub(crate) mod proxy_indicators {
 
     use super::ProxyExchange;
 
-    pub trait Valid {
+    pub trait Valid: std::fmt::Debug + Send + Sync + Clone {
+        // False positive
+        #[allow(private_interfaces)]
         fn decode(exch_or_primary: String) -> Result<(Routing, Primary), DecodeError>;
         fn deserialize(
             exch: Option<Routing>,
@@ -783,6 +788,8 @@ pub(crate) mod proxy_indicators {
     pub struct NoExchange;
 
     impl Valid for HasExchange {
+        // False positive
+        #[allow(private_interfaces)]
         #[inline]
         fn decode(exch_or_primary: String) -> Result<(Routing, Primary), DecodeError> {
             Ok((
@@ -809,6 +816,8 @@ pub(crate) mod proxy_indicators {
     }
 
     impl Valid for NoExchange {
+        // False positive
+        #[allow(private_interfaces)]
         #[inline]
         fn decode(exch_or_primary: String) -> Result<(Routing, Primary), DecodeError> {
             Ok((
@@ -841,7 +850,7 @@ pub(crate) mod proxy_indicators {
 }
 
 #[allow(clippy::needless_pass_by_value)]
-fn _dummy_ser<E: ProxyExchange, Sec: Security + Clone, Ser: Serializer>(
+fn _dummy_ser<E: ProxyExchange, Sec: Security + Clone + Debug, Ser: Serializer>(
     _t: &Proxy<Sec, E>,
     _ser: Ser,
 ) -> Result<Ser::Ok, Ser::Error> {
@@ -849,14 +858,14 @@ fn _dummy_ser<E: ProxyExchange, Sec: Security + Clone, Ser: Serializer>(
 }
 
 #[allow(clippy::needless_pass_by_value)]
-fn _dummy_de<'de, E: ProxyExchange, Sec: Security + Clone, De: Deserializer<'de>>(
+fn _dummy_de<'de, E: ProxyExchange, Sec: Security + Clone + Debug, De: Deserializer<'de>>(
     _de: De,
 ) -> Result<Proxy<Sec, E>, De::Error> {
     unreachable!()
 }
 
 #[allow(clippy::needless_pass_by_value)]
-fn _dummy_ser_2<E: ProxyExchange, Sec: Security + Clone, Ser: Serializer>(
+fn _dummy_ser_2<E: ProxyExchange, Sec: Security + Clone + Debug, Ser: Serializer>(
     _t: &Proxy<Sec, E>,
     _ser: Ser,
 ) -> Result<Ser::Ok, Ser::Error> {
@@ -864,7 +873,7 @@ fn _dummy_ser_2<E: ProxyExchange, Sec: Security + Clone, Ser: Serializer>(
 }
 
 #[allow(clippy::needless_pass_by_value)]
-fn _dummy_de_2<'de, E: ProxyExchange, Sec: Security + Clone, De: Deserializer<'de>>(
+fn _dummy_de_2<'de, E: ProxyExchange, Sec: Security + Clone + Debug, De: Deserializer<'de>>(
     _de: De,
 ) -> Result<Proxy<Sec, E>, De::Error> {
     unreachable!()
@@ -895,7 +904,7 @@ pub enum SecOptionClass {
     Put,
 }
 
-impl<S: Security + Clone + Debug, E: ProxyExchange + Clone> From<Proxy<S, E>> for SerProxyHelp {
+impl<S: Security + Clone + Debug, E: ProxyExchange> From<Proxy<S, E>> for SerProxyHelp {
     #[allow(clippy::too_many_lines)]
     fn from(value: Proxy<S, E>) -> Self {
         let contract_type = value.contract_type();
@@ -1013,7 +1022,7 @@ impl<S: Security + Clone + Debug, E: ProxyExchange + Clone> From<Proxy<S, E>> fo
     }
 }
 
-impl<S: Security + Clone + Debug, E: ProxyExchange + Clone> TryFrom<SerProxyHelp> for Proxy<S, E> {
+impl<S: Security + Clone + Debug, E: ProxyExchange> TryFrom<SerProxyHelp> for Proxy<S, E> {
     type Error = anyhow::Error;
 
     #[allow(clippy::too_many_lines)]
@@ -1164,18 +1173,18 @@ impl<S: Security + Clone + Debug, E: ProxyExchange + Clone> TryFrom<SerProxyHelp
 
         Ok(Self {
             inner,
-            _exch: Default::default(),
+            _exch: std::marker::PhantomData,
         })
     }
 }
 
-impl<S: Security + Clone, E: ProxyExchange> From<Proxy<S, E>> for ContractId {
+impl<S: Security + Clone + Debug, E: ProxyExchange> From<Proxy<S, E>> for ContractId {
     fn from(value: Proxy<S, E>) -> Self {
         value.inner.contract_id()
     }
 }
 
-impl<S: Security + Clone, E: ProxyExchange> Proxy<S, E> {
+impl<S: Security + Clone + Debug, E: ProxyExchange> Proxy<S, E> {
     #[inline]
     /// Get the type of contract.
     pub fn contract_type(&self) -> ContractType {
@@ -1206,7 +1215,7 @@ impl<S: Security + Clone, E: ProxyExchange> Proxy<S, E> {
     }
 }
 
-impl<E: ProxyExchange + Clone> Proxy<Contract, E> {
+impl<E: ProxyExchange> Proxy<Contract, E> {
     proxy_impl!(Forex, (Contract::Forex(t), e) => Proxy::<Forex, E> { inner: t, _exch: e }, forex);
     proxy_impl!(Crypto, (Contract::Crypto(t), e) => Proxy::<Crypto, E> { inner: t, _exch: e }, crypto);
     proxy_impl!(Stock, (Contract::Stock(t), e) => Proxy::<Stock, E> { inner: t, _exch: e }, stock);
@@ -1216,7 +1225,7 @@ impl<E: ProxyExchange + Clone> Proxy<Contract, E> {
     proxy_impl!(SecOption, (Contract::SecOption(t), e) => Proxy::<SecOption, E> { inner: t, _exch: e }, sec_option);
 }
 
-impl<E: ProxyExchange + Clone> Proxy<Forex, E> {
+impl<E: ProxyExchange> Proxy<Forex, E> {
     #[inline]
     #[must_use]
     /// Get the [`Forex`] trading class.
@@ -1225,7 +1234,7 @@ impl<E: ProxyExchange + Clone> Proxy<Forex, E> {
     }
 }
 
-impl<E: ProxyExchange + Clone> Proxy<Crypto, E> {
+impl<E: ProxyExchange> Proxy<Crypto, E> {
     #[inline]
     #[must_use]
     /// Get the [`Crypto`] trading class.
@@ -1234,7 +1243,7 @@ impl<E: ProxyExchange + Clone> Proxy<Crypto, E> {
     }
 }
 
-impl<E: ProxyExchange + Clone> Proxy<Stock, E> {
+impl<E: ProxyExchange> Proxy<Stock, E> {
     #[inline]
     #[must_use]
     /// Get the [`Stock`] trading class.
@@ -1252,7 +1261,7 @@ impl Proxy<Stock, NoExchange> {
     }
 }
 
-impl<E: ProxyExchange + Clone> Proxy<Commodity, E> {
+impl<E: ProxyExchange> Proxy<Commodity, E> {
     #[inline]
     #[must_use]
     /// Get the [`Commodity`] trading class.
@@ -1261,7 +1270,7 @@ impl<E: ProxyExchange + Clone> Proxy<Commodity, E> {
     }
 }
 
-impl<E: ProxyExchange + Clone> Proxy<SecFuture, E> {
+impl<E: ProxyExchange> Proxy<SecFuture, E> {
     #[inline]
     #[must_use]
     /// Get the [`SecFuture`] trading class.
@@ -1284,7 +1293,7 @@ impl<E: ProxyExchange + Clone> Proxy<SecFuture, E> {
     }
 }
 
-impl<E: ProxyExchange + Clone> Proxy<SecOption, E> {
+impl<E: ProxyExchange> Proxy<SecOption, E> {
     #[inline]
     #[must_use]
     /// Get the [`SecOption`] trading class.
@@ -1329,30 +1338,40 @@ impl<E: ProxyExchange + Clone> Proxy<SecOption, E> {
 }
 
 impl Proxy<Forex, HasExchange> {
+    #[must_use]
+    /// Get the [`Forex`] `exchange`
     pub fn exchange(&self) -> Routing {
         self.inner.exchange()
     }
 }
 
 impl Proxy<Stock, HasExchange> {
+    #[must_use]
+    /// Get the [`Stock`] `exchange`
     pub fn exchange(&self) -> Routing {
         self.inner.exchange()
     }
 }
 
 impl Proxy<Commodity, HasExchange> {
+    #[must_use]
+    /// Get the [`Commodity`] `exchange`
     pub fn exchange(&self) -> Routing {
         self.inner.exchange()
     }
 }
 
 impl Proxy<SecFuture, HasExchange> {
+    #[must_use]
+    /// Get the [`SecFuture`] `exchange`
     pub fn exchange(&self) -> Routing {
         self.inner.exchange()
     }
 }
 
 impl Proxy<SecOption, HasExchange> {
+    #[must_use]
+    /// Get the [`SecOption`] `exchange`
     pub fn exchange(&self) -> Routing {
         self.inner.exchange()
     }

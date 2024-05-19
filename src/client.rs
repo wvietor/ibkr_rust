@@ -52,10 +52,10 @@ struct Config {
 pub enum ParseConfigFileError {
     #[error("Failed to read config.toml file. Cause: {0}")]
     /// The OS failed to read the file
-    File(std::io::Error),
+    File(#[from] std::io::Error),
     #[error("Failed to parse config.toml file. Cause: {0}")]
-    /// The required TOMl data was invalid or missing
-    Toml(toml::de::Error),
+    /// The required `TOMl` data was invalid or missing
+    Toml(#[from] toml::de::Error),
 }
 
 impl Config {
@@ -2487,7 +2487,8 @@ impl Client<indicators::Active> {
         self.status
             .tx
             .send(ToWrapper::ContractQuery((query, req_id)))
-            .await?;
+            .await
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::BrokenPipe, e))?;
 
         match query {
             Query::IbContractId(contract_id, routing) => {

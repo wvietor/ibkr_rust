@@ -1,9 +1,10 @@
-use chrono::serde::{ts_milliseconds, ts_seconds};
-use chrono::{DateTime, NaiveDate, Utc};
-use serde::{ser::SerializeTuple, Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::Formatter;
 use std::num::ParseFloatError;
 use std::str::FromStr;
+
+use chrono::serde::{ts_milliseconds, ts_seconds};
+use chrono::{DateTime, NaiveDate, Utc};
+use serde::{ser::SerializeTuple, Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "etf_nav")]
@@ -17,7 +18,7 @@ pub enum EtfNav {
     Bid(f64),
     /// The ask price of ETF's Net Asset Value (NAV). Calculation is based on prices of ETF's underlying securities.
     Ask(f64),
-    /// The last price of Net Asset Value (NAV). For ETFs: Calculation is based on prices of ETF's underlying securities. For NextShares: Value is provided by NASDAQ.
+    /// The last price of Net Asset Value (NAV). For ETFs: Calculation is based on prices of ETF's underlying securities. For `NextShares`: Value is provided by NASDAQ.
     Last(f64),
     /// ETF Nav Last for Frozen data.
     FrozenLast(f64),
@@ -35,7 +36,7 @@ pub enum Price {
     Bid(f64),
     /// Lowest price offer on the contract.
     Ask(f64),
-    /// Last price at which the contract traded (does not include some trades in RTVolume).
+    /// Last price at which the contract traded (does not include some trades in `RTVolume`).
     Last(f64),
     /// High price for the day.
     High(f64),

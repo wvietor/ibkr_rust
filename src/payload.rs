@@ -1,3 +1,4 @@
+use std::convert::Infallible;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
@@ -18,10 +19,13 @@ pub enum ParsePayloadError {
     /// Invalid order status
     #[error("Invalid value encountered when attempting to parse order status. No such order status: {0}")]
     OrderStatus(String),
+    /// Invalid entry side
     #[error("Invalid int encountered while parsing entry side")]
     Entry,
+    /// Invalid MPID
     #[error("Invalid value encountered when attempting to parse MPID.")]
     Mpid,
+    /// Invalid operation integer code
     #[error("Invalid int encountered while parsing operation")]
     Operation,
 }
@@ -37,32 +41,8 @@ impl std::fmt::Display for ExchangeId {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
-/// An error type returned when a given exchange ID cannot be parsed (likely due to invalid UTF-8)
-pub struct ParseExchangeIdError;
-
-impl std::error::Error for ParseExchangeIdError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-
-    fn description(&self) -> &str {
-        "description() is deprecated; use Display"
-    }
-
-    fn cause(&self) -> Option<&dyn std::error::Error> {
-        self.source()
-    }
-}
-
-impl std::fmt::Display for ParseExchangeIdError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Invalid exchange ID, likely due to a bad UTF-8 code")
-    }
-}
-
 impl FromStr for ExchangeId {
-    type Err = ParseExchangeIdError;
+    type Err = Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self(s.to_owned()))
@@ -441,18 +421,6 @@ impl FromStr for Locate {
         }
     }
 }
-
-#[derive(Debug, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-/// An error that represents an invalid order status.
-pub struct ParseOrderStatusError(pub String);
-
-impl std::fmt::Display for ParseOrderStatusError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Invalid order status message: {}", self.0)
-    }
-}
-
-impl std::error::Error for ParseOrderStatusError {}
 
 #[allow(non_snake_case, missing_docs)]
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]

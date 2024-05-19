@@ -698,7 +698,7 @@ pub trait Local: wrapper::LocalWrapper {
                     if name.ends_with('C') || name.ends_with('P') || name.ends_with('S') {
                         return Ok(());
                     }
-                    return Err(ParseAttributeError::NoSuchAttribute(format!("Unexpected segment title \"{}\" encountered. This may mandate an API update: currently-supported values are C, P, and S as outlined in the account::Segment type.", name)).into());
+                    return Err(ParseAttributeError::NoSuchAttribute(format!("Unexpected segment title \"{name}\" encountered. This may mandate an API update: currently-supported values are C, P, and S as outlined in the account::Segment type.")).into());
                 }
                 _ => return Err(ParseAttributeError::NoSuchAttribute(name).into()),
             };
@@ -987,11 +987,8 @@ pub trait Local: wrapper::LocalWrapper {
                             volume,
                             wap,
                             trade_count: trade_count.try_into().map_err(|_| {
-                                (
-                                    "trade_count",
-                                    DecodeError::UnexpectedData(
-                                        "Tradec count could not be converted to unsigned integer.",
-                                    ),
+                                DecodeError::UnexpectedData(
+                                    "trade_count could not be converted to unsigned integer.",
                                 )
                             })?,
                         })
@@ -1072,10 +1069,10 @@ pub trait Local: wrapper::LocalWrapper {
             let calc = match base {
                 0 => SecOptionCalculations::ReturnBased(calc),
                 1 => SecOptionCalculations::PriceBased(calc),
-                t => {
-                    return Err(anyhow::Error::msg(format!(
-                        "Unexpected option calculation base: {t}"
-                    )))
+                _ => {
+                    return Err(DecodeError::UnexpectedData(
+                        "Unexpected option calculation base.",
+                    ))
                 }
             };
             let calc = match tick_type {
@@ -1141,9 +1138,7 @@ pub trait Local: wrapper::LocalWrapper {
                     wrapper.quoting_exchanges(req_id, quoting_exchanges).await;
                 }
                 45 | 85 | 88 => {
-                    let value = value
-                        .parse()
-                        .with_context(|| "Invalid value in timestamp decode")?;
+                    let value = value.parse().map_err(|e| ("value", e))?;
                     if value == 0 {
                         return Ok(());
                     }
@@ -1152,9 +1147,7 @@ pub trait Local: wrapper::LocalWrapper {
                         85 => DateTime::from_timestamp_millis(value),
                         _ => unreachable!(),
                     }
-                    .ok_or_else(|| {
-                        anyhow::Error::msg("Invalid timestamp encountered in string message")
-                    })?;
+                    .ok_or(("timestamp", ParseDateTimeError::Timestamp))?;
                     let timestamp = match tick_type {
                         45 => Class::Live(TimeStamp::Last(timestamp)),
                         85 => Class::Live(TimeStamp::Regulatory(timestamp)),
@@ -1171,43 +1164,44 @@ pub trait Local: wrapper::LocalWrapper {
                             .ok_or(DecodeError::MissingData {
                                 field_name: "last_price",
                             })?
-                            .parse()?,
+                            .parse()
+                            .map_err(|e| ("last_price", e))?,
                         last_size: vols
                             .next()
                             .ok_or(DecodeError::MissingData {
                                 field_name: "last_size",
                             })?
-                            .parse()?,
+                            .parse()
+                            .map_err(|e| ("last_size", e))?,
                         last_time: DateTime::from_timestamp(
                             vols.next()
                                 .ok_or(DecodeError::MissingData {
                                     field_name: "last_time",
                                 })?
-                                .parse()?,
+                                .parse()
+                                .map_err(|e| ("last_time", e))?,
                             0,
                         )
-                        .ok_or_else(|| {
-                            anyhow::Error::msg(
-                                "Invalid Unix timestamp found in real time volume message",
-                            )
-                        })?,
+                        .ok_or(("last_time", ParseDateTimeError::Timestamp))?,
                         day_volume: vols
                             .next()
                             .ok_or(DecodeError::MissingData {
                                 field_name: "day_volume",
                             })?
-                            .parse()?,
+                            .parse()
+                            .map_err(|e| ("day_volume", e))?,
                         vwap: vols
                             .next()
-                            .ok_or(DecodeError::MissingData)
                             .ok_or(DecodeError::MissingData { field_name: "vwap" })?
-                            .parse()?,
+                            .parse()
+                            .map_err(|e| ("vwap", e))?,
                         single_mm: vols
                             .next()
                             .ok_or(DecodeError::MissingData {
                                 field_name: "single_mm",
                             })?
-                            .parse()?,
+                            .parse()
+                            .map_err(|e| ("single_mm", e))?,
                     };
                     let volume = match tick_type {
                         48 => RealTimeVolume::All(base),
@@ -1224,26 +1218,30 @@ pub trait Local: wrapper::LocalWrapper {
                             .ok_or(DecodeError::MissingData {
                                 field_name: "trailing_year",
                             })?
-                            .parse()?,
+                            .parse()
+                            .map_err(|e| ("trailing_year", e))?,
                         forward_year: divs
                             .next()
                             .ok_or(DecodeError::MissingData {
                                 field_name: "forward_year",
                             })?
-                            .parse()?,
+                            .parse()
+                            .map_err(|e| ("forward_year", e))?,
                         next_dividend: (
                             NaiveDate::parse_and_remainder(
                                 divs.next().ok_or(DecodeError::MissingData {
                                     field_name: "next_dividend",
-                                })??,
+                                })?,
                                 "%Y%m%d",
-                            )?
+                            )
+                            .map_err(|_| ("next_dividend", ParseDateTimeError::Timestamp))?
                             .0,
                             divs.next()
                                 .ok_or(DecodeError::MissingData {
                                     field_name: "next_price",
                                 })?
-                                .parse()?,
+                                .parse()
+                                .map_err(|e| ("next_dividend", e))?,
                         ),
                     };
                     wrapper.dividends(req_id, dividends).await;
@@ -1252,8 +1250,8 @@ pub trait Local: wrapper::LocalWrapper {
                     wrapper.news(req_id, value).await;
                 }
                 t => {
-                    return Err(anyhow::Error::msg(format!(
-                        "Unexpected price market data request: {t}"
+                    return Err(DecodeError::Other(format!(
+                        "unexpected price market data request: {t}."
                     )))
                 }
             };
@@ -1286,11 +1284,8 @@ pub trait Local: wrapper::LocalWrapper {
             wrapper
                 .current_time(
                     req_id,
-                    DateTime::from_timestamp(datetime, 0).ok_or_else(|| {
-                        anyhow::Error::msg(
-                            "Invalid datetime value encountered while parsing the UNIX timestamp!",
-                        )
-                    })?,
+                    DateTime::from_timestamp(datetime, 0)
+                        .ok_or(("datetime", ParseDateTimeError::Timestamp))?,
                 )
                 .await;
             Ok(())
@@ -1317,7 +1312,7 @@ pub trait Local: wrapper::LocalWrapper {
             );
             let core = BarCore {
                 datetime: DateTime::from_timestamp(date_time, 0)
-                    .ok_or(anyhow::Error::msg("Invalid timestamp"))?,
+                    .ok_or(("datetime", ParseDateTimeError::Timestamp))?,
                 open,
                 high,
                 low,
@@ -1328,7 +1323,11 @@ pub trait Local: wrapper::LocalWrapper {
                     bar: core,
                     volume,
                     wap,
-                    trade_count: trade_count.try_into()?,
+                    trade_count: trade_count.try_into().map_err(|_| {
+                        DecodeError::UnexpectedData(
+                            "trade_count could not be converted to unsigned integer.",
+                        )
+                    })?,
                 })
             } else {
                 Bar::Ordinary(core)
@@ -1820,7 +1819,8 @@ pub trait Local: wrapper::LocalWrapper {
             wrapper
                 .head_timestamp(
                     req_id,
-                    DateTime::from_timestamp(timestamp, 0).ok_or(ParseDateTimeError::Timestamp)?,
+                    DateTime::from_timestamp(timestamp, 0)
+                        .ok_or(("timestamp", ParseDateTimeError::Timestamp))?,
                 )
                 .await;
             Ok(())
@@ -1842,7 +1842,8 @@ pub trait Local: wrapper::LocalWrapper {
             for (bin, chunk) in fields
                 .take(num_points * 2)
                 .map(|v| v.parse())
-                .collect::<Result<Vec<f64>, _>>()?
+                .collect::<Result<Vec<f64>, _>>()
+                .map_err(|e| ("chunk", e))?
                 .chunks_exact(2)
                 .enumerate()
             {
@@ -1874,7 +1875,8 @@ pub trait Local: wrapper::LocalWrapper {
                     volume @ 0: f64
             );
             let core = BarCore {
-                datetime: NaiveDateTime::parse_and_remainder(datetime_str.as_str(), "%Y%m%d %T")?
+                datetime: NaiveDateTime::parse_and_remainder(datetime_str.as_str(), "%Y%m%d %T")
+                    .map_err(|_| ("datetime", ParseDateTimeError::Timestamp))?
                     .0
                     .and_utc(),
                 open,
@@ -1887,7 +1889,11 @@ pub trait Local: wrapper::LocalWrapper {
                     bar: core,
                     volume,
                     wap,
-                    trade_count: trade_count.try_into()?,
+                    trade_count: trade_count.try_into().map_err(|_| {
+                        DecodeError::UnexpectedData(
+                            "trade_count could not be converted to unsigned integer.",
+                        )
+                    })?,
                 })
             } else {
                 Bar::Ordinary(core)
@@ -1996,9 +2002,12 @@ pub trait Local: wrapper::LocalWrapper {
             {
                 if let [time, _, price, size] = chunk {
                     ticks.push(TickData::Midpoint(Midpoint {
-                        datetime: DateTime::from_timestamp(time.parse()?, 0)
-                            .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
-                        price: price.parse()?,
+                        datetime: DateTime::from_timestamp(
+                            time.parse().map_err(|e| ("datetime", e))?,
+                            0,
+                        )
+                        .ok_or(("datetime", ParseDateTimeError::Timestamp))?,
+                        price: price.parse().map_err(|e| ("price", e))?,
                     }));
                 }
             }
@@ -2026,12 +2035,15 @@ pub trait Local: wrapper::LocalWrapper {
             {
                 if let [time, _, bid_price, ask_price, bid_size, ask_size] = chunk {
                     ticks.push(TickData::BidAsk(BidAsk {
-                        datetime: DateTime::from_timestamp(time.parse()?, 0)
-                            .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
-                        bid_price: bid_price.parse()?,
-                        ask_price: ask_price.parse()?,
-                        bid_size: bid_size.parse()?,
-                        ask_size: ask_size.parse()?,
+                        datetime: DateTime::from_timestamp(
+                            time.parse().map_err(|e| ("datetime", e))?,
+                            0,
+                        )
+                        .ok_or(("datetime", ParseDateTimeError::Timestamp))?,
+                        bid_price: bid_price.parse().map_err(|e| ("bid_price", e))?,
+                        ask_price: ask_price.parse().map_err(|e| ("ask_price", e))?,
+                        bid_size: bid_size.parse().map_err(|e| ("bid_size", e))?,
+                        ask_size: ask_size.parse().map_err(|e| ("ask_size", e))?,
                     }));
                 }
             }
@@ -2059,11 +2071,14 @@ pub trait Local: wrapper::LocalWrapper {
             {
                 if let [time, _, price, size, exchange, _] = chunk {
                     ticks.push(TickData::Last(Last {
-                        datetime: DateTime::from_timestamp(time.parse()?, 0)
-                            .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
-                        price: price.parse()?,
-                        size: size.parse()?,
-                        exchange: exchange.parse()?,
+                        datetime: DateTime::from_timestamp(
+                            time.parse().map_err(|e| ("datetime", e))?,
+                            0,
+                        )
+                        .ok_or(("datetime", ParseDateTimeError::Timestamp))?,
+                        price: price.parse().map_err(|e| ("price", e))?,
+                        size: size.parse().map_err(|e| ("size", e))?,
+                        exchange: exchange.parse().map_err(|e| ("exchange", e))?,
                     }));
                 }
             }
@@ -2085,13 +2100,15 @@ pub trait Local: wrapper::LocalWrapper {
                     timestamp @ 0: i64
             );
             let datetime = DateTime::from_timestamp(timestamp, 0)
-                .ok_or_else(|| anyhow::Error::msg("Invalid timestamp"))?;
+                .ok_or(("datetime", ParseDateTimeError::Timestamp))?;
             let tick = match tick_type {
                 1 | 2 => TickData::Last(Last {
                     datetime,
-                    price: nth(fields, 0, "price")?.parse()?,
-                    size: nth(fields, 0, "size")?.parse()?,
-                    exchange: nth(fields, 1, "exchange")?.parse()?,
+                    price: nth(fields, 0, "price")?.parse().map_err(|e| ("price", e))?,
+                    size: nth(fields, 0, "size")?.parse().map_err(|e| ("size", e))?,
+                    exchange: nth(fields, 1, "exchange")?
+                        .parse()
+                        .map_err(|e| ("exchange", e))?,
                 }),
                 3 => {
                     decode_fields!(
@@ -2111,9 +2128,9 @@ pub trait Local: wrapper::LocalWrapper {
                 }
                 4 => TickData::Midpoint(Midpoint {
                     datetime,
-                    price: nth(fields, 0, "price")?.parse()?,
+                    price: nth(fields, 0, "price")?.parse().map_err(|e| ("price", e))?,
                 }),
-                _ => Err(anyhow::Error::msg("Unexpected tick type"))?,
+                _ => Err(DecodeError::UnexpectedData("Unexpected tick type"))?,
             };
             wrapper.live_tick(req_id, tick).await;
             Ok(())
@@ -2325,10 +2342,10 @@ pub trait Local: wrapper::LocalWrapper {
                     };
                     wrapper.ipo(req_id, ipo).await;
                 }
-                t => {
-                    return Err(anyhow::Error::msg(format!(
-                        "Unexpected generic market data request: {t}"
-                    )))
+                _ => {
+                    return Err(DecodeError::UnexpectedData(
+                        "Unexpected generic market data request",
+                    ))
                 }
             };
 
@@ -2528,10 +2545,11 @@ pub(crate) async fn decode_contract_no_wrapper(
             })),
         };
 
-        tx.send(ToClient::NewContract(contract.ok_or_else(|| {
-            DecodeError::UnexpectedData("No contract was created")
-        })?))
-        .await?;
+        tx.send(ToClient::NewContract(contract.ok_or(
+            DecodeError::UnexpectedData("No contract was created"),
+        )?))
+        .await
+        .map_err(Box::new)?;
     }
     Ok(())
 }
@@ -2661,8 +2679,7 @@ fn deserialize_contract_proxy<E: crate::contract::ProxyExchange + Clone>(
                 "P" => SecOption::Put(op_inner),
                 other => {
                     return Err(DecodeError::Other(format!(
-                        "Unexpected option right. Expected \'C\' or \'P\'. Found {}.",
-                        other
+                        "Unexpected option right. Expected \'C\' or \'P\'. Found {other}."
                     )))
                 }
             };
@@ -2672,7 +2689,7 @@ fn deserialize_contract_proxy<E: crate::contract::ProxyExchange + Clone>(
 
     Ok(Proxy {
         inner,
-        _exch: Default::default(),
+        _exch: std::marker::PhantomData,
     })
 }
 
@@ -2687,6 +2704,12 @@ pub(crate) enum DecodeError {
         field_name: &'static str,
         int_error: std::num::ParseIntError,
     },
+    #[error("Failed to parse boolean field {field_name}. Cause: {bool_error}")]
+    /// Failed to parse boolean field
+    ParseBoolError {
+        field_name: &'static str,
+        bool_error: std::str::ParseBoolError,
+    },
     #[error("Failed to parse float field {field_name}. Cause: {float_error}")]
     /// Failed to parse floating point field
     ParseFloatError {
@@ -2698,6 +2721,18 @@ pub(crate) enum DecodeError {
     ParseCurrencyError {
         field_name: &'static str,
         currency_error: crate::currency::ParseCurrencyError,
+    },
+    #[error("Failed to parse class field {field_name}. Cause: {class_error}")]
+    /// Failed to parse [`market::data::live_data::Class`] field
+    ParseClassError {
+        field_name: &'static str,
+        class_error: crate::market_data::live_data::ParseClassError,
+    },
+    #[error("Failed to parse tag field {field_name}. Cause: {tag_error}")]
+    /// Failed to parse [`Tag`] field
+    ParseTagError {
+        field_name: &'static str,
+        tag_error: account::ParseTagError,
     },
     #[error("Failed to parse exchange field {field_name}. Cause: {exchange_error}")]
     /// Failed to parse [`Routing`] or [`Primary`] field
@@ -2740,7 +2775,7 @@ pub(crate) enum DecodeError {
     #[error("{0}")]
     UnexpectedData(&'static str),
     #[error("Error when sending data {0}")]
-    SendError(#[from] tokio::sync::mpsc::error::SendError<ToClient>),
+    SendError(#[from] Box<tokio::sync::mpsc::error::SendError<ToClient>>),
     #[error("{0}")]
     Other(String),
 }
@@ -2750,6 +2785,15 @@ impl From<(&'static str, std::num::ParseIntError)> for DecodeError {
         Self::ParseIntError {
             field_name: value.0,
             int_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, std::str::ParseBoolError)> for DecodeError {
+    fn from(value: (&'static str, std::str::ParseBoolError)) -> Self {
+        Self::ParseBoolError {
+            field_name: value.0,
+            bool_error: value.1,
         }
     }
 }
@@ -2768,6 +2812,24 @@ impl From<(&'static str, crate::currency::ParseCurrencyError)> for DecodeError {
         Self::ParseCurrencyError {
             field_name: value.0,
             currency_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, crate::market_data::live_data::ParseClassError)> for DecodeError {
+    fn from(value: (&'static str, crate::market_data::live_data::ParseClassError)) -> Self {
+        Self::ParseClassError {
+            field_name: value.0,
+            class_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, account::ParseTagError)> for DecodeError {
+    fn from(value: (&'static str, account::ParseTagError)) -> Self {
+        Self::ParseTagError {
+            field_name: value.0,
+            tag_error: value.1,
         }
     }
 }
@@ -2833,7 +2895,7 @@ impl From<(&'static str, ParseDateTimeError)> for DecodeError {
 }
 
 impl From<(&'static str, std::convert::Infallible)> for DecodeError {
-    fn from(value: (&'static str, ParseDateTimeError)) -> Self {
+    fn from(value: (&'static str, std::convert::Infallible)) -> Self {
         unreachable!()
     }
 }

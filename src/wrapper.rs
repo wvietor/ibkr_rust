@@ -5,7 +5,7 @@ use ibapi_macros::debug_trait;
 
 use crate::account::{Attribute, TagValue};
 use crate::client::ActiveClient;
-use crate::contract::{Contract, Proxy};
+use crate::contract::{Contract, ExchangeProxy};
 use crate::execution::Execution;
 use crate::payload::{
     self, Bar, ExchangeId, HistogramEntry, OrderStatus, Pnl, PnlSingle, Position, PositionSummary,
@@ -169,10 +169,10 @@ pub trait LocalWrapper {
     /// The callback message that contains order status data from [`crate::client::Client::req_place_order`].
     fn order_status(&mut self, status: OrderStatus) -> impl Future {}
     /// The callback message that contains information about currently open orders from [`crate::client::Client::req_place_order`].
-    fn open_order<E: crate::contract::ProxyExchange + Clone>(
+    fn open_order(
         &mut self,
         order_id: i64,
-        proxy: Proxy<Contract, E>,
+        proxy: ExchangeProxy<Contract>,
         client_id: i64,
         parent_id: Option<i64>,
         permanent_id: i64,

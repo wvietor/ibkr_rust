@@ -87,7 +87,7 @@ pub enum Attribute {
     InitMarginReq(Segment<f64>, Denomination),
     /// Real-time mark-to-market value of Issued Option.
     IssuerOptionValue(f64, Denomination),
-    /// GrossPositionValue / NetLiquidation in security segment.
+    /// Quotient of `GrossPositionValue` and `NetLiquidation` in security segment.
     LeverageSecurity(f64),
     /// Time when look-ahead values take effect.
     LookAheadNextChange(i32),
@@ -127,7 +127,7 @@ pub enum Attribute {
     PostExpirationMargin(Segment<f64>, Denomination),
     /// Marginable Equity with Loan value as of 16:00 ET the previous day in securities segment.
     PreviousDayEquityWithLoanValue(f64, Denomination),
-    /// IMarginable Equity with Loan value as of 16:00 ET the previous day.
+    /// `IMarginable` Equity with Loan value as of 16:00 ET the previous day.
     PreviousDayEquityWithLoanValueSecurity(f64, Denomination),
     /// Open positions are grouped by currency.
     RealCurrency(Denomination),
@@ -176,25 +176,33 @@ pub enum ParseAttributeError {
     #[error("Failed to parse floating point attribute {attribute_name}. Cause: {float_error}")]
     /// Failed to parse float attribute
     Float {
+        /// The name of the attribute
         attribute_name: &'static str,
+        /// The underlying error
         float_error: ParseFloatError,
     },
     #[error("Failed to parse integer attribute {attribute_name}. Cause: {int_error}")]
     /// Failed to parse int attribute
     Int {
+        /// The name of the attribute
         attribute_name: &'static str,
+        /// The underlying error
         int_error: ParseIntError,
     },
     #[error("Failed to parse day trades attribute {attribute_name}. Cause: {day_trades_error}")]
     /// Failed to parse [`RemainingDayTrades`] attribute
     DayTrades {
+        /// The name of the attribute
         attribute_name: &'static str,
+        /// The underlying error
         day_trades_error: ParseDayTradesError,
     },
     #[error("Failed to parse boolean attribute {attribute_name}. Cause: {bool_error}")]
     /// Failed to parse [`bool`] attribute
     Bool {
+        /// The name of the attribute
         attribute_name: &'static str,
+        /// The underlying error
         bool_error: ParseBoolError,
     },
     #[error(
@@ -202,10 +210,13 @@ pub enum ParseAttributeError {
     )]
     /// Failed to parse [`Denomination`] attribute
     Denomination {
+        /// The name of the attribute
         attribute_name: &'static str,
+        /// The underlying error
         denomination_error: ParseCurrencyError,
     },
     #[error("No such attribute {0}")]
+    /// No such attribute exists
     NoSuchAttribute(String),
 }
 
@@ -435,12 +446,17 @@ pub enum Tag {
     HighestSeverity,
     /// The Number of Open/Close trades a user could put on before Pattern Day Trading is detected. A value of "-1" means that the user can put on unlimited day trades.
     DayTradesRemaining,
-    /// GrossPositionValue / NetLiquidation.
+    /// Quotient of `GrossPositionValue` and `NetLiquidation`.
     Leverage,
 }
 
+#[derive(Debug, Clone, Copy, Error)]
+#[error("Invalid value encountered when parsing tag.")]
+/// An error returned when attempting to parse a [`Tag`]
+pub struct ParseTagError;
+
 impl std::str::FromStr for Tag {
-    type Err = anyhow::Error;
+    type Err = ParseTagError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
@@ -473,11 +489,7 @@ impl std::str::FromStr for Tag {
             "HighestSeverity" => Self::HighestSeverity,
             "DayTradesRemaining" => Self::DayTradesRemaining,
             "Leverage" => Self::Leverage,
-            s => {
-                return Err(anyhow::Error::msg(format!(
-                    "Invalid tag value encountered while parsing: {s}"
-                )))
-            }
+            _ => return Err(ParseTagError),
         })
     }
 }
