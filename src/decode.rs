@@ -87,7 +87,7 @@ macro_rules! expand_seg_variants {
 macro_rules! impl_seg_variants {
     ($root_name: literal, $attr_var: ident, $name: expr, $value: expr, $currency: expr) => {{
         match $name.as_str() {
-            stringify!($root_name) => account::Attribute::$attr_var(
+            concat!($root_name) => account::Attribute::$attr_var(
                 account::Segment::Total(
                     $value
                         .parse()

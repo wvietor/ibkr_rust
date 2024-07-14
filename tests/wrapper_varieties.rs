@@ -47,7 +47,7 @@ struct Recur {
 }
 
 impl ibapi::wrapper::LocalRecurring for Recur {
-    fn cycle(&mut self) -> impl Future<Output = ()> + Send {
+    fn cycle(&mut self) -> impl Future<Output = ()> {
         async {
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
             self.cancel_loop.cancel();
