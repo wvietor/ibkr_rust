@@ -64,7 +64,7 @@ impl Initializer for AccountSummaryInitializer {
 }
 
 #[tokio::test]
-async fn account_summary() -> anyhow::Result<()> {
+async fn account_summary() -> Result<(), Box<dyn std::error::Error>> {
     let discon =
         Builder::from_config_file(Mode::Paper, Host::Gateway, Some("config.toml".as_ref()))?
             .connect(1)
@@ -97,7 +97,7 @@ impl Initializer for AccountUpdateInitializer {
 }
 
 #[tokio::test]
-async fn account_update() -> anyhow::Result<()> {
+async fn account_update() -> Result<(), Box<dyn std::error::Error>> {
     let discon =
         Builder::from_config_file(Mode::Paper, Host::Gateway, Some("config.toml".as_ref()))?
             .connect(2)
@@ -129,7 +129,7 @@ impl Initializer for PositionInitializer {
 }
 
 #[tokio::test]
-async fn positions() -> anyhow::Result<()> {
+async fn positions() -> Result<(), Box<dyn std::error::Error>> {
     let discon =
         Builder::from_config_file(Mode::Paper, Host::Gateway, Some("config.toml".as_ref()))?
             .connect(3)
@@ -164,7 +164,7 @@ impl Initializer for PnlInitializer {
 }
 
 #[tokio::test]
-async fn pnl() -> anyhow::Result<()> {
+async fn pnl() -> Result<(), Box<dyn std::error::Error>> {
     let discon =
         Builder::from_config_file(Mode::Paper, Host::Gateway, Some("config.toml".as_ref()))?
             .connect(4)

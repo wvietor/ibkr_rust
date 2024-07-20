@@ -56,7 +56,7 @@ impl ibapi::wrapper::LocalRecurring for Recur {
 }
 
 #[tokio::test]
-async fn disaggregated_remote() -> anyhow::Result<()> {
+async fn disaggregated_remote() -> Result<(), Box<dyn std::error::Error>> {
     let mut client = Builder::from_config_file(Mode::Paper, Host::Gateway, None)?
         .connect(5)
         .await?
@@ -70,7 +70,7 @@ async fn disaggregated_remote() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn disaggregated_local() -> anyhow::Result<()> {
+async fn disaggregated_local() -> Result<(), Box<dyn std::error::Error>> {
     let mut client = Builder::from_config_file(Mode::Paper, Host::Gateway, None)?
         .connect(6)
         .await?
@@ -84,7 +84,7 @@ async fn disaggregated_local() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn remote() -> anyhow::Result<()> {
+async fn remote() -> Result<(), Box<dyn std::error::Error>> {
     let cancel_token = Builder::from_config_file(Mode::Paper, Host::Gateway, None)?
         .connect(7)
         .await?
@@ -97,7 +97,7 @@ async fn remote() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn local() -> anyhow::Result<()> {
+async fn local() -> Result<(), Box<dyn std::error::Error>> {
     Builder::from_config_file(Mode::Paper, Host::Gateway, None)?
         .connect(8)
         .await?

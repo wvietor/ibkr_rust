@@ -304,13 +304,31 @@ impl Security for Contract {
 /// match the generic type specified in the function call.
 ///
 /// # Returns
-/// Returns a fully-defined contract that can be used for market data, placing orders, etc.
+/// A fully-defined contract that can be used for market data, placing orders, etc.
 pub async fn new<S: Security>(
     client: &mut crate::client::ActiveClient,
     query: Query,
-) -> anyhow::Result<S> {
+) -> Result<S, NewSecurityError> {
     client.send_contract_query(query).await?;
-    client.recv_contract_query().await?.try_into().map_err(|e: <S as TryFrom<Contract>>::Error| e.into()).map_err(anyhow::Error::from)
+    client.recv_contract_query()
+        .await
+        .ok_or(NewSecurityError::BadResponse)?
+        .try_into()
+        .map_err(|e: <S as TryFrom<Contract>>::Error| NewSecurityError::UnexpectedSecurityType(e.into()))
+}
+
+#[derive(Debug, Error)]
+/// An error type that is returned if creating a [`new`] [`Security`] fails
+pub enum NewSecurityError {
+    /// Failed to send the contract query to the IBKR API
+    #[error("Failed to send contract query to IBKR API. Cause {0}")]
+    Io(#[from] std::io::Error),
+    /// Failed to receive valid response form the IBKR API
+    #[error("No valid contract received from the IBKR API.")]
+    BadResponse,
+    /// Unexpected security type returned from the IBKR API
+    #[error("Invalid contract received from the IBKR API. {0}")]
+    UnexpectedSecurityType(#[from] UnexpectedSecurityType),
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Error)]
@@ -318,7 +336,9 @@ pub async fn new<S: Security>(
 /// An error type that's returned when a [`Security`] of type `S` is requested, but a security of
 /// another type is received from the API
 pub struct UnexpectedSecurityType {
+    /// The expected contract type
     expected: ContractType,
+    /// The contract type that was actually found
     found: ContractType,
 }
 

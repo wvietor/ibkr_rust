@@ -2780,6 +2780,20 @@ pub(crate) enum DecodeError {
     Other(String),
 }
 
+#[derive(Debug, Error)]
+#[error("Decode error in function {function_name}. Cause {decode_error}")]
+pub(crate) struct DecodeContext {
+    decode_error: DecodeError,
+    function_name: &'static str,
+}
+
+impl DecodeError {
+    #[inline]
+    pub(crate) fn with_context(self, msg: &'static str) -> DecodeContext {
+        DecodeContext { decode_error: self, function_name: msg }
+    }
+}
+
 impl From<(&'static str, std::num::ParseIntError)> for DecodeError {
     fn from(value: (&'static str, std::num::ParseIntError)) -> Self {
         Self::ParseIntError {

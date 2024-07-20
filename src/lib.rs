@@ -23,7 +23,7 @@ mod constants;
 /// Contains the definitions of all [`contract::Security`] implementors, which represent tradable
 /// contracts.
 ///
-/// Each variety of financial instrument instrument is represented as its own unique struct or
+/// Each variety of financial instrument is represented as its own unique struct or
 /// enum. They all implement the [`contract::Security`] trait, which means they are a valid IBKR
 /// contract and that they have at least one valid order type.
 pub mod contract;

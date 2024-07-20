@@ -1,7 +1,7 @@
 pub use crate::account::{Attribute, Tag, TagValue};
 pub use crate::client::{ActiveClient, Builder, Client, Host, Mode};
 pub use crate::contract::{
-    new, Commodity, Contract, ContractId, ContractType, Crypto, ExchangeProxy, Forex, Index,
+    self, Commodity, Contract, ContractId, ContractType, Crypto, ExchangeProxy, Forex, Index,
     NoExchangeProxy, Query, SecFuture, SecOption, SecOptionClass, SecOptionInner, Security, Stock,
 };
 pub use crate::currency::Currency;

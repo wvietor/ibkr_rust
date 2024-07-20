@@ -1,7 +1,6 @@
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use anyhow::Context;
 use crossbeam::queue::SegQueue;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -27,7 +26,7 @@ use crate::{
     reader::Reader,
     timezone,
 };
-
+use crate::decode::DecodeError;
 // ======================================
 // === Types for Handling Config File ===
 // ======================================
@@ -326,236 +325,236 @@ async fn decode_msg_remote<W>(
     W: Wrapper,
 {
     let status = match fields.first() {
-        None => Err(anyhow::Error::msg("Empty fields received from reader")),
+        None => Err(DecodeError::MissingData { field_name: "In-message identifier" }.with_context("None")),
         Some(s) => match s.parse() {
             Ok(In::TickPrice) => decode::Remote::tick_price_msg(&mut fields.into_iter(), remote)
                 .await
-                .with_context(|| "tick price msg"),
+                .map_err(|e| e.with_context("tick price msg")),
             Ok(In::TickSize) => decode::Remote::tick_size_msg(&mut fields.into_iter(), remote)
                 .await
-                .with_context(|| "tick size msg"),
+                .map_err(|e| e.with_context("tick size msg")),
             Ok(In::OrderStatus) => {
                 decode::Remote::order_status_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "order status msg")
+                    .map_err(|e| e.with_context("order status msg"))
             }
             Ok(In::ErrMsg) => decode::Remote::err_msg_msg(&mut fields.into_iter(), remote)
                 .await
-                .with_context(|| "err msg msg"),
+                .map_err(|e| e.with_context("err msg msg")),
             Ok(In::OpenOrder) => decode::Remote::open_order_msg(&mut fields.into_iter(), remote)
                 .await
-                .with_context(|| "open order msg"),
+                .map_err(|e| e.with_context("open order msg")),
             Ok(In::AcctValue) => decode::Remote::acct_value_msg(&mut fields.into_iter(), remote)
                 .await
-                .with_context(|| "acct value msg"),
+                .map_err(|e| e.with_context("acct value msg")),
             Ok(In::PortfolioValue) => {
                 decode::Remote::portfolio_value_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "portfolio value msg")
+                    .map_err(|e| e.with_context("portfolio value msg"))
             }
             Ok(In::AcctUpdateTime) => {
                 decode::Remote::acct_update_time_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "acct update time msg")
+                    .map_err(|e| e.with_context("acct update time msg"))
             }
             Ok(In::NextValidId) => {
                 decode::Remote::next_valid_id_msg(&mut fields.into_iter(), remote, tx, rx)
                     .await
-                    .with_context(|| "next valid id msg")
+                    .map_err(|e| e.with_context("next valid id msg"))
             }
             Ok(In::ContractData) => {
                 decode::Remote::contract_data_msg(&mut fields.into_iter(), remote, tx, rx)
                     .await
-                    .with_context(|| "contract data msg")
+                    .map_err(|e| e.with_context("contract data msg"))
             }
             Ok(In::ExecutionData) => {
                 decode::Remote::execution_data_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "execution data msg")
+                    .map_err(|e| e.with_context("execution data msg"))
             }
             Ok(In::MarketDepth) => {
                 decode::Remote::market_depth_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "market depth msg")
+                    .map_err(|e| e.with_context("market depth msg"))
             }
             Ok(In::MarketDepthL2) => {
                 decode::Remote::market_depth_l2_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "market depth l2 msg")
+                    .map_err(|e| e.with_context("market depth l2 msg"))
             }
             Ok(In::NewsBulletins) => {
                 decode::Remote::news_bulletins_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "news bulletins msg")
+                    .map_err(|e| e.with_context("news bulletins msg"))
             }
             Ok(In::ManagedAccts) => {
                 decode::Remote::managed_accts_msg(&mut fields.into_iter(), remote, tx, rx)
                     .await
-                    .with_context(|| "managed accounts msg")
+                    .map_err(|e| e.with_context("managed accounts msg"))
             }
             Ok(In::ReceiveFa) => decode::Remote::receive_fa_msg(&mut fields.into_iter(), remote)
                 .await
-                .with_context(|| "receive fa msg"),
+                .map_err(|e| e.with_context("receive fa msg")),
             Ok(In::HistoricalData) => {
                 decode::Remote::historical_data_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "historical data msg")
+                    .map_err(|e| e.with_context("historical data msg"))
             }
             Ok(In::BondContractData) => {
                 decode::Remote::bond_contract_data_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "bond contract data msg")
+                    .map_err(|e| e.with_context("bond contract data msg"))
             }
             Ok(In::ScannerParameters) => {
                 decode::Remote::scanner_parameters_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "scanner parameters msg")
+                    .map_err(|e| e.with_context("scanner parameters msg"))
             }
             Ok(In::ScannerData) => {
                 decode::Remote::scanner_data_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "scanner data msg")
+                    .map_err(|e| e.with_context("scanner data msg"))
             }
             Ok(In::TickOptionComputation) => {
                 decode::Remote::tick_option_computation_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "tick option computation msg")
+                    .map_err(|e| e.with_context("tick option computation msg"))
             }
             Ok(In::TickGeneric) => {
                 decode::Remote::tick_generic_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "tick generic msg")
+                    .map_err(|e| e.with_context("tick generic msg"))
             }
             Ok(In::TickString) => decode::Remote::tick_string_msg(&mut fields.into_iter(), remote)
                 .await
-                .with_context(|| "tick string msg"),
+                .map_err(|e| e.with_context("tick string msg")),
             Ok(In::TickEfp) => decode::Remote::tick_efp_msg(&mut fields.into_iter(), remote)
                 .await
-                .with_context(|| "tick efp msg"),
+                .map_err(|e| e.with_context("tick efp msg")),
             Ok(In::CurrentTime) => {
                 decode::Remote::current_time_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "current time msg")
+                    .map_err(|e| e.with_context("current time msg"))
             }
             Ok(In::RealTimeBars) => {
                 decode::Remote::real_time_bars_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "real time bars msg")
+                    .map_err(|e| e.with_context("real time bars msg"))
             }
             Ok(In::FundamentalData) => {
                 decode::Remote::fundamental_data_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "fundamental data msg")
+                    .map_err(|e| e.with_context("fundamental data msg"))
             }
             Ok(In::ContractDataEnd) => {
                 decode::Remote::contract_data_end_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "contract data end msg")
+                    .map_err(|e| e.with_context("contract data end msg"))
             }
             Ok(In::OpenOrderEnd) => {
                 decode::Remote::open_order_end_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "open order end msg")
+                    .map_err(|e| e.with_context("open order end msg"))
             }
             Ok(In::AcctDownloadEnd) => {
                 decode::Remote::acct_download_end_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "acct download end msg")
+                    .map_err(|e| e.with_context("acct download end msg"))
             }
             Ok(In::ExecutionDataEnd) => {
                 decode::Remote::execution_data_end_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "execution data end msg")
+                    .map_err(|e| e.with_context("execution data end msg"))
             }
             Ok(In::DeltaNeutralValidation) => {
                 decode::Remote::delta_neutral_validation_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "delta neutral validation msg")
+                    .map_err(|e| e.with_context("delta neutral validation msg"))
             }
             Ok(In::TickSnapshotEnd) => {
                 decode::Remote::tick_snapshot_end_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "tick snapshot end msg")
+                    .map_err(|e| e.with_context("tick snapshot end msg"))
             }
             Ok(In::MarketDataType) => {
                 decode::Remote::market_data_type_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "market data type msg")
+                    .map_err(|e| e.with_context("market data type msg"))
             }
             Ok(In::CommissionReport) => {
                 decode::Remote::commission_report_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "commission report msg")
+                    .map_err(|e| e.with_context("commission report msg"))
             }
             Ok(In::PositionData) => {
                 decode::Remote::position_data_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "position data msg")
+                    .map_err(|e| e.with_context("position data msg"))
             }
             Ok(In::PositionEnd) => {
                 decode::Remote::position_end_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "position end msg")
+                    .map_err(|e| e.with_context("position end msg"))
             }
             Ok(In::AccountSummary) => {
                 decode::Remote::account_summary_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "account summary msg")
+                    .map_err(|e| e.with_context("account summary msg"))
             }
             Ok(In::AccountSummaryEnd) => {
                 decode::Remote::account_summary_end_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "account summary end msg")
+                    .map_err(|e| e.with_context("account summary end msg"))
             }
             Ok(In::VerifyMessageApi) => {
                 decode::Remote::verify_message_api_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "verify message api msg")
+                    .map_err(|e| e.with_context("verify message api msg"))
             }
             Ok(In::VerifyCompleted) => {
                 decode::Remote::verify_completed_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "verify completed msg")
+                    .map_err(|e| e.with_context("verify completed msg"))
             }
             Ok(In::DisplayGroupList) => {
                 decode::Remote::display_group_list_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "display group list msg")
+                    .map_err(|e| e.with_context("display group list msg"))
             }
             Ok(In::DisplayGroupUpdated) => {
                 decode::Remote::display_group_updated_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "display group updated msg")
+                    .map_err(|e| e.with_context("display group updated msg"))
             }
             Ok(In::VerifyAndAuthMessageApi) => {
                 decode::Remote::verify_and_auth_message_api_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "verify and auth message api msg")
+                    .map_err(|e| e.with_context("verify and auth message api msg"))
             }
             Ok(In::VerifyAndAuthCompleted) => {
                 decode::Remote::verify_and_auth_completed_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "verify and auth completed msg")
+                    .map_err(|e| e.with_context("verify and auth completed msg"))
             }
             Ok(In::PositionMulti) => {
                 decode::Remote::position_multi_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "position multi msg")
+                    .map_err(|e| e.with_context("position multi msg"))
             }
             Ok(In::PositionMultiEnd) => {
                 decode::Remote::position_multi_end_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "position multi end msg")
+                    .map_err(|e| e.with_context("position multi end msg"))
             }
             Ok(In::AccountUpdateMulti) => {
                 decode::Remote::account_update_multi_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "account update multi msg")
+                    .map_err(|e| e.with_context("account update multi msg"))
             }
             Ok(In::AccountUpdateMultiEnd) => {
                 decode::Remote::account_update_multi_end_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "account update multi end msg")
+                    .map_err(|e| e.with_context("account update multi end msg"))
             }
             Ok(In::SecurityDefinitionOptionParameter) => {
                 decode::Remote::security_definition_option_parameter_msg(
@@ -563,7 +562,7 @@ async fn decode_msg_remote<W>(
                     remote,
                 )
                 .await
-                .with_context(|| "security definition option parameter msg")
+                .map_err(|e| e.with_context("security definition option parameter msg"))
             }
             Ok(In::SecurityDefinitionOptionParameterEnd) => {
                 decode::Remote::security_definition_option_parameter_end_msg(
@@ -571,157 +570,157 @@ async fn decode_msg_remote<W>(
                     remote,
                 )
                 .await
-                .with_context(|| "security definition option parameter end msg")
+                .map_err(|e| e.with_context("security definition option parameter end msg"))
             }
             Ok(In::SoftDollarTiers) => {
                 decode::Remote::soft_dollar_tiers_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "soft dollar tiers msg")
+                    .map_err(|e| e.with_context("soft dollar tiers msg"))
             }
             Ok(In::FamilyCodes) => {
                 decode::Remote::family_codes_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "family codes msg")
+                    .map_err(|e| e.with_context("family codes msg"))
             }
             Ok(In::SymbolSamples) => {
                 decode::Remote::symbol_samples_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "symbol samples msg")
+                    .map_err(|e| e.with_context("symbol samples msg"))
             }
             Ok(In::MktDepthExchanges) => {
                 decode::Remote::mkt_depth_exchanges_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "mkt depth exchanges msg")
+                    .map_err(|e| e.with_context("mkt depth exchanges msg"))
             }
             Ok(In::TickReqParams) => {
                 decode::Remote::tick_req_params_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "tick req params msg")
+                    .map_err(|e| e.with_context("tick req params msg"))
             }
             Ok(In::SmartComponents) => {
                 decode::Remote::smart_components_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "smart components msg")
+                    .map_err(|e| e.with_context("smart components msg"))
             }
             Ok(In::NewsArticle) => {
                 decode::Remote::news_article_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "news article msg")
+                    .map_err(|e| e.with_context("news article msg"))
             }
             Ok(In::TickNews) => decode::Remote::tick_news_msg(&mut fields.into_iter(), remote)
                 .await
-                .with_context(|| "tick news msg"),
+                .map_err(|e| e.with_context("tick news msg")),
             Ok(In::NewsProviders) => {
                 decode::Remote::news_providers_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "news providers msg")
+                    .map_err(|e| e.with_context("news providers msg"))
             }
             Ok(In::HistoricalNews) => {
                 decode::Remote::historical_news_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "historical news msg")
+                    .map_err(|e| e.with_context("historical news msg"))
             }
             Ok(In::HistoricalNewsEnd) => {
                 decode::Remote::historical_news_end_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "historical news end msg")
+                    .map_err(|e| e.with_context("historical news end msg"))
             }
             Ok(In::HeadTimestamp) => {
                 decode::Remote::head_timestamp_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "head timestamp msg")
+                    .map_err(|e| e.with_context("head timestamp msg"))
             }
             Ok(In::HistogramData) => {
                 decode::Remote::histogram_data_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "histogram data msg")
+                    .map_err(|e| e.with_context("histogram data msg"))
             }
             Ok(In::HistoricalDataUpdate) => {
                 decode::Remote::historical_data_update_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "historical data update msg")
+                    .map_err(|e| e.with_context("historical data update msg"))
             }
             Ok(In::RerouteMktDataReq) => {
                 decode::Remote::reroute_mkt_data_req_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "reroute mkt data req msg")
+                    .map_err(|e| e.with_context("reroute mkt data req msg"))
             }
             Ok(In::RerouteMktDepthReq) => {
                 decode::Remote::reroute_mkt_depth_req_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "reroute mkt depth req msg")
+                    .map_err(|e| e.with_context("reroute mkt depth req msg"))
             }
             Ok(In::MarketRule) => decode::Remote::market_rule_msg(&mut fields.into_iter(), remote)
                 .await
-                .with_context(|| "market rule msg"),
+                .map_err(|e| e.with_context("market rule msg")),
             Ok(In::Pnl) => decode::Remote::pnl_msg(&mut fields.into_iter(), remote)
                 .await
-                .with_context(|| "pnl msg"),
+                .map_err(|e| e.with_context("pnl msg")),
             Ok(In::PnlSingle) => decode::Remote::pnl_single_msg(&mut fields.into_iter(), remote)
                 .await
-                .with_context(|| "pnl single msg"),
+                .map_err(|e| e.with_context("pnl single msg")),
             Ok(In::HistoricalTicks) => {
                 decode::Remote::historical_ticks_midpoint_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "historical ticks msg")
+                    .map_err(|e| e.with_context("historical ticks msg"))
             }
             Ok(In::HistoricalTicksBidAsk) => {
                 decode::Remote::historical_ticks_bid_ask_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "historical ticks bid ask msg")
+                    .map_err(|e| e.with_context("historical ticks bid ask msg"))
             }
             Ok(In::HistoricalTicksLast) => {
                 decode::Remote::historical_ticks_last_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "historical ticks last msg")
+                    .map_err(|e| e.with_context("historical ticks last msg"))
             }
             Ok(In::TickByTick) => decode::Remote::tick_by_tick_msg(&mut fields.into_iter(), remote)
                 .await
-                .with_context(|| "tick by tick msg"),
+                .map_err(|e| e.with_context("tick by tick msg")),
             Ok(In::OrderBound) => decode::Remote::order_bound_msg(&mut fields.into_iter(), remote)
                 .await
-                .with_context(|| "order bound msg"),
+                .map_err(|e| e.with_context("order bound msg")),
             Ok(In::CompletedOrder) => {
                 decode::Remote::completed_order_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "completed order msg")
+                    .map_err(|e| e.with_context("completed order msg"))
             }
             Ok(In::CompletedOrdersEnd) => {
                 decode::Remote::completed_orders_end_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "completed orders end msg")
+                    .map_err(|e| e.with_context("completed orders end msg"))
             }
             Ok(In::ReplaceFaEnd) => {
                 decode::Remote::replace_fa_end_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "replace fa end msg")
+                    .map_err(|e| e.with_context("replace fa end msg"))
             }
             Ok(In::WshMetaData) => {
                 decode::Remote::wsh_meta_data_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "wsh meta data msg")
+                    .map_err(|e| e.with_context("wsh meta data msg"))
             }
             Ok(In::WshEventData) => {
                 decode::Remote::wsh_event_data_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "wsh event data msg")
+                    .map_err(|e| e.with_context("wsh event data msg"))
             }
             Ok(In::HistoricalSchedule) => {
                 decode::Remote::historical_schedule_msg(&mut fields.into_iter(), remote)
                     .await
-                    .with_context(|| "historical schedule msg")
+                    .map_err(|e| e.with_context("historical schedule msg"))
             }
             Ok(In::UserInfo) => decode::Remote::user_info_msg(&mut fields.into_iter(), remote)
                 .await
-                .with_context(|| "user info msg"),
-            Err(e) => Err(e.into()),
+                .map_err(|e| e.with_context("user info msg")),
+            Err(e) => Err(DecodeError::Other(e.0).with_context("invalid in msg")),
         },
     };
     match status {
         Ok(()) => (),
         Err(e) => {
-            println!("\x1B[31m{e}");
-            println!("{}\x1B[0m", e.root_cause());
+            tokio::task::yield_now().await;
+            println!("\x1B[31m{e}\x1B[0m");
         }
     }
 }
@@ -737,387 +736,407 @@ async fn decode_msg_local<W>(
     W: LocalWrapper,
 {
     let status = match fields.first() {
-        None => Err(anyhow::Error::msg("Empty fields received from reader")),
+        None => Err(DecodeError::MissingData { field_name: "In-message identifier" }.with_context("None")),
         Some(s) => match s.parse() {
             Ok(In::TickPrice) => decode::Local::tick_price_msg(&mut fields.into_iter(), local)
                 .await
-                .with_context(|| "tick price msg"),
+                .map_err(|e| e.with_context("tick price msg")),
             Ok(In::TickSize) => decode::Local::tick_size_msg(&mut fields.into_iter(), local)
                 .await
-                .with_context(|| "tick size msg"),
-            Ok(In::OrderStatus) => decode::Local::order_status_msg(&mut fields.into_iter(), local)
-                .await
-                .with_context(|| "order status msg"),
+                .map_err(|e| e.with_context("tick size msg")),
+            Ok(In::OrderStatus) => {
+                decode::Local::order_status_msg(&mut fields.into_iter(), local)
+                    .await
+                    .map_err(|e| e.with_context("order status msg"))
+            }
             Ok(In::ErrMsg) => decode::Local::err_msg_msg(&mut fields.into_iter(), local)
                 .await
-                .with_context(|| "err msg msg"),
+                .map_err(|e| e.with_context("err msg msg")),
             Ok(In::OpenOrder) => decode::Local::open_order_msg(&mut fields.into_iter(), local)
                 .await
-                .with_context(|| "open order msg"),
+                .map_err(|e| e.with_context("open order msg")),
             Ok(In::AcctValue) => decode::Local::acct_value_msg(&mut fields.into_iter(), local)
                 .await
-                .with_context(|| "acct value msg"),
+                .map_err(|e| e.with_context("acct value msg")),
             Ok(In::PortfolioValue) => {
                 decode::Local::portfolio_value_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "portfolio value msg")
+                    .map_err(|e| e.with_context("portfolio value msg"))
             }
             Ok(In::AcctUpdateTime) => {
                 decode::Local::acct_update_time_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "acct update time msg")
+                    .map_err(|e| e.with_context("acct update time msg"))
             }
             Ok(In::NextValidId) => {
                 decode::Local::next_valid_id_msg(&mut fields.into_iter(), local, tx, rx)
                     .await
-                    .with_context(|| "next valid id msg")
+                    .map_err(|e| e.with_context("next valid id msg"))
             }
             Ok(In::ContractData) => {
                 decode::Local::contract_data_msg(&mut fields.into_iter(), local, tx, rx)
                     .await
-                    .with_context(|| "contract data msg")
+                    .map_err(|e| e.with_context("contract data msg"))
             }
             Ok(In::ExecutionData) => {
                 decode::Local::execution_data_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "execution data msg")
+                    .map_err(|e| e.with_context("execution data msg"))
             }
-            Ok(In::MarketDepth) => decode::Local::market_depth_msg(&mut fields.into_iter(), local)
-                .await
-                .with_context(|| "market depth msg"),
+            Ok(In::MarketDepth) => {
+                decode::Local::market_depth_msg(&mut fields.into_iter(), local)
+                    .await
+                    .map_err(|e| e.with_context("market depth msg"))
+            }
             Ok(In::MarketDepthL2) => {
                 decode::Local::market_depth_l2_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "market depth l2 msg")
+                    .map_err(|e| e.with_context("market depth l2 msg"))
             }
             Ok(In::NewsBulletins) => {
                 decode::Local::news_bulletins_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "news bulletins msg")
+                    .map_err(|e| e.with_context("news bulletins msg"))
             }
             Ok(In::ManagedAccts) => {
                 decode::Local::managed_accts_msg(&mut fields.into_iter(), local, tx, rx)
                     .await
-                    .with_context(|| "managed accounts msg")
+                    .map_err(|e| e.with_context("managed accounts msg"))
             }
             Ok(In::ReceiveFa) => decode::Local::receive_fa_msg(&mut fields.into_iter(), local)
                 .await
-                .with_context(|| "receive fa msg"),
+                .map_err(|e| e.with_context("receive fa msg")),
             Ok(In::HistoricalData) => {
                 decode::Local::historical_data_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "historical data msg")
+                    .map_err(|e| e.with_context("historical data msg"))
             }
             Ok(In::BondContractData) => {
                 decode::Local::bond_contract_data_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "bond contract data msg")
+                    .map_err(|e| e.with_context("bond contract data msg"))
             }
             Ok(In::ScannerParameters) => {
                 decode::Local::scanner_parameters_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "scanner parameters msg")
+                    .map_err(|e| e.with_context("scanner parameters msg"))
             }
-            Ok(In::ScannerData) => decode::Local::scanner_data_msg(&mut fields.into_iter(), local)
-                .await
-                .with_context(|| "scanner data msg"),
+            Ok(In::ScannerData) => {
+                decode::Local::scanner_data_msg(&mut fields.into_iter(), local)
+                    .await
+                    .map_err(|e| e.with_context("scanner data msg"))
+            }
             Ok(In::TickOptionComputation) => {
                 decode::Local::tick_option_computation_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "tick option computation msg")
+                    .map_err(|e| e.with_context("tick option computation msg"))
             }
-            Ok(In::TickGeneric) => decode::Local::tick_generic_msg(&mut fields.into_iter(), local)
-                .await
-                .with_context(|| "tick generic msg"),
+            Ok(In::TickGeneric) => {
+                decode::Local::tick_generic_msg(&mut fields.into_iter(), local)
+                    .await
+                    .map_err(|e| e.with_context("tick generic msg"))
+            }
             Ok(In::TickString) => decode::Local::tick_string_msg(&mut fields.into_iter(), local)
                 .await
-                .with_context(|| "tick string msg"),
+                .map_err(|e| e.with_context("tick string msg")),
             Ok(In::TickEfp) => decode::Local::tick_efp_msg(&mut fields.into_iter(), local)
                 .await
-                .with_context(|| "tick efp msg"),
-            Ok(In::CurrentTime) => decode::Local::current_time_msg(&mut fields.into_iter(), local)
-                .await
-                .with_context(|| "current time msg"),
+                .map_err(|e| e.with_context("tick efp msg")),
+            Ok(In::CurrentTime) => {
+                decode::Local::current_time_msg(&mut fields.into_iter(), local)
+                    .await
+                    .map_err(|e| e.with_context("current time msg"))
+            }
             Ok(In::RealTimeBars) => {
                 decode::Local::real_time_bars_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "real time bars msg")
+                    .map_err(|e| e.with_context("real time bars msg"))
             }
             Ok(In::FundamentalData) => {
                 decode::Local::fundamental_data_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "fundamental data msg")
+                    .map_err(|e| e.with_context("fundamental data msg"))
             }
             Ok(In::ContractDataEnd) => {
                 decode::Local::contract_data_end_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "contract data end msg")
+                    .map_err(|e| e.with_context("contract data end msg"))
             }
             Ok(In::OpenOrderEnd) => {
                 decode::Local::open_order_end_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "open order end msg")
+                    .map_err(|e| e.with_context("open order end msg"))
             }
             Ok(In::AcctDownloadEnd) => {
                 decode::Local::acct_download_end_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "acct download end msg")
+                    .map_err(|e| e.with_context("acct download end msg"))
             }
             Ok(In::ExecutionDataEnd) => {
                 decode::Local::execution_data_end_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "execution data end msg")
+                    .map_err(|e| e.with_context("execution data end msg"))
             }
             Ok(In::DeltaNeutralValidation) => {
                 decode::Local::delta_neutral_validation_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "delta neutral validation msg")
+                    .map_err(|e| e.with_context("delta neutral validation msg"))
             }
             Ok(In::TickSnapshotEnd) => {
                 decode::Local::tick_snapshot_end_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "tick snapshot end msg")
+                    .map_err(|e| e.with_context("tick snapshot end msg"))
             }
             Ok(In::MarketDataType) => {
                 decode::Local::market_data_type_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "market data type msg")
+                    .map_err(|e| e.with_context("market data type msg"))
             }
             Ok(In::CommissionReport) => {
                 decode::Local::commission_report_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "commission report msg")
+                    .map_err(|e| e.with_context("commission report msg"))
             }
             Ok(In::PositionData) => {
                 decode::Local::position_data_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "position data msg")
+                    .map_err(|e| e.with_context("position data msg"))
             }
-            Ok(In::PositionEnd) => decode::Local::position_end_msg(&mut fields.into_iter(), local)
-                .await
-                .with_context(|| "position end msg"),
+            Ok(In::PositionEnd) => {
+                decode::Local::position_end_msg(&mut fields.into_iter(), local)
+                    .await
+                    .map_err(|e| e.with_context("position end msg"))
+            }
             Ok(In::AccountSummary) => {
                 decode::Local::account_summary_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "account summary msg")
+                    .map_err(|e| e.with_context("account summary msg"))
             }
             Ok(In::AccountSummaryEnd) => {
                 decode::Local::account_summary_end_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "account summary end msg")
+                    .map_err(|e| e.with_context("account summary end msg"))
             }
             Ok(In::VerifyMessageApi) => {
                 decode::Local::verify_message_api_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "verify message api msg")
+                    .map_err(|e| e.with_context("verify message api msg"))
             }
             Ok(In::VerifyCompleted) => {
                 decode::Local::verify_completed_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "verify completed msg")
+                    .map_err(|e| e.with_context("verify completed msg"))
             }
             Ok(In::DisplayGroupList) => {
                 decode::Local::display_group_list_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "display group list msg")
+                    .map_err(|e| e.with_context("display group list msg"))
             }
             Ok(In::DisplayGroupUpdated) => {
                 decode::Local::display_group_updated_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "display group updated msg")
+                    .map_err(|e| e.with_context("display group updated msg"))
             }
             Ok(In::VerifyAndAuthMessageApi) => {
                 decode::Local::verify_and_auth_message_api_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "verify and auth message api msg")
+                    .map_err(|e| e.with_context("verify and auth message api msg"))
             }
             Ok(In::VerifyAndAuthCompleted) => {
                 decode::Local::verify_and_auth_completed_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "verify and auth completed msg")
+                    .map_err(|e| e.with_context("verify and auth completed msg"))
             }
             Ok(In::PositionMulti) => {
                 decode::Local::position_multi_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "position multi msg")
+                    .map_err(|e| e.with_context("position multi msg"))
             }
             Ok(In::PositionMultiEnd) => {
                 decode::Local::position_multi_end_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "position multi end msg")
+                    .map_err(|e| e.with_context("position multi end msg"))
             }
             Ok(In::AccountUpdateMulti) => {
                 decode::Local::account_update_multi_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "account update multi msg")
+                    .map_err(|e| e.with_context("account update multi msg"))
             }
             Ok(In::AccountUpdateMultiEnd) => {
                 decode::Local::account_update_multi_end_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "account update multi end msg")
+                    .map_err(|e| e.with_context("account update multi end msg"))
             }
             Ok(In::SecurityDefinitionOptionParameter) => {
                 decode::Local::security_definition_option_parameter_msg(
                     &mut fields.into_iter(),
                     local,
                 )
-                .await
-                .with_context(|| "security definition option parameter msg")
+                    .await
+                    .map_err(|e| e.with_context("security definition option parameter msg"))
             }
             Ok(In::SecurityDefinitionOptionParameterEnd) => {
                 decode::Local::security_definition_option_parameter_end_msg(
                     &mut fields.into_iter(),
                     local,
                 )
-                .await
-                .with_context(|| "security definition option parameter end msg")
+                    .await
+                    .map_err(|e| e.with_context("security definition option parameter end msg"))
             }
             Ok(In::SoftDollarTiers) => {
                 decode::Local::soft_dollar_tiers_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "soft dollar tiers msg")
+                    .map_err(|e| e.with_context("soft dollar tiers msg"))
             }
-            Ok(In::FamilyCodes) => decode::Local::family_codes_msg(&mut fields.into_iter(), local)
-                .await
-                .with_context(|| "family codes msg"),
+            Ok(In::FamilyCodes) => {
+                decode::Local::family_codes_msg(&mut fields.into_iter(), local)
+                    .await
+                    .map_err(|e| e.with_context("family codes msg"))
+            }
             Ok(In::SymbolSamples) => {
                 decode::Local::symbol_samples_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "symbol samples msg")
+                    .map_err(|e| e.with_context("symbol samples msg"))
             }
             Ok(In::MktDepthExchanges) => {
                 decode::Local::mkt_depth_exchanges_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "mkt depth exchanges msg")
+                    .map_err(|e| e.with_context("mkt depth exchanges msg"))
             }
             Ok(In::TickReqParams) => {
                 decode::Local::tick_req_params_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "tick req params msg")
+                    .map_err(|e| e.with_context("tick req params msg"))
             }
             Ok(In::SmartComponents) => {
                 decode::Local::smart_components_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "smart components msg")
+                    .map_err(|e| e.with_context("smart components msg"))
             }
-            Ok(In::NewsArticle) => decode::Local::news_article_msg(&mut fields.into_iter(), local)
-                .await
-                .with_context(|| "news article msg"),
+            Ok(In::NewsArticle) => {
+                decode::Local::news_article_msg(&mut fields.into_iter(), local)
+                    .await
+                    .map_err(|e| e.with_context("news article msg"))
+            }
             Ok(In::TickNews) => decode::Local::tick_news_msg(&mut fields.into_iter(), local)
                 .await
-                .with_context(|| "tick news msg"),
+                .map_err(|e| e.with_context("tick news msg")),
             Ok(In::NewsProviders) => {
                 decode::Local::news_providers_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "news providers msg")
+                    .map_err(|e| e.with_context("news providers msg"))
             }
             Ok(In::HistoricalNews) => {
                 decode::Local::historical_news_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "historical news msg")
+                    .map_err(|e| e.with_context("historical news msg"))
             }
             Ok(In::HistoricalNewsEnd) => {
                 decode::Local::historical_news_end_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "historical news end msg")
+                    .map_err(|e| e.with_context("historical news end msg"))
             }
             Ok(In::HeadTimestamp) => {
                 decode::Local::head_timestamp_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "head timestamp msg")
+                    .map_err(|e| e.with_context("head timestamp msg"))
             }
             Ok(In::HistogramData) => {
                 decode::Local::histogram_data_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "histogram data msg")
+                    .map_err(|e| e.with_context("histogram data msg"))
             }
             Ok(In::HistoricalDataUpdate) => {
                 decode::Local::historical_data_update_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "historical data update msg")
+                    .map_err(|e| e.with_context("historical data update msg"))
             }
             Ok(In::RerouteMktDataReq) => {
                 decode::Local::reroute_mkt_data_req_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "reroute mkt data req msg")
+                    .map_err(|e| e.with_context("reroute mkt data req msg"))
             }
             Ok(In::RerouteMktDepthReq) => {
                 decode::Local::reroute_mkt_depth_req_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "reroute mkt depth req msg")
+                    .map_err(|e| e.with_context("reroute mkt depth req msg"))
             }
             Ok(In::MarketRule) => decode::Local::market_rule_msg(&mut fields.into_iter(), local)
                 .await
-                .with_context(|| "market rule msg"),
+                .map_err(|e| e.with_context("market rule msg")),
             Ok(In::Pnl) => decode::Local::pnl_msg(&mut fields.into_iter(), local)
                 .await
-                .with_context(|| "pnl msg"),
+                .map_err(|e| e.with_context("pnl msg")),
             Ok(In::PnlSingle) => decode::Local::pnl_single_msg(&mut fields.into_iter(), local)
                 .await
-                .with_context(|| "pnl single msg"),
+                .map_err(|e| e.with_context("pnl single msg")),
             Ok(In::HistoricalTicks) => {
                 decode::Local::historical_ticks_midpoint_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "historical ticks msg")
+                    .map_err(|e| e.with_context("historical ticks msg"))
             }
             Ok(In::HistoricalTicksBidAsk) => {
                 decode::Local::historical_ticks_bid_ask_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "historical ticks bid ask msg")
+                    .map_err(|e| e.with_context("historical ticks bid ask msg"))
             }
             Ok(In::HistoricalTicksLast) => {
                 decode::Local::historical_ticks_last_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "historical ticks last msg")
+                    .map_err(|e| e.with_context("historical ticks last msg"))
             }
             Ok(In::TickByTick) => decode::Local::tick_by_tick_msg(&mut fields.into_iter(), local)
                 .await
-                .with_context(|| "tick by tick msg"),
+                .map_err(|e| e.with_context("tick by tick msg")),
             Ok(In::OrderBound) => decode::Local::order_bound_msg(&mut fields.into_iter(), local)
                 .await
-                .with_context(|| "order bound msg"),
+                .map_err(|e| e.with_context("order bound msg")),
             Ok(In::CompletedOrder) => {
                 decode::Local::completed_order_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "completed order msg")
+                    .map_err(|e| e.with_context("completed order msg"))
             }
             Ok(In::CompletedOrdersEnd) => {
                 decode::Local::completed_orders_end_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "completed orders end msg")
+                    .map_err(|e| e.with_context("completed orders end msg"))
             }
             Ok(In::ReplaceFaEnd) => {
                 decode::Local::replace_fa_end_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "replace fa end msg")
+                    .map_err(|e| e.with_context("replace fa end msg"))
             }
-            Ok(In::WshMetaData) => decode::Local::wsh_meta_data_msg(&mut fields.into_iter(), local)
-                .await
-                .with_context(|| "wsh meta data msg"),
+            Ok(In::WshMetaData) => {
+                decode::Local::wsh_meta_data_msg(&mut fields.into_iter(), local)
+                    .await
+                    .map_err(|e| e.with_context("wsh meta data msg"))
+            }
             Ok(In::WshEventData) => {
                 decode::Local::wsh_event_data_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "wsh event data msg")
+                    .map_err(|e| e.with_context("wsh event data msg"))
             }
             Ok(In::HistoricalSchedule) => {
                 decode::Local::historical_schedule_msg(&mut fields.into_iter(), local)
                     .await
-                    .with_context(|| "historical schedule msg")
+                    .map_err(|e| e.with_context("historical schedule msg"))
             }
             Ok(In::UserInfo) => decode::Local::user_info_msg(&mut fields.into_iter(), local)
                 .await
-                .with_context(|| "user info msg"),
-            Err(e) => Err(e.into()),
+                .map_err(|e| e.with_context("user info msg")),
+            Err(e) => Err(DecodeError::Other(e.0).with_context("invalid in msg")),
         },
     };
     match status {
         Ok(()) => (),
         Err(e) => {
-            println!("\x1B[31m{e}");
-            println!("{}\x1B[0m", e.root_cause());
+            tokio::task::yield_now().await;
+            println!("\x1B[31m{e}\x1B[0m");
         }
     }
 }
+
+
 
 pub(crate) mod indicators {
     use std::collections::HashSet;
@@ -1266,7 +1285,7 @@ fn spawn_temp_contract_thread(
                 () = async {
                     let _ = if let Some(fields) = queue.pop() {
                         match fields.first().and_then(|t| t.parse().ok()) {
-                            Some(In::ContractData) => decode::decode_contract_no_wrapper(&mut fields.into_iter(), &mut tx, &mut rx).await.with_context(|| "contract data msg"),
+                            Some(In::ContractData) => decode::decode_contract_no_wrapper(&mut fields.into_iter(), &mut tx, &mut rx).await.map_err(|e| e.with_context("contract data msg")),
                             Some(_) => { backlog.push_back(fields); Ok(()) },
                             None => Ok(()),
                         }
@@ -1475,6 +1494,7 @@ impl Client<indicators::Inactive> {
         }
         drop(backlog);
         tokio::spawn(async move {
+            let (mut tx, mut rx, mut wrapper) = (tx, rx, wrapper);
             loop {
                 tokio::select! {
                     () = c_loop_disconnect.cancelled() => {println!("Client loop: disconnecting"); break},
@@ -1528,6 +1548,7 @@ impl Client<indicators::Inactive> {
                 }
             }
         });
+
 
         client
     }
@@ -2524,15 +2545,11 @@ impl Client<indicators::Active> {
     #[inline]
     pub(crate) async fn recv_contract_query(
         &mut self,
-    ) -> anyhow::Result<crate::contract::Contract> {
-        match self
-            .status
-            .rx
-            .recv()
-            .await
-            .ok_or_else(|| anyhow::Error::msg("Failed to receive contract object"))?
-        {
-            ToClient::NewContract(c) => Ok(c),
+    ) -> Option<crate::contract::Contract> {
+        if let Some(ToClient::NewContract(c)) = self.status.rx.recv().await {
+            Some(c)
+        } else {
+            None
         }
     }
 
