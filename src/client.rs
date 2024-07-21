@@ -1,7 +1,6 @@
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use anyhow::Context;
 use crossbeam::queue::SegQueue;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -1509,47 +1508,6 @@ impl Client<indicators::Inactive> {
                 }
             }
         });
-
-        client
-    }
-
-    /// Initiates the main message loop and spawns all helper threads to manage the application.
-    ///
-    /// # Arguments
-    /// * `wrapper` - A [`LocalWrapper`] that defines how incoming data from the IBKR trading systems should be handled.
-    ///
-    /// # Returns
-    /// An active [`Client`] that can be used to make API requests.
-    ///
-    /// # Panics
-    /// This function will panic if called from inside `tokio::spawn`.
-    pub async fn disaggregated_local<W: LocalWrapper + 'static>(
-        self,
-        mut wrapper: W,
-    ) -> Client<indicators::Active> {
-        let (client, mut tx, mut rx, queue, mut backlog) = self.into_active().await;
-        let c_loop_disconnect = client.status.disconnect.clone();
-
-        while let Some(fields) = backlog.pop_front() {
-            decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
-        }
-        drop(backlog);
-        let local = tokio::task::LocalSet::new();
-        local.spawn_local(async move {
-            loop {
-                tokio::select! {
-                    () = c_loop_disconnect.cancelled() => {println!("Client loop: disconnecting"); break},
-                    () = async {
-                        if let Some(fields) = queue.pop() {
-                            decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
-                        } else {
-                            tokio::task::yield_now().await;
-                        }
-                    } => (),
-                }
-            }
-        });
-
 
         client
     }

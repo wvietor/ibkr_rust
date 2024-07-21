@@ -14,10 +14,14 @@ impl ibapi::wrapper::Initializer for SendWrapper {
 
     fn build(
         self,
-        _client: &mut ActiveClient,
+        client: &mut ActiveClient,
         _cancel_loop: CancelToken,
     ) -> impl Future<Output = (Self::Wrap<'_>, Self::Recur<'_>)> + Send {
-        async move { (self, ()) }
+        async move {
+            let aapl: ibapi::contract::Stock = ibapi::contract::new(client, "BBG000B9XRY4".parse().unwrap()).await.unwrap();
+            assert_eq!(aapl.symbol(), "AAPL");
+            (self, ())
+        }
     }
 }
 
@@ -34,10 +38,14 @@ impl ibapi::wrapper::LocalInitializer for NonSendWrapper {
 
     fn build(
         self,
-        _client: &mut ActiveClient,
+        client: &mut ActiveClient,
         cancel_loop: CancelToken,
     ) -> impl Future<Output = (Self::Wrap<'_>, Self::Recur<'_>)> {
-        async { (self, Recur { cancel_loop }) }
+        async {
+            let aapl: ibapi::contract::Stock = ibapi::contract::new(client, "BBG000B9XRY4".parse().unwrap()).await.unwrap();
+            assert_eq!(aapl.symbol(), "AAPL");
+            (self, Recur { cancel_loop })
+        }
     }
 }
 
@@ -63,21 +71,8 @@ async fn disaggregated_remote() -> Result<(), Box<dyn std::error::Error>> {
         .disaggregated(SendWrapper)
         .await;
     client.req_current_time().await?;
-
-    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-    client.disconnect().await?;
-    Ok(())
-}
-
-#[tokio::test]
-async fn disaggregated_local() -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = Builder::from_config_file(Mode::Paper, Host::Gateway, None)?
-        .connect(6)
-        .await?
-        .disaggregated_local(NonSendWrapper::default())
-        .await;
-    client.req_current_time().await?;
-
+    let aapl: ibapi::contract::Stock = ibapi::contract::new(&mut client, "BBG000B9XRY4".parse()?).await?;
+    assert_eq!(aapl.symbol(), "AAPL");
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     client.disconnect().await?;
     Ok(())
@@ -86,7 +81,7 @@ async fn disaggregated_local() -> Result<(), Box<dyn std::error::Error>> {
 #[tokio::test]
 async fn remote() -> Result<(), Box<dyn std::error::Error>> {
     let cancel_token = Builder::from_config_file(Mode::Paper, Host::Gateway, None)?
-        .connect(7)
+        .connect(6)
         .await?
         .remote(SendWrapper)
         .await;
@@ -99,7 +94,7 @@ async fn remote() -> Result<(), Box<dyn std::error::Error>> {
 #[tokio::test]
 async fn local() -> Result<(), Box<dyn std::error::Error>> {
     Builder::from_config_file(Mode::Paper, Host::Gateway, None)?
-        .connect(8)
+        .connect(7)
         .await?
         .local(NonSendWrapper::default(), None)
         .await?;

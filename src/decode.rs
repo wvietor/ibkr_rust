@@ -574,6 +574,9 @@ pub trait Local: wrapper::LocalWrapper {
                 expand_seg_variants!("Guarantee") => {
                     impl_seg_variants!("Guarantee", Guarantee, name, value, currency)
                 }
+                expand_seg_variants!("IncentiveCoupons") => {
+                    impl_seg_variants!("IncentiveCoupons", IncentiveCoupons, name, value, currency)
+                }
                 expand_seg_variants!("IndianStockHaircut") => impl_seg_variants!(
                     "IndianStockHaircut",
                     IndianStockHaircut,

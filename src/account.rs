@@ -81,6 +81,8 @@ pub enum Attribute {
     GrossPositionValueSecurity(f64, Denomination),
     /// Guarantee: For internal use only.
     Guarantee(Segment<f64>, Denomination),
+    /// Incentive coupon.
+    IncentiveCoupons(Segment<f64>, Denomination),
     /// Margin rule for IB-IN accounts.
     IndianStockHaircut(Segment<f64>, Denomination),
     /// Initial Margin requirement of whole portfolio.
