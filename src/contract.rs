@@ -4,7 +4,7 @@ use std::{num::ParseIntError, str::FromStr};
 
 use chrono::NaiveDate;
 use ibapi_macros::{make_getters, Security};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, ser::SerializeStruct};
 use thiserror::Error;
 
 use crate::contract::proxy_indicators::{HasExchange, NoExchange};
