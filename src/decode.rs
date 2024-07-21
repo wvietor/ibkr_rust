@@ -1,19 +1,19 @@
 use core::future::Future;
 
-use anyhow::Context;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
+use thiserror::Error;
 
-use crate::account::{self, Tag, TagValue};
+use crate::account::{self, ParseAttributeError, Tag, TagValue};
 use crate::contract::{
     Commodity, Contract, ContractId, ContractType, Crypto, Forex, Index, Proxy, SecFuture,
     SecOption, SecOptionInner, SecurityId, Stock,
 };
 use crate::exchange::Primary;
-use crate::execution::{Exec, Execution, OrderSide};
+use crate::execution::{Exec, Execution, OrderSide, ParseOrderSideError};
 use crate::payload::{
     market_depth::{CompleteEntry, Entry, Operation},
     Bar, BarCore, BidAsk, ExchangeId, Fill, HistogramEntry, Last, MarketDataClass, Midpoint,
-    OrderStatus, Pnl, PnlSingle, Position, PositionSummary, TickData, Trade,
+    ParsePayloadError, Pnl, PnlSingle, Position, PositionSummary, TickData, Trade,
 };
 use crate::tick::{
     Accessibility, AuctionData, CalculationResult, Class, Dividends, EtfNav, ExtremeValue, Ipo,
@@ -21,6 +21,7 @@ use crate::tick::{
     RealTimeVolumeBase, SecOptionCalculationResults, SecOptionCalculationSource,
     SecOptionCalculations, SecOptionVolume, Size, SummaryVolume, TimeStamp, Volatility, Yield,
 };
+use crate::timezone::ParseTimezoneError;
 use crate::{
     currency::Currency,
     exchange::Routing,
@@ -31,19 +32,46 @@ use crate::{
 type Tx = tokio::sync::mpsc::Sender<ToClient>;
 type Rx = tokio::sync::mpsc::Receiver<ToWrapper>;
 type Fields = std::vec::IntoIter<String>;
+type DecodeResult = Result<(), DecodeError>;
 
 macro_rules! decode_fields {
-    ($fields: expr => $ind: literal: String) => {
-        nth($fields, $ind).with_context(|| format!("Expected {:?}, found none", &$fields))?
+    ($fields: expr => $f_name: ident @ $ind: literal: String) => {
+        let $f_name = nth($fields, $ind, stringify!($f_name))?;
     };
-    ($fields: expr => $ind: literal: $f_type: ty) => {
-        nth($fields, $ind).with_context(|| format!("Expected {:?}, found none", &$fields))?
-            .parse::<$f_type>().with_context(|| format!("Invalid value for {:?}", $fields))?
+    ($fields: expr => $f_name: ident @ $ind: literal: Option<$op_f_type: ty>) => {
+        let $f_name = match nth($fields, $ind, stringify!($f_name))?.as_str() {
+            "" => None::<$op_f_type>,
+            s => Some(s.parse::<$op_f_type>().map_err(|e| DecodeError::from((stringify!($f_name), e)))?)
+        };
+    };
+    ($fields: expr => $f_name: ident @ $ind: literal: $f_type: ty) => {
+        let $f_name = nth($fields, $ind, stringify!($f_name))?
+            .parse::<$f_type>().map_err(|e| DecodeError::from((stringify!($f_name), e)))?;
     };
     ($fields: expr => $($f_name: ident @ $ind: literal: $f_type: ty ),* $(,)?) => {
         $(
-            let $f_name = decode_fields!($fields => $ind: $f_type);
+            decode_fields!($fields => $f_name @ $ind: $f_type);
         )*
+    };
+}
+
+macro_rules! decode_account_attr {
+    ($attr_var: ident, $value: expr, $currency: expr) => {
+        account::Attribute::$attr_var(
+            $value
+                .parse()
+                .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+            $currency
+                .parse()
+                .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+        )
+    };
+    ($attr_var: ident, $value: expr) => {
+        account::Attribute::$attr_var(
+            $value
+                .parse()
+                .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+        )
     };
 }
 
@@ -57,36 +85,82 @@ macro_rules! expand_seg_variants {
 }
 
 macro_rules! impl_seg_variants {
-    ($root_name: literal, $name: expr, $value: expr) => {
+    ($root_name: literal, $attr_var: ident, $name: expr, $value: expr, $currency: expr) => {{
         match $name.as_str() {
-            $root_name => account::Segment::Total(
-                $value
+            concat!($root_name) => account::Attribute::$attr_var(
+                account::Segment::Total(
+                    $value
+                        .parse()
+                        .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+                ),
+                $currency
                     .parse()
-                    .with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?,
+                    .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
             ),
-            concat!($root_name, "-C") => account::Segment::Commodity(
-                $value
+            concat!($root_name, "-C") => account::Attribute::$attr_var(
+                account::Segment::Commodity(
+                    $value
+                        .parse()
+                        .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+                ),
+                $currency
                     .parse()
-                    .with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?,
+                    .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
             ),
-            concat!($root_name, "-P") => account::Segment::Paxos(
-                $value
+            concat!($root_name, "-P") => account::Attribute::$attr_var(
+                account::Segment::Paxos(
+                    $value
+                        .parse()
+                        .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+                ),
+                $currency
                     .parse()
-                    .with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?,
+                    .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
             ),
-            concat!($root_name, "-S") => account::Segment::Security(
-                $value
+            concat!($root_name, "-S") => account::Attribute::$attr_var(
+                account::Segment::Security(
+                    $value
+                        .parse()
+                        .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+                ),
+                $currency
                     .parse()
-                    .with_context(|| format!("Name: {}, Root name: {}", $name, $root_name))?,
+                    .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
             ),
-            _ => {
-                return Err(anyhow::Error::msg(format!(
-                    "Could not match {} in {} segment parsing",
-                    $name, $root_name
-                )))
-            }
+            _ => unreachable!(),
         }
-    };
+    }};
+    ($root_name: literal, $attr_var: ident, $name: expr, $value: expr) => {{
+        match $name.as_str() {
+            stringify!($attr_var) => account::Attribute::$attr_var(account::Segment::Total(
+                $value
+                    .parse()
+                    .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+            )),
+            concat!(stringify!($attr_var), "-C") => {
+                account::Attribute::$attr_var(account::Segment::Commodity(
+                    $value
+                        .parse()
+                        .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+                ))
+            }
+            concat!(stringify!($attr_var), "-P") => {
+                account::Attribute::$attr_var(account::Segment::Paxos(
+                    $value
+                        .parse()
+                        .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+                ))
+            }
+            concat!(stringify!($attr_var), "-S") => {
+                account::Attribute::$attr_var(account::Segment::Security(
+                    $value
+                        .parse()
+                        .map_err(|e| ParseAttributeError::from((stringify!($attr_var), e)))?,
+                ))
+            }
+            _ => unreachable!(),
+        }
+    }};
 }
 
 #[ibapi_macros::make_send(Remote(Send): wrapper::Wrapper)]
@@ -95,26 +169,21 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_price_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
             fields =>
                 req_id @ 2: i64,
                 tick_type @ 0: u16,
-                price @ 0: f64,
-                size @ 0: String,
-                _attr_mask @ 0: u8
+                price @ 0: f64
+            );
+            decode_fields!(
+                fields => size @ 0: Option<f64>
+            );
+            decode_fields!(
+                fields => _attr_mask @ 0: u8
             );
 
-            let size = if size.is_empty() {
-                None
-            } else {
-                Some(
-                    size.as_str()
-                        .parse()
-                        .with_context(|| "Invalid value for size")?,
-                )
-            };
             if (price + 1.0).abs() < f64::EPSILON || (price == 0.0 && size == Some(0.0)) {
                 return Ok(());
             }
@@ -210,7 +279,7 @@ pub trait Local: wrapper::LocalWrapper {
                     wrapper.etf_nav(req_id, nav).await;
                 }
                 t => {
-                    return Err(anyhow::Error::msg(format!(
+                    return Err(DecodeError::Other(format!(
                         "Unexpected price market data request: {t}"
                     )))
                 }
@@ -223,7 +292,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_size_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -239,33 +308,27 @@ pub trait Local: wrapper::LocalWrapper {
     fn order_status_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
-                fields =>
-                    order_id @ 1: i64,
-                    status @ 0: String,
-                    filled @ 0: f64,
-                    remaining @ 0: f64,
-                    average_price @ 0: f64,
-                    permanent_id @ 0: i64,
-                    parent_id @ 0: i64,
-                    last_price @ 0: f64,
-                    client_id @ 0: i64,
-                    why_held @ 0: String,
-                    market_cap_price @ 0: f64
+            fields =>
+                order_id @ 1: i64,
+                status @ 0: String,
+                filled @ 0: f64,
+                remaining @ 0: f64,
+                average_price @ 0: f64,
+                permanent_id @ 0: i64,
+                parent_id @ 0: i64,
+                last_price @ 0: f64,
+                client_id @ 0: i64
+            );
+            decode_fields!(
+                fields => why_held @ 0: Option<crate::payload::Locate>
+            );
+            decode_fields!(
+                fields => market_cap_price @ 0: f64
             );
 
-            let why_held = match why_held.as_str() {
-                "locate" => Some(crate::payload::Locate),
-                "" => None,
-                s => {
-                    return Err(anyhow::anyhow!(
-                        "Invalid Locate string. Expected \"locate\" or \"\", got {}",
-                        s
-                    ))
-                }
-            };
             let market_cap_price = if market_cap_price == 0.0 {
                 None
             } else {
@@ -295,20 +358,14 @@ pub trait Local: wrapper::LocalWrapper {
                 why_held,
                 market_cap_price,
             };
-            let status = match status.as_str() {
-                "ApiPending" => OrderStatus::ApiPending(core),
-                "PendingSubmit" => OrderStatus::PendingSubmit(core),
-                "PendingCancel" => OrderStatus::PendingCancel(core),
-                "PreSubmitted" => OrderStatus::PreSubmitted(core),
-                "Submitted" => OrderStatus::Submitted(core),
-                "ApiCancelled" => OrderStatus::ApiCancelled(core),
-                "Cancelled" => OrderStatus::Cancelled(core),
-                "Filled" => OrderStatus::Filled(core),
-                "Inactive" => OrderStatus::Inactive(core),
-                s => return Err(anyhow::anyhow!("Invalid order status string. Expected \"PendingSubmit\", \"PendingCancel\", \"PreSubmitted\", \"Submitted\", \"ApiCancelled\", \"Cancelled\", \"Filled\", or \"Inactive\". Got {}", s)),
-            };
 
-            wrapper.order_status(status).await;
+            wrapper
+                .order_status(
+                    (status.as_str(), core)
+                        .try_into()
+                        .map_err(|e| ("order_status", e))?,
+                )
+                .await;
 
             Ok(())
         }
@@ -316,10 +373,7 @@ pub trait Local: wrapper::LocalWrapper {
 
     #[inline]
     // todo: Implement a proper Error Enum
-    fn err_msg_msg(
-        fields: &mut Fields,
-        wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    fn err_msg_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -339,18 +393,20 @@ pub trait Local: wrapper::LocalWrapper {
     fn open_order_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
-                    order_id @ 1: i64
+                    order_id @ 1: i64,
             );
-            let proxy = deserialize_contract_proxy(fields)?;
+            let proxy = deserialize_contract_proxy::<crate::contract::proxy_indicators::HasExchange>(
+                fields,
+            )?;
             decode_fields!(
                 fields =>
                     client_id @ 10: i64,
                     permanent_id @ 0: i64,
-                    parent_id @ 32: i64
+                    parent_id @ 32: i64,
             );
             let parent_id = if parent_id == 0 {
                 None
@@ -427,7 +483,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn acct_value_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -438,261 +494,213 @@ pub trait Local: wrapper::LocalWrapper {
             );
             let attribute = match name.as_str() {
                 "AccountCode" => account::Attribute::AccountCode(value),
-                "AccountOrGroup" => match value.as_str() {
-                    "All" => {
-                        account::Attribute::AccountOrGroup(account::Group::All, currency.parse()?)
-                    }
-                    name => account::Attribute::AccountOrGroup(
-                        account::Group::Name(name.to_owned()),
-                        currency.parse()?,
-                    ),
-                },
-                "AccountReady" => account::Attribute::AccountReady(value.parse()?),
+                "AccountOrGroup" => decode_account_attr!(AccountOrGroup, value, currency),
+                "AccountReady" => decode_account_attr!(AccountReady, value),
                 "AccountType" => account::Attribute::AccountType(value),
-                expand_seg_variants!("AccruedCash") => account::Attribute::AccruedCash(
-                    impl_seg_variants!("AccruedCash", name, value),
-                    currency.parse()?,
-                ),
-                expand_seg_variants!("AccruedDividend") => account::Attribute::AccruedDividend(
-                    impl_seg_variants!("AccruedDividend", name, value),
-                    currency.parse()?,
-                ),
-                expand_seg_variants!("AvailableFunds") => account::Attribute::AvailableFunds(
-                    impl_seg_variants!("AvailableFunds", name, value),
-                    currency.parse()?,
-                ),
-                expand_seg_variants!("Billable") => account::Attribute::Billable(
-                    impl_seg_variants!("Billable", name, value),
-                    currency.parse()?,
-                ),
-                "BuyingPower" => account::Attribute::BuyingPower(value.parse()?, currency.parse()?),
-                "CashBalance" => account::Attribute::CashBalance(value.parse()?, currency.parse()?),
+                expand_seg_variants!("AccruedCash") => {
+                    impl_seg_variants!("AccruedCash", AccruedCash, name, value, currency)
+                }
+                expand_seg_variants!("AccruedDividend") => {
+                    impl_seg_variants!("AccruedDividend", AccruedDividend, name, value, currency)
+                }
+                expand_seg_variants!("AvailableFunds") => {
+                    impl_seg_variants!("AvailableFunds", AvailableFunds, name, value, currency)
+                }
+                expand_seg_variants!("Billable") => {
+                    impl_seg_variants!("Billable", Billable, name, value, currency)
+                }
+                "BuyingPower" => decode_account_attr!(BuyingPower, value, currency),
+                "CashBalance" => decode_account_attr!(CashBalance, value, currency),
                 expand_seg_variants!("ColumnPrio") => {
-                    account::Attribute::ColumnPrio(impl_seg_variants!("ColumnPrio", name, value))
+                    impl_seg_variants!("ColumnPrio", ColumnPrio, name, value)
                 }
-                "CorporateBondValue" => {
-                    account::Attribute::CorporateBondValue(value.parse()?, currency.parse()?)
-                }
-                "Cryptocurrency" => {
-                    account::Attribute::Cryptocurrency(value.parse()?, currency.parse()?)
-                }
-                "Currency" => account::Attribute::Currency(value.parse()?),
-                "Cushion" => account::Attribute::Cushion(value.parse()?),
-                "DayTradesRemaining" => account::Attribute::DayTradesRemaining(value.parse()?),
-                "DayTradesRemainingT+1" => {
-                    account::Attribute::DayTradesRemainingTPlus1(value.parse()?)
-                }
-                "DayTradesRemainingT+2" => {
-                    account::Attribute::DayTradesRemainingTPlus2(value.parse()?)
-                }
-                "DayTradesRemainingT+3" => {
-                    account::Attribute::DayTradesRemainingTPlus3(value.parse()?)
-                }
-                "DayTradesRemainingT+4" => {
-                    account::Attribute::DayTradesRemainingTPlus4(value.parse()?)
-                }
+                "CorporateBondValue" => decode_account_attr!(CorporateBondValue, value, currency),
+                "Cryptocurrency" => decode_account_attr!(Cryptocurrency, value, currency),
+                "Currency" => decode_account_attr!(Currency, value),
+                "Cushion" => decode_account_attr!(Cushion, value),
+                "DayTradesRemaining" => decode_account_attr!(DayTradesRemaining, value),
+                "DayTradesRemainingT+1" => decode_account_attr!(DayTradesRemainingTPlus1, value),
+                "DayTradesRemainingT+2" => decode_account_attr!(DayTradesRemainingTPlus2, value),
+                "DayTradesRemainingT+3" => decode_account_attr!(DayTradesRemainingTPlus3, value),
+                "DayTradesRemainingT+4" => decode_account_attr!(DayTradesRemainingTPlus4, value),
                 "DayTradingStatus-S" => account::Attribute::DayTradingStatus(value),
-                expand_seg_variants!("EquityWithLoanValue") => {
-                    account::Attribute::EquityWithLoanValue(
-                        impl_seg_variants!("EquityWithLoanValue", name, value),
-                        currency.parse()?,
-                    )
-                }
-                expand_seg_variants!("ExcessLiquidity") => account::Attribute::ExcessLiquidity(
-                    impl_seg_variants!("ExcessLiquidity", name, value),
-                    currency.parse()?,
+                expand_seg_variants!("EquityWithLoanValue") => impl_seg_variants!(
+                    "EquityWithLoanValue",
+                    EquityWithLoanValue,
+                    name,
+                    value,
+                    currency
                 ),
-                "ExchangeRate" => {
-                    account::Attribute::ExchangeRate(value.parse()?, currency.parse()?)
+                expand_seg_variants!("ExcessLiquidity") => {
+                    impl_seg_variants!("ExcessLiquidity", ExcessLiquidity, name, value, currency)
                 }
-                expand_seg_variants!("FullAvailableFunds") => {
-                    account::Attribute::FullAvailableFunds(
-                        impl_seg_variants!("FullAvailableFunds", name, value),
-                        currency.parse()?,
-                    )
-                }
-                expand_seg_variants!("FullExcessLiquidity") => {
-                    account::Attribute::FullExcessLiquidity(
-                        impl_seg_variants!("FullExcessLiquidity", name, value),
-                        currency.parse()?,
-                    )
-                }
-                expand_seg_variants!("FullInitMarginReq") => account::Attribute::FullInitMarginReq(
-                    impl_seg_variants!("FullInitMarginReq", name, value),
-                    currency.parse()?,
+                "ExchangeRate" => decode_account_attr!(ExchangeRate, value, currency),
+                expand_seg_variants!("FullAvailableFunds") => impl_seg_variants!(
+                    "FullAvailableFunds",
+                    FullAvailableFunds,
+                    name,
+                    value,
+                    currency
                 ),
-                expand_seg_variants!("FullMaintMarginReq") => {
-                    account::Attribute::FullMaintenanceMarginReq(
-                        impl_seg_variants!("FullMaintMarginReq", name, value),
-                        currency.parse()?,
-                    )
-                }
-                "FundValue" => account::Attribute::FundValue(value.parse()?, currency.parse()?),
-                "FutureOptionValue" => {
-                    account::Attribute::FutureOptionValue(value.parse()?, currency.parse()?)
-                }
-                "FuturesPNL" => account::Attribute::FuturesPnl(value.parse()?, currency.parse()?),
-                "FxCashBalance" => {
-                    account::Attribute::FxCashBalance(value.parse()?, currency.parse()?)
-                }
-                "GrossPositionValue" => {
-                    account::Attribute::GrossPositionValue(value.parse()?, currency.parse()?)
-                }
-                "GrossPositionValue-S" => account::Attribute::GrossPositionValueSecurity(
-                    value.parse()?,
-                    currency.parse()?,
+                expand_seg_variants!("FullExcessLiquidity") => impl_seg_variants!(
+                    "FullExcessLiquidity",
+                    FullExcessLiquidity,
+                    name,
+                    value,
+                    currency
                 ),
-                expand_seg_variants!("Guarantee") => account::Attribute::Guarantee(
-                    impl_seg_variants!("Guarantee", name, value),
-                    currency.parse()?,
+                expand_seg_variants!("FullInitMarginReq") => impl_seg_variants!(
+                    "FullInitMarginReq",
+                    FullInitMarginReq,
+                    name,
+                    value,
+                    currency
                 ),
-                expand_seg_variants!("IndianStockHaircut") => {
-                    account::Attribute::IndianStockHaircut(
-                        impl_seg_variants!("IndianStockHaircut", name, value),
-                        currency.parse()?,
-                    )
-                }
-                expand_seg_variants!("InitMarginReq") => account::Attribute::InitMarginReq(
-                    impl_seg_variants!("InitMarginReq", name, value),
-                    currency.parse()?,
+                expand_seg_variants!("FullMaintMarginReq") => impl_seg_variants!(
+                    "FullMaintMarginReq",
+                    FullMaintenanceMarginReq,
+                    name,
+                    value,
+                    currency
                 ),
-                "IssuerOptionValue" => {
-                    account::Attribute::IssuerOptionValue(value.parse()?, currency.parse()?)
+                "FundValue" => decode_account_attr!(FundValue, value, currency),
+                "FutureOptionValue" => decode_account_attr!(FutureOptionValue, value, currency),
+                "FuturesPNL" => decode_account_attr!(FuturesPnl, value, currency),
+                "FxCashBalance" => decode_account_attr!(FxCashBalance, value, currency),
+                "GrossPositionValue" => decode_account_attr!(GrossPositionValue, value, currency),
+                "GrossPositionValue-S" => {
+                    decode_account_attr!(GrossPositionValueSecurity, value, currency)
                 }
-                "Leverage-S" => account::Attribute::LeverageSecurity(value.parse()?),
-                expand_seg_variants!("LookAheadAvailableFunds") => {
-                    account::Attribute::LookAheadAvailableFunds(
-                        impl_seg_variants!("LookAheadAvailableFunds", name, value),
-                        currency.parse()?,
-                    )
+                expand_seg_variants!("Guarantee") => {
+                    impl_seg_variants!("Guarantee", Guarantee, name, value, currency)
                 }
-                expand_seg_variants!("LookAheadExcessLiquidity") => {
-                    account::Attribute::LookAheadExcessLiquidity(
-                        impl_seg_variants!("LookAheadExcessLiquidity", name, value),
-                        currency.parse()?,
-                    )
+                expand_seg_variants!("IndianStockHaircut") => impl_seg_variants!(
+                    "IndianStockHaircut",
+                    IndianStockHaircut,
+                    name,
+                    value,
+                    currency
+                ),
+                expand_seg_variants!("InitMarginReq") => {
+                    impl_seg_variants!("InitMarginReq", InitMarginReq, name, value, currency)
                 }
-                expand_seg_variants!("LookAheadInitMarginReq") => {
-                    account::Attribute::LookAheadInitMarginReq(
-                        impl_seg_variants!("LookAheadInitMarginReq", name, value),
-                        currency.parse()?,
-                    )
-                }
-                expand_seg_variants!("LookAheadMaintMarginReq") => {
-                    account::Attribute::LookAheadMaintenanceMarginReq(
-                        impl_seg_variants!("LookAheadMaintMarginReq", name, value),
-                        currency.parse()?,
-                    )
-                }
-                "LookAheadNextChange" => account::Attribute::LookAheadNextChange(value.parse()?),
-                expand_seg_variants!("MaintMarginReq") => account::Attribute::MaintenanceMarginReq(
-                    impl_seg_variants!("MaintMarginReq", name, value),
-                    currency.parse()?,
+                "IssuerOptionValue" => decode_account_attr!(IssuerOptionValue, value, currency),
+                "Leverage-S" => decode_account_attr!(LeverageSecurity, value),
+                "LookAheadNextChange" => decode_account_attr!(LookAheadNextChange, value),
+                expand_seg_variants!("LookAheadAvailableFunds") => impl_seg_variants!(
+                    "LookAheadAvailableFunds",
+                    LookAheadAvailableFunds,
+                    name,
+                    value,
+                    currency
+                ),
+                expand_seg_variants!("LookAheadExcessLiquidity") => impl_seg_variants!(
+                    "LookAheadExcessLiquidity",
+                    LookAheadExcessLiquidity,
+                    name,
+                    value,
+                    currency
+                ),
+                expand_seg_variants!("LookAheadInitMarginReq") => impl_seg_variants!(
+                    "LookAheadInitMarginReq",
+                    LookAheadInitMarginReq,
+                    name,
+                    value,
+                    currency
+                ),
+                expand_seg_variants!("LookAheadMaintMarginReq") => impl_seg_variants!(
+                    "LookAheadMaintMarginReq",
+                    LookAheadMaintenanceMarginReq,
+                    name,
+                    value,
+                    currency
+                ),
+                expand_seg_variants!("MaintMarginReq") => impl_seg_variants!(
+                    "MaintMarginReq",
+                    MaintenanceMarginReq,
+                    name,
+                    value,
+                    currency
                 ),
                 "MoneyMarketFundValue" => {
-                    account::Attribute::MoneyMarketFundValue(value.parse()?, currency.parse()?)
+                    decode_account_attr!(MoneyMarketFundValue, value, currency)
                 }
-                "MutualFundValue" => {
-                    account::Attribute::MutualFundValue(value.parse()?, currency.parse()?)
+                "MutualFundValue" => decode_account_attr!(MutualFundValue, value, currency),
+                "NLVAndMarginInReview" => decode_account_attr!(NlvAndMarginInReview, value),
+                "NetDividend" => decode_account_attr!(NetDividend, value, currency),
+                expand_seg_variants!("NetLiquidation") => {
+                    impl_seg_variants!("NetLiquidation", NetLiquidation, name, value, currency)
                 }
-                "NLVAndMarginInReview" => account::Attribute::NlvAndMarginInReview(value.parse()?),
-                "NetDividend" => account::Attribute::NetDividend(value.parse()?, currency.parse()?),
-                expand_seg_variants!("NetLiquidation") => account::Attribute::NetLiquidation(
-                    impl_seg_variants!("NetLiquidation", name, value),
-                    currency.parse()?,
-                ),
                 "NetLiquidationByCurrency" => {
-                    account::Attribute::NetLiquidationByCurrency(value.parse()?, currency.parse()?)
+                    decode_account_attr!(NetLiquidationByCurrency, value, currency)
                 }
                 "NetLiquidationUncertainty" => {
-                    account::Attribute::NetLiquidationUncertainty(value.parse()?, currency.parse()?)
+                    decode_account_attr!(NetLiquidationUncertainty, value, currency)
                 }
-                "OptionMarketValue" => {
-                    account::Attribute::OptionMarketValue(value.parse()?, currency.parse()?)
+                "OptionMarketValue" => decode_account_attr!(OptionMarketValue, value, currency),
+                expand_seg_variants!("PASharesValue") => {
+                    impl_seg_variants!("PASharesValue", PaSharesValue, name, value, currency)
                 }
-                expand_seg_variants!("PASharesValue") => account::Attribute::PaSharesValue(
-                    impl_seg_variants!("PASharesValue", name, value),
-                    currency.parse()?,
+                expand_seg_variants!("PhysicalCertificateValue") => impl_seg_variants!(
+                    "PhysicalCertificateValue",
+                    PhysicalCertificateValue,
+                    name,
+                    value,
+                    currency
                 ),
-                expand_seg_variants!("PhysicalCertificateValue") => {
-                    account::Attribute::PhysicalCertificateValue(
-                        impl_seg_variants!("PhysicalCertificateValue", name, value),
-                        currency.parse()?,
-                    )
-                }
-                expand_seg_variants!("PostExpirationExcess") => {
-                    account::Attribute::PostExpirationExcess(
-                        impl_seg_variants!("PostExpirationExcess", name, value),
-                        currency.parse()?,
-                    )
-                }
-                expand_seg_variants!("PostExpirationMargin") => {
-                    account::Attribute::PostExpirationMargin(
-                        impl_seg_variants!("PostExpirationMargin", name, value),
-                        currency.parse()?,
-                    )
-                }
+                expand_seg_variants!("PostExpirationExcess") => impl_seg_variants!(
+                    "PostExpirationExcess",
+                    PostExpirationExcess,
+                    name,
+                    value,
+                    currency
+                ),
+                expand_seg_variants!("PostExpirationMargin") => impl_seg_variants!(
+                    "PostExpirationMargin",
+                    PostExpirationMargin,
+                    name,
+                    value,
+                    currency
+                ),
                 "PreviousDayEquityWithLoanValue" => {
-                    account::Attribute::PreviousDayEquityWithLoanValue(
-                        value.parse()?,
-                        currency.parse()?,
-                    )
+                    decode_account_attr!(PreviousDayEquityWithLoanValue, value, currency)
                 }
                 "PreviousDayEquityWithLoanValue-S" => {
-                    account::Attribute::PreviousDayEquityWithLoanValueSecurity(
-                        value.parse()?,
-                        currency.parse()?,
-                    )
+                    decode_account_attr!(PreviousDayEquityWithLoanValueSecurity, value, currency)
                 }
-                "RealCurrency" => account::Attribute::RealCurrency(currency.parse()?),
-                "RealizedPnL" => account::Attribute::RealizedPnL(value.parse()?, currency.parse()?),
-                "RegTEquity" => account::Attribute::RegTEquity(value.parse()?, currency.parse()?),
-                "RegTEquity-S" => {
-                    account::Attribute::RegTEquitySecurity(value.parse()?, currency.parse()?)
+                "RealCurrency" => decode_account_attr!(RealCurrency, value),
+                "RealizedPnL" => decode_account_attr!(RealizedPnL, value, currency),
+                "RegTEquity" => decode_account_attr!(RegTEquity, value, currency),
+                "RegTEquity-S" => decode_account_attr!(RegTEquitySecurity, value, currency),
+                "RegTMargin" => decode_account_attr!(RegTMargin, value, currency),
+                "RegTMargin-S" => decode_account_attr!(RegTMarginSecurity, value, currency),
+                "SMA" => decode_account_attr!(Sma, value, currency),
+                "SMA-S" => decode_account_attr!(SmaSecurity, value, currency),
+                "StockMarketValue" => decode_account_attr!(StockMarketValue, value, currency),
+                "TBillValue" => decode_account_attr!(TBillValue, value, currency),
+                "TBondValue" => decode_account_attr!(TBondValue, value, currency),
+                "TotalCashBalance" => decode_account_attr!(TotalCashBalance, value, currency),
+                expand_seg_variants!("TotalCashValue") => {
+                    impl_seg_variants!("TotalCashValue", TotalCashValue, name, value, currency)
                 }
-                "RegTMargin" => account::Attribute::RegTMargin(value.parse()?, currency.parse()?),
-                "RegTMargin-S" => {
-                    account::Attribute::RegTMarginSecurity(value.parse()?, currency.parse()?)
-                }
-                "SMA" => account::Attribute::Sma(value.parse()?, currency.parse()?),
-                "SMA-S" => account::Attribute::SmaSecurity(value.parse()?, currency.parse()?),
-                "StockMarketValue" => {
-                    account::Attribute::StockMarketValue(value.parse()?, currency.parse()?)
-                }
-                "TBillValue" => account::Attribute::TBillValue(value.parse()?, currency.parse()?),
-                "TBondValue" => account::Attribute::TBondValue(value.parse()?, currency.parse()?),
-                "TotalCashBalance" => {
-                    account::Attribute::TotalCashBalance(value.parse()?, currency.parse()?)
-                }
-                expand_seg_variants!("TotalCashValue") => account::Attribute::TotalCashValue(
-                    impl_seg_variants!("TotalCashValue", name, value),
-                    currency.parse()?,
+                expand_seg_variants!("TotalDebitCardPendingCharges") => impl_seg_variants!(
+                    "TotalDebitCardPendingCharges",
+                    TotalDebitCardPendingCharges,
+                    name,
+                    value,
+                    currency
                 ),
-                expand_seg_variants!("TotalDebitCardPendingCharges") => {
-                    account::Attribute::TotalDebitCardPendingCharges(
-                        impl_seg_variants!("TotalDebitCardPendingCharges", name, value),
-                        currency.parse()?,
-                    )
-                }
                 "TradingType-S" => account::Attribute::TradingTypeSecurity(value),
-                "UnrealizedPnL" => {
-                    account::Attribute::UnrealizedPnL(value.parse()?, currency.parse()?)
-                }
-                "WarrantValue" => {
-                    account::Attribute::WarrantValue(value.parse()?, currency.parse()?)
-                }
-                "WhatIfPMEnabled" => account::Attribute::WhatIfPMEnabled(value.parse()?),
+                "UnrealizedPnL" => decode_account_attr!(UnrealizedPnL, value, currency),
+                "WarrantValue" => decode_account_attr!(WarrantValue, value, currency),
+                "WhatIfPMEnabled" => decode_account_attr!(WhatIfPMEnabled, value),
                 expand_seg_variants!("SegmentTitle") => {
                     if name.ends_with('C') || name.ends_with('P') || name.ends_with('S') {
                         return Ok(());
                     }
-                    return Err(anyhow::Error::msg("Unexpected segment title encountered.  This may mandate an API update: currently-supported values are C, P, and S as outlined in the account::Segment type."));
+                    return Err(ParseAttributeError::NoSuchAttribute(format!("Unexpected segment title \"{name}\" encountered. This may mandate an API update: currently-supported values are C, P, and S as outlined in the account::Segment type.")).into());
                 }
-                _ => {
-                    return Err(anyhow::Error::msg(format!(
-                        "Invalid account attribute encountered: {name}"
-                    )))
-                }
+                _ => return Err(ParseAttributeError::NoSuchAttribute(name).into()),
             };
             wrapper.account_attribute(attribute, account_number).await;
             Ok(())
@@ -703,7 +711,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn portfolio_value_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             let _ = fields.nth(1);
             let proxy = deserialize_contract_proxy(fields)?;
@@ -737,14 +745,17 @@ pub trait Local: wrapper::LocalWrapper {
     fn acct_update_time_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
                     timestamp @ 2: String
             );
             wrapper
-                .account_attribute_time(NaiveTime::parse_from_str(timestamp.as_str(), "%H:%M")?)
+                .account_attribute_time(
+                    NaiveTime::parse_from_str(timestamp.as_str(), "%H:%M")
+                        .map_err(|e| ("timestamp", ParseDateTimeError::Timestamp))?,
+                )
                 .await;
             Ok(())
         }
@@ -756,7 +767,7 @@ pub trait Local: wrapper::LocalWrapper {
         _wrapper: &mut Self,
         _tx: &mut Tx,
         _rx: &mut Rx,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move { Ok(()) }
     }
 
@@ -766,7 +777,7 @@ pub trait Local: wrapper::LocalWrapper {
         _wrapper: &mut Self,
         tx: &mut Tx,
         rx: &mut Rx,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move { decode_contract_no_wrapper(fields, tx, rx).await }
     }
 
@@ -774,7 +785,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn execution_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -799,11 +810,15 @@ pub trait Local: wrapper::LocalWrapper {
                     pending_price_revision @ 5: u8
             );
 
-            let (dt, tz) = NaiveDateTime::parse_and_remainder(datetime.as_str(), "%Y%m%d %T ")?;
+            let (dt, tz) = NaiveDateTime::parse_and_remainder(datetime.as_str(), "%Y%m%d %T ")
+                .map_err(|_| ("datetime", ParseDateTimeError::Timestamp))?;
             let datetime = dt
-                .and_local_timezone(tz.parse::<timezone::IbTimeZone>()?)
+                .and_local_timezone(
+                    tz.parse::<timezone::IbTimeZone>()
+                        .map_err(|e| ("datetime", ParseDateTimeError::Timezone(e)))?,
+                )
                 .single()
-                .ok_or(anyhow::anyhow!("Invalid timezone in execution data."))?
+                .ok_or(("datetime", ParseDateTimeError::Single))?
                 .to_utc();
             let exec = Execution::from((
                 Exec {
@@ -834,7 +849,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn market_depth_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -846,8 +861,11 @@ pub trait Local: wrapper::LocalWrapper {
                     size @ 0: f64
             );
 
-            let entry = CompleteEntry::Ordinary(Entry::try_from((side, position, price, size))?);
-            let operation = Operation::try_from((operation, entry))?;
+            let entry = CompleteEntry::Ordinary(
+                Entry::try_from((side, position, price, size)).map_err(|e| ("entry", e))?,
+            );
+            let operation =
+                Operation::try_from((operation, entry)).map_err(|e| ("operation", e))?;
 
             wrapper.update_market_depth(req_id, operation).await;
             Ok(())
@@ -858,7 +876,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn market_depth_l2_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -871,7 +889,7 @@ pub trait Local: wrapper::LocalWrapper {
                     size @ 0: f64,
                     is_smart @ 0: i32
             );
-            let entry = Entry::try_from((side, position, price, size))?;
+            let entry = Entry::try_from((side, position, price, size)).map_err(|e| ("entry", e))?;
             let entry = match is_smart {
                 0 => CompleteEntry::MarketMaker {
                     market_maker: market_maker
@@ -879,15 +897,16 @@ pub trait Local: wrapper::LocalWrapper {
                         .take(4)
                         .collect::<Vec<char>>()
                         .try_into()
-                        .map_err(|_| anyhow::Error::msg("Invalid Mpid encountered"))?,
+                        .map_err(|_| ("market_maker", ParsePayloadError::Mpid))?,
                     entry,
                 },
                 _ => CompleteEntry::SmartDepth {
-                    exchange: market_maker.parse()?,
+                    exchange: market_maker.parse().map_err(|e| ("exchange", e))?,
                     entry,
                 },
             };
-            let operation = Operation::try_from((operation, entry))?;
+            let operation =
+                Operation::try_from((operation, entry)).map_err(|e| ("operation", e))?;
 
             wrapper.update_market_depth(req_id, operation).await;
             Ok(())
@@ -898,7 +917,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn news_bulletins_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -910,7 +929,7 @@ pub trait Local: wrapper::LocalWrapper {
         _wrapper: &mut Self,
         _tx: &mut Tx,
         _rx: &mut Rx,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move { Ok(()) }
     }
 
@@ -918,7 +937,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn receive_fa_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -929,7 +948,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn historical_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -941,27 +960,37 @@ pub trait Local: wrapper::LocalWrapper {
             let mut bars = Vec::with_capacity(count);
             for chunk in fields.collect::<Vec<String>>().chunks(8) {
                 if let [datetime_str, open, high, low, close, volume, wap, trade_count] = chunk {
-                    let (date, rem) = NaiveDate::parse_and_remainder(datetime_str, "%Y%m%d")?;
+                    let (date, rem) = NaiveDate::parse_and_remainder(datetime_str, "%Y%m%d")
+                        .map_err(|_| ("date", ParseDateTimeError::Timestamp))?;
                     let time = if rem.is_empty() {
                         NaiveTime::default()
                     } else {
-                        NaiveTime::parse_and_remainder(rem, " %T")?.0
+                        NaiveTime::parse_and_remainder(rem, " %T")
+                            .map_err(|_| ("time", ParseDateTimeError::Timestamp))?
+                            .0
                     };
                     let core = BarCore {
                         datetime: NaiveDateTime::new(date, time).and_utc(),
-                        open: open.parse()?,
-                        high: high.parse()?,
-                        low: low.parse()?,
-                        close: close.parse()?,
+                        open: open.parse().map_err(|e| ("open", e))?,
+                        high: high.parse().map_err(|e| ("high", e))?,
+                        low: low.parse().map_err(|e| ("low", e))?,
+                        close: close.parse().map_err(|e| ("close", e))?,
                     };
-                    let (volume, wap, trade_count) =
-                        (volume.parse()?, wap.parse()?, trade_count.parse::<i64>()?);
+                    let (volume, wap, trade_count) = (
+                        volume.parse().map_err(|e| ("volume", e))?,
+                        wap.parse().map_err(|e| ("wap", e))?,
+                        trade_count.parse::<i64>().map_err(|e| ("trade_count", e))?,
+                    );
                     let bar = if volume > 0. && wap > 0. && trade_count > 0 {
                         Bar::Trades(Trade {
                             bar: core,
                             volume,
                             wap,
-                            trade_count: trade_count.try_into()?,
+                            trade_count: trade_count.try_into().map_err(|_| {
+                                DecodeError::UnexpectedData(
+                                    "trade_count could not be converted to unsigned integer.",
+                                )
+                            })?,
                         })
                     } else {
                         Bar::Ordinary(core)
@@ -978,7 +1007,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn bond_contract_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -989,7 +1018,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn scanner_parameters_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1000,7 +1029,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn scanner_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1011,7 +1040,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_option_computation_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1040,10 +1069,10 @@ pub trait Local: wrapper::LocalWrapper {
             let calc = match base {
                 0 => SecOptionCalculations::ReturnBased(calc),
                 1 => SecOptionCalculations::PriceBased(calc),
-                t => {
-                    return Err(anyhow::Error::msg(format!(
-                        "Unexpected option calculation base: {t}"
-                    )))
+                _ => {
+                    return Err(DecodeError::UnexpectedData(
+                        "Unexpected option calculation base.",
+                    ))
                 }
             };
             let calc = match tick_type {
@@ -1074,7 +1103,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_generic_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1090,7 +1119,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_string_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1109,9 +1138,7 @@ pub trait Local: wrapper::LocalWrapper {
                     wrapper.quoting_exchanges(req_id, quoting_exchanges).await;
                 }
                 45 | 85 | 88 => {
-                    let value = value
-                        .parse()
-                        .with_context(|| "Invalid value in timestamp decode")?;
+                    let value = value.parse().map_err(|e| ("value", e))?;
                     if value == 0 {
                         return Ok(());
                     }
@@ -1120,9 +1147,7 @@ pub trait Local: wrapper::LocalWrapper {
                         85 => DateTime::from_timestamp_millis(value),
                         _ => unreachable!(),
                     }
-                    .ok_or_else(|| {
-                        anyhow::Error::msg("Invalid timestamp encountered in string message")
-                    })?;
+                    .ok_or(("timestamp", ParseDateTimeError::Timestamp))?;
                     let timestamp = match tick_type {
                         45 => Class::Live(TimeStamp::Last(timestamp)),
                         85 => Class::Live(TimeStamp::Regulatory(timestamp)),
@@ -1136,51 +1161,47 @@ pub trait Local: wrapper::LocalWrapper {
                     let base = RealTimeVolumeBase {
                         last_price: vols
                             .next()
-                            .ok_or(MissingInputData)
-                            .with_context(|| "No last price in real time volume message")?
-                            .parse()
-                            .with_context(|| "Invalid value in RealTimeVolume last_price decode")?,
-                        last_size: vols
-                            .next()
-                            .ok_or(MissingInputData)
-                            .with_context(|| "No last size in real time volume message")?
-                            .parse()
-                            .with_context(|| "Invalid value in RealTimeVolume last_size decode")?,
-                        last_time: DateTime::from_timestamp(
-                            vols.next()
-                                .ok_or(MissingInputData)
-                                .with_context(|| "No last time in real time volume message")?
-                                .parse()
-                                .with_context(|| {
-                                    "Invalid value in RealTimeVolume last_time decode"
-                                })?,
-                            0,
-                        )
-                        .ok_or_else(|| {
-                            anyhow::Error::msg(
-                                "Invalid Unix timestamp found in real time volume message",
-                            )
-                        })?,
-                        day_volume: vols
-                            .next()
-                            .ok_or(MissingInputData)
-                            .with_context(|| "No day volume in real time volume message")?
-                            .parse()
-                            .with_context(|| "Invalid value in RealTimeVolume day_volume decode")?,
-                        vwap: vols
-                            .next()
-                            .ok_or(MissingInputData)
-                            .with_context(|| "No VWAP in real time volume message")?
-                            .parse()
-                            .with_context(|| "Invalid value in RealTimeVolume vwap decode")?,
-                        single_mm: vols
-                            .next()
-                            .ok_or(MissingInputData)
-                            .with_context(|| {
-                                "No single market maker parameter in real time volume message"
+                            .ok_or(DecodeError::MissingData {
+                                field_name: "last_price",
                             })?
                             .parse()
-                            .with_context(|| "Invalid value in RealTimeVolume single_mm decode")?,
+                            .map_err(|e| ("last_price", e))?,
+                        last_size: vols
+                            .next()
+                            .ok_or(DecodeError::MissingData {
+                                field_name: "last_size",
+                            })?
+                            .parse()
+                            .map_err(|e| ("last_size", e))?,
+                        last_time: DateTime::from_timestamp(
+                            vols.next()
+                                .ok_or(DecodeError::MissingData {
+                                    field_name: "last_time",
+                                })?
+                                .parse()
+                                .map_err(|e| ("last_time", e))?,
+                            0,
+                        )
+                        .ok_or(("last_time", ParseDateTimeError::Timestamp))?,
+                        day_volume: vols
+                            .next()
+                            .ok_or(DecodeError::MissingData {
+                                field_name: "day_volume",
+                            })?
+                            .parse()
+                            .map_err(|e| ("day_volume", e))?,
+                        vwap: vols
+                            .next()
+                            .ok_or(DecodeError::MissingData { field_name: "vwap" })?
+                            .parse()
+                            .map_err(|e| ("vwap", e))?,
+                        single_mm: vols
+                            .next()
+                            .ok_or(DecodeError::MissingData {
+                                field_name: "single_mm",
+                            })?
+                            .parse()
+                            .map_err(|e| ("single_mm", e))?,
                     };
                     let volume = match tick_type {
                         48 => RealTimeVolume::All(base),
@@ -1194,34 +1215,33 @@ pub trait Local: wrapper::LocalWrapper {
                     let dividends = Dividends {
                         trailing_year: divs
                             .next()
-                            .ok_or(MissingInputData)
-                            .with_context(|| "No trailing year in dividend message")?
+                            .ok_or(DecodeError::MissingData {
+                                field_name: "trailing_year",
+                            })?
                             .parse()
-                            .with_context(|| "Invalid value in Dividends trailing_year decode")?,
+                            .map_err(|e| ("trailing_year", e))?,
                         forward_year: divs
                             .next()
-                            .ok_or(MissingInputData)
-                            .with_context(|| "No forward year in dividend message")?
+                            .ok_or(DecodeError::MissingData {
+                                field_name: "forward_year",
+                            })?
                             .parse()
-                            .with_context(|| "Invalid value in Dividends forward_year decode")?,
+                            .map_err(|e| ("forward_year", e))?,
                         next_dividend: (
                             NaiveDate::parse_and_remainder(
-                                divs.next()
-                                    .ok_or(MissingInputData)
-                                    .with_context(|| "No next dividend date in dividend message")?,
+                                divs.next().ok_or(DecodeError::MissingData {
+                                    field_name: "next_dividend",
+                                })?,
                                 "%Y%m%d",
                             )
-                            .with_context(|| {
-                                "Invalid value in Dividends next_dividend decode datetime"
-                            })?
+                            .map_err(|_| ("next_dividend", ParseDateTimeError::Timestamp))?
                             .0,
                             divs.next()
-                                .ok_or(MissingInputData)
-                                .with_context(|| "No next price in dividend message")?
+                                .ok_or(DecodeError::MissingData {
+                                    field_name: "next_price",
+                                })?
                                 .parse()
-                                .with_context(|| {
-                                    "Invalid value in Dividends next_dividend decode value"
-                                })?,
+                                .map_err(|e| ("next_dividend", e))?,
                         ),
                     };
                     wrapper.dividends(req_id, dividends).await;
@@ -1230,8 +1250,8 @@ pub trait Local: wrapper::LocalWrapper {
                     wrapper.news(req_id, value).await;
                 }
                 t => {
-                    return Err(anyhow::Error::msg(format!(
-                        "Unexpected price market data request: {t}"
+                    return Err(DecodeError::Other(format!(
+                        "unexpected price market data request: {t}."
                     )))
                 }
             };
@@ -1243,7 +1263,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_efp_msg(
         _fields: &mut Fields,
         _wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             unimplemented!();
         }
@@ -1253,7 +1273,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn current_time_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1264,11 +1284,8 @@ pub trait Local: wrapper::LocalWrapper {
             wrapper
                 .current_time(
                     req_id,
-                    DateTime::from_timestamp(datetime, 0).ok_or_else(|| {
-                        anyhow::Error::msg(
-                            "Invalid datetime value encountered while parsing the UNIX timestamp!",
-                        )
-                    })?,
+                    DateTime::from_timestamp(datetime, 0)
+                        .ok_or(("datetime", ParseDateTimeError::Timestamp))?,
                 )
                 .await;
             Ok(())
@@ -1279,7 +1296,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn real_time_bars_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1295,7 +1312,7 @@ pub trait Local: wrapper::LocalWrapper {
             );
             let core = BarCore {
                 datetime: DateTime::from_timestamp(date_time, 0)
-                    .ok_or(anyhow::Error::msg("Invalid timestamp"))?,
+                    .ok_or(("datetime", ParseDateTimeError::Timestamp))?,
                 open,
                 high,
                 low,
@@ -1306,7 +1323,11 @@ pub trait Local: wrapper::LocalWrapper {
                     bar: core,
                     volume,
                     wap,
-                    trade_count: trade_count.try_into()?,
+                    trade_count: trade_count.try_into().map_err(|_| {
+                        DecodeError::UnexpectedData(
+                            "trade_count could not be converted to unsigned integer.",
+                        )
+                    })?,
                 })
             } else {
                 Bar::Ordinary(core)
@@ -1320,7 +1341,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn fundamental_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1331,7 +1352,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn contract_data_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(fields => req_id @ 2: i64);
             wrapper.contract_data_end(req_id).await;
@@ -1343,7 +1364,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn open_order_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             wrapper.open_order_end().await;
             Ok(())
@@ -1354,7 +1375,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn acct_download_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields => account_number @ 2: String
@@ -1368,7 +1389,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn execution_data_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
 
@@ -1380,7 +1401,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn delta_neutral_validation_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1391,7 +1412,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_snapshot_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1402,7 +1423,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn market_data_type_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1418,7 +1439,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn commission_report_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1429,7 +1450,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn position_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1457,7 +1478,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn position_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             wrapper.position_end().await;
             Ok(())
@@ -1468,7 +1489,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn account_summary_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1480,12 +1501,26 @@ pub trait Local: wrapper::LocalWrapper {
             );
             let summary = match tag {
                 Tag::AccountType => TagValue::String(Tag::AccountType, value),
-                Tag::Cushion => TagValue::Float(Tag::Cushion, value.parse()?),
-                Tag::LookAheadNextChange => TagValue::Int(Tag::LookAheadNextChange, value.parse()?),
+                Tag::Cushion => {
+                    TagValue::Float(Tag::Cushion, value.parse().map_err(|e| ("summary", e))?)
+                }
+                Tag::LookAheadNextChange => TagValue::Int(
+                    Tag::LookAheadNextChange,
+                    value.parse().map_err(|e| ("summary", e))?,
+                ),
                 Tag::HighestSeverity => TagValue::String(Tag::HighestSeverity, value),
-                Tag::DayTradesRemaining => TagValue::Int(Tag::DayTradesRemaining, value.parse()?),
-                Tag::Leverage => TagValue::Float(Tag::Leverage, value.parse()?),
-                t => TagValue::Currency(t, value.parse()?, currency.parse()?),
+                Tag::DayTradesRemaining => TagValue::Int(
+                    Tag::DayTradesRemaining,
+                    value.parse().map_err(|e| ("summary", e))?,
+                ),
+                Tag::Leverage => {
+                    TagValue::Float(Tag::Leverage, value.parse().map_err(|e| ("summary", e))?)
+                }
+                t => TagValue::Currency(
+                    t,
+                    value.parse().map_err(|e| ("summary", e))?,
+                    currency.parse().map_err(|e| ("summary", e))?,
+                ),
             };
             wrapper
                 .account_summary(req_id, account_number, summary)
@@ -1498,7 +1533,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn account_summary_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields => req_id @ 2: i64
@@ -1512,7 +1547,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn verify_message_api_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1523,7 +1558,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn verify_completed_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1534,7 +1569,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn display_group_list_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1545,7 +1580,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn display_group_updated_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1556,7 +1591,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn verify_and_auth_message_api_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1567,7 +1602,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn verify_and_auth_completed_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1578,7 +1613,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn position_multi_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1589,7 +1624,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn position_multi_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1600,7 +1635,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn account_update_multi_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1611,7 +1646,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn account_update_multi_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1622,7 +1657,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn security_definition_option_parameter_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1633,7 +1668,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn security_definition_option_parameter_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1644,7 +1679,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn soft_dollar_tiers_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1655,7 +1690,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn family_codes_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1666,7 +1701,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn symbol_samples_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1677,7 +1712,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn mkt_depth_exchanges_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1688,7 +1723,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_req_params_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1708,7 +1743,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn smart_components_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1719,7 +1754,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn news_article_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1730,7 +1765,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_news_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1741,7 +1776,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn news_providers_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1752,7 +1787,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn historical_news_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1763,7 +1798,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn historical_news_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1774,7 +1809,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn head_timestamp_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1785,7 +1820,7 @@ pub trait Local: wrapper::LocalWrapper {
                 .head_timestamp(
                     req_id,
                     DateTime::from_timestamp(timestamp, 0)
-                        .ok_or(anyhow::anyhow!("Invalid timestamp."))?,
+                        .ok_or(("timestamp", ParseDateTimeError::Timestamp))?,
                 )
                 .await;
             Ok(())
@@ -1796,7 +1831,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn histogram_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1807,7 +1842,8 @@ pub trait Local: wrapper::LocalWrapper {
             for (bin, chunk) in fields
                 .take(num_points * 2)
                 .map(|v| v.parse())
-                .collect::<Result<Vec<f64>, _>>()?
+                .collect::<Result<Vec<f64>, _>>()
+                .map_err(|e| ("chunk", e))?
                 .chunks_exact(2)
                 .enumerate()
             {
@@ -1824,7 +1860,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn historical_data_update_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1839,7 +1875,8 @@ pub trait Local: wrapper::LocalWrapper {
                     volume @ 0: f64
             );
             let core = BarCore {
-                datetime: NaiveDateTime::parse_and_remainder(datetime_str.as_str(), "%Y%m%d %T")?
+                datetime: NaiveDateTime::parse_and_remainder(datetime_str.as_str(), "%Y%m%d %T")
+                    .map_err(|_| ("datetime", ParseDateTimeError::Timestamp))?
                     .0
                     .and_utc(),
                 open,
@@ -1852,7 +1889,11 @@ pub trait Local: wrapper::LocalWrapper {
                     bar: core,
                     volume,
                     wap,
-                    trade_count: trade_count.try_into()?,
+                    trade_count: trade_count.try_into().map_err(|_| {
+                        DecodeError::UnexpectedData(
+                            "trade_count could not be converted to unsigned integer.",
+                        )
+                    })?,
                 })
             } else {
                 Bar::Ordinary(core)
@@ -1866,7 +1907,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn reroute_mkt_data_req_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1877,7 +1918,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn reroute_mkt_depth_req_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1888,7 +1929,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn market_rule_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -1896,10 +1937,7 @@ pub trait Local: wrapper::LocalWrapper {
     }
 
     #[inline]
-    fn pnl_msg(
-        fields: &mut Fields,
-        wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    fn pnl_msg(fields: &mut Fields, wrapper: &mut Self) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1922,7 +1960,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn pnl_single_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1949,7 +1987,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn historical_ticks_midpoint_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1964,9 +2002,12 @@ pub trait Local: wrapper::LocalWrapper {
             {
                 if let [time, _, price, size] = chunk {
                     ticks.push(TickData::Midpoint(Midpoint {
-                        datetime: DateTime::from_timestamp(time.parse()?, 0)
-                            .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
-                        price: price.parse()?,
+                        datetime: DateTime::from_timestamp(
+                            time.parse().map_err(|e| ("datetime", e))?,
+                            0,
+                        )
+                        .ok_or(("datetime", ParseDateTimeError::Timestamp))?,
+                        price: price.parse().map_err(|e| ("price", e))?,
                     }));
                 }
             }
@@ -1979,7 +2020,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn historical_ticks_bid_ask_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -1994,12 +2035,15 @@ pub trait Local: wrapper::LocalWrapper {
             {
                 if let [time, _, bid_price, ask_price, bid_size, ask_size] = chunk {
                     ticks.push(TickData::BidAsk(BidAsk {
-                        datetime: DateTime::from_timestamp(time.parse()?, 0)
-                            .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
-                        bid_price: bid_price.parse()?,
-                        ask_price: ask_price.parse()?,
-                        bid_size: bid_size.parse()?,
-                        ask_size: ask_size.parse()?,
+                        datetime: DateTime::from_timestamp(
+                            time.parse().map_err(|e| ("datetime", e))?,
+                            0,
+                        )
+                        .ok_or(("datetime", ParseDateTimeError::Timestamp))?,
+                        bid_price: bid_price.parse().map_err(|e| ("bid_price", e))?,
+                        ask_price: ask_price.parse().map_err(|e| ("ask_price", e))?,
+                        bid_size: bid_size.parse().map_err(|e| ("bid_size", e))?,
+                        ask_size: ask_size.parse().map_err(|e| ("ask_size", e))?,
                     }));
                 }
             }
@@ -2012,7 +2056,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn historical_ticks_last_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -2027,11 +2071,14 @@ pub trait Local: wrapper::LocalWrapper {
             {
                 if let [time, _, price, size, exchange, _] = chunk {
                     ticks.push(TickData::Last(Last {
-                        datetime: DateTime::from_timestamp(time.parse()?, 0)
-                            .ok_or_else(|| anyhow::Error::msg("Invalid datetime"))?,
-                        price: price.parse()?,
-                        size: size.parse()?,
-                        exchange: exchange.parse()?,
+                        datetime: DateTime::from_timestamp(
+                            time.parse().map_err(|e| ("datetime", e))?,
+                            0,
+                        )
+                        .ok_or(("datetime", ParseDateTimeError::Timestamp))?,
+                        price: price.parse().map_err(|e| ("price", e))?,
+                        size: size.parse().map_err(|e| ("size", e))?,
+                        exchange: exchange.parse().map_err(|e| ("exchange", e))?,
                     }));
                 }
             }
@@ -2044,7 +2091,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn tick_by_tick_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             decode_fields!(
                 fields =>
@@ -2053,13 +2100,15 @@ pub trait Local: wrapper::LocalWrapper {
                     timestamp @ 0: i64
             );
             let datetime = DateTime::from_timestamp(timestamp, 0)
-                .ok_or_else(|| anyhow::Error::msg("Invalid timestamp"))?;
+                .ok_or(("datetime", ParseDateTimeError::Timestamp))?;
             let tick = match tick_type {
                 1 | 2 => TickData::Last(Last {
                     datetime,
-                    price: nth(fields, 0)?.parse()?,
-                    size: nth(fields, 0)?.parse()?,
-                    exchange: nth(fields, 1)?.parse()?,
+                    price: nth(fields, 0, "price")?.parse().map_err(|e| ("price", e))?,
+                    size: nth(fields, 0, "size")?.parse().map_err(|e| ("size", e))?,
+                    exchange: nth(fields, 1, "exchange")?
+                        .parse()
+                        .map_err(|e| ("exchange", e))?,
                 }),
                 3 => {
                     decode_fields!(
@@ -2079,9 +2128,9 @@ pub trait Local: wrapper::LocalWrapper {
                 }
                 4 => TickData::Midpoint(Midpoint {
                     datetime,
-                    price: nth(fields, 0)?.parse()?,
+                    price: nth(fields, 0, "price")?.parse().map_err(|e| ("price", e))?,
                 }),
-                _ => Err(anyhow::Error::msg("Unexpected tick type"))?,
+                _ => Err(DecodeError::UnexpectedData("Unexpected tick type"))?,
             };
             wrapper.live_tick(req_id, tick).await;
             Ok(())
@@ -2092,7 +2141,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn order_bound_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -2103,7 +2152,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn completed_order_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -2114,7 +2163,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn completed_orders_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -2125,7 +2174,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn replace_fa_end_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -2136,7 +2185,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn wsh_meta_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -2147,7 +2196,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn wsh_event_data_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -2158,7 +2207,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn historical_schedule_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -2169,7 +2218,7 @@ pub trait Local: wrapper::LocalWrapper {
     fn user_info_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             println!("{:?}", &fields);
             Ok(())
@@ -2182,7 +2231,7 @@ pub trait Local: wrapper::LocalWrapper {
         tick_type: u16,
         value: f64,
         wrapper: &mut Self,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = DecodeResult> {
         async move {
             match tick_type {
                 0 | 3 | 5 => {
@@ -2293,10 +2342,10 @@ pub trait Local: wrapper::LocalWrapper {
                     };
                     wrapper.ipo(req_id, ipo).await;
                 }
-                t => {
-                    return Err(anyhow::Error::msg(format!(
-                        "Unexpected generic market data request: {t}"
-                    )))
+                _ => {
+                    return Err(DecodeError::UnexpectedData(
+                        "Unexpected generic market data request",
+                    ))
                 }
             };
 
@@ -2309,35 +2358,13 @@ impl<W: wrapper::LocalWrapper> Local for W {}
 
 impl<W: wrapper::Wrapper> Remote for W {}
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct MissingInputData;
-
-impl std::fmt::Display for MissingInputData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Missing value encountered while decoding an API callback"
-        )
-    }
-}
-
-impl std::error::Error for MissingInputData {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-
-    fn description(&self) -> &str {
-        "description() is deprecated; use Display"
-    }
-
-    fn cause(&self) -> Option<&dyn std::error::Error> {
-        self.source()
-    }
-}
-
 #[inline]
-pub(crate) fn nth(fields: &mut Fields, n: usize) -> Result<String, MissingInputData> {
-    fields.nth(n).ok_or(MissingInputData)
+pub(crate) fn nth(
+    fields: &mut Fields,
+    n: usize,
+    field_name: &'static str,
+) -> Result<String, DecodeError> {
+    fields.nth(n).ok_or(DecodeError::MissingData { field_name })
 }
 
 #[inline]
@@ -2345,7 +2372,7 @@ pub(crate) async fn decode_contract_no_wrapper(
     fields: &mut Fields,
     tx: &mut Tx,
     rx: &mut Rx,
-) -> anyhow::Result<()> {
+) -> DecodeResult {
     decode_fields!(
         fields =>
             req_id @ 1: i64,
@@ -2378,44 +2405,32 @@ pub(crate) async fn decode_contract_no_wrapper(
         .split(',')
         .map(str::parse)
         .collect::<Result<_, _>>()
-        .with_context(|| "Invalid exchange in valid_exchanges")?;
+        .map_err(|e| ("valid_exchanges", e))?;
     let security_ids = (0..security_id_count)
-        .map(|_| {
-            match nth(fields, 0)
-                .with_context(|| "Expected number of security_ids but none found")?
-                .to_uppercase()
-                .as_str()
-            {
-                "CUSIP" => Ok(SecurityId::Cusip(
-                    nth(fields, 0).with_context(|| "Expected CUSIP but none found")?,
-                )),
-                "SEDOL" => Ok(SecurityId::Sedol(
-                    nth(fields, 0).with_context(|| "Expected SEDOL but none found")?,
-                )),
-                "ISIN" => Ok(SecurityId::Isin(
-                    nth(fields, 0).with_context(|| "Expected ISIN but none found")?,
-                )),
-                "RIC" => Ok(SecurityId::Ric(
-                    nth(fields, 0).with_context(|| "Expected RIC but none found")?,
-                )),
-                _ => Err(anyhow::Error::msg(
+        .map(
+            |_| match nth(fields, 0, "security_ids")?.to_uppercase().as_str() {
+                "CUSIP" => Ok(SecurityId::Cusip(nth(fields, 0, "security_id")?)),
+                "SEDOL" => Ok(SecurityId::Sedol(nth(fields, 0, "security_id")?)),
+                "ISIN" => Ok(SecurityId::Isin(nth(fields, 0, "security_id")?)),
+                "RIC" => Ok(SecurityId::Ric(nth(fields, 0, "security_id")?)),
+                _ => Err(DecodeError::UnexpectedData(
                     "Invalid security_id type found in STK contract_data_msg",
                 )),
-            }
-        })
+            },
+        )
         .collect::<Result<_, _>>()?;
 
     if let Ok(ToWrapper::ContractQuery((query_client, req_id_client))) = rx.try_recv() {
         if let crate::contract::Query::IbContractId(con_id_client, routing_client) = query_client {
             if con_id_client != contract_id {
-                return Err(anyhow::Error::msg("Unexpected contract ID"));
+                return Err(DecodeError::UnexpectedData("Unexpected contract ID"));
             }
             if exchange != routing_client {
-                return Err(anyhow::Error::msg("Unexpected routing exchange"));
+                return Err(DecodeError::UnexpectedData("Unexpected routing exchange"));
             }
         }
         if req_id_client != req_id {
-            return Err(anyhow::Error::msg("Unexpected request ID"));
+            return Err(DecodeError::UnexpectedData("Unexpected request ID"));
         }
         let contract = match sec_type {
             ContractType::Stock => Some(Contract::Stock(Stock {
@@ -2428,13 +2443,13 @@ pub(crate) async fn decode_contract_no_wrapper(
                 min_tick,
                 primary_exchange: primary_exchange
                     .parse()
-                    .with_context(|| "Invalid exchange in STK primary_exchange")?,
+                    .map_err(|e| ("primary_exchange", e))?,
                 long_name,
                 sector,
                 order_types,
                 valid_exchanges,
                 security_ids,
-                stock_type: nth(fields, 5).with_context(|| "Expected stock_type but none found")?,
+                stock_type: nth(fields, 5, "stock_type")?,
             })),
             ContractType::SecOption => {
                 let inner = SecOptionInner {
@@ -2443,14 +2458,12 @@ pub(crate) async fn decode_contract_no_wrapper(
                     symbol,
                     exchange,
                     strike,
-                    multiplier: multiplier
-                        .parse()
-                        .with_context(|| "Invalid multiplier in OPT multiplier")?,
+                    multiplier: multiplier.parse().map_err(|e| ("multiplier", e))?,
                     expiration_date: NaiveDate::parse_and_remainder(
                         expiration_date.as_str(),
                         "%Y%m%d",
                     )
-                    .with_context(|| "Invalid date string in OPT expiration_date")?
+                    .map_err(|_| ("expiration_date", ParseDateTimeError::Timestamp))?
                     .0,
                     underlying_contract_id,
                     sector,
@@ -2464,7 +2477,7 @@ pub(crate) async fn decode_contract_no_wrapper(
                 match class.as_str() {
                     "C" => Some(Contract::SecOption(SecOption::Call(inner))),
                     "P" => Some(Contract::SecOption(SecOption::Put(inner))),
-                    _ => return Err(anyhow::Error::msg("Unexpected option class")),
+                    _ => return Err(DecodeError::UnexpectedData("Unexpected option class")),
                 }
             }
             ContractType::Crypto => Some(Contract::Crypto(Crypto {
@@ -2506,11 +2519,9 @@ pub(crate) async fn decode_contract_no_wrapper(
                 min_tick,
                 symbol,
                 exchange,
-                multiplier: multiplier
-                    .parse()
-                    .with_context(|| "Invalid multiplier in FUT multiplier")?,
+                multiplier: multiplier.parse().map_err(|e| ("multiplier", e))?,
                 expiration_date: NaiveDate::parse_and_remainder(expiration_date.as_str(), "%Y%m%d")
-                    .with_context(|| "Invalid date string in OPT expiration_date")?
+                    .map_err(|_| ("expiration_date", ParseDateTimeError::Timestamp))?
                     .0,
                 trading_class,
                 underlying_contract_id,
@@ -2534,17 +2545,19 @@ pub(crate) async fn decode_contract_no_wrapper(
             })),
         };
 
-        tx.send(ToClient::NewContract(
-            contract.ok_or_else(|| anyhow::Error::msg("No contract was created"))?,
-        ))
+        tx.send(ToClient::NewContract(contract.ok_or(
+            DecodeError::UnexpectedData("No contract was created"),
+        )?))
         .await
-        .with_context(|| "Failure when sending contract")?;
+        .map_err(Box::new)?;
     }
     Ok(())
 }
 
 #[inline]
-fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<Proxy<Contract>> {
+fn deserialize_contract_proxy<E: crate::contract::ProxyExchange + Clone>(
+    fields: &mut Fields,
+) -> Result<Proxy<Contract, E>, DecodeError> {
     decode_fields!(
         fields =>
             contract_id @ 0: ContractId,
@@ -2554,21 +2567,20 @@ fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<Proxy<Contr
             strike @ 0: String,
             right @ 0: String,
             multiplier @ 0: String,
-            primary_exchange @ 0: String,
+            exch_or_priamry @ 0: String,
             currency @ 0: Currency,
             local_symbol @ 0: String,
             trading_class @ 0: String
     );
+    let (exchange, primary_exchange) = E::decode(exch_or_priamry)?;
 
     let inner = match sec_type {
         ContractType::Stock => Contract::Stock(Stock {
             contract_id,
             min_tick: f64::default(),
             symbol,
-            exchange: Routing::Smart,
-            primary_exchange: primary_exchange
-                .parse()
-                .with_context(|| "Invalid primary exchange in STK proxy")?,
+            exchange,
+            primary_exchange,
             stock_type: String::default(),
             security_ids: Vec::default(),
             sector: String::default(),
@@ -2594,7 +2606,7 @@ fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<Proxy<Contr
             contract_id,
             min_tick: f64::default(),
             symbol,
-            exchange: Routing::Smart,
+            exchange,
             currency,
             local_symbol,
             long_name: String::default(),
@@ -2605,7 +2617,7 @@ fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<Proxy<Contr
             contract_id,
             min_tick: f64::default(),
             symbol,
-            exchange: Routing::Smart,
+            exchange,
             trading_class,
             currency,
             local_symbol,
@@ -2617,7 +2629,7 @@ fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<Proxy<Contr
             contract_id,
             min_tick: f64::default(),
             symbol,
-            exchange: Routing::Smart,
+            exchange,
             trading_class,
             currency,
             local_symbol,
@@ -2629,12 +2641,10 @@ fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<Proxy<Contr
             contract_id,
             min_tick: f64::default(),
             symbol,
-            exchange: Routing::Smart,
-            multiplier: multiplier
-                .parse()
-                .with_context(|| "Invalid multiplier in FUT proxy")?,
+            exchange,
+            multiplier: multiplier.parse().map_err(|e| ("multiplier", e))?,
             expiration_date: NaiveDate::parse_and_remainder(expiration_date.as_str(), "%Y%m%d")
-                .with_context(|| "Invalid expiration date in OPT proxy")?
+                .map_err(|_| ("expiration_date", ParseDateTimeError::Timestamp))?
                 .0,
             trading_class,
             underlying_contract_id: contract_id,
@@ -2649,13 +2659,11 @@ fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<Proxy<Contr
                 contract_id,
                 min_tick: f64::default(),
                 symbol,
-                exchange: Routing::Smart,
-                strike: strike.parse().with_context(|| "Invalid strike")?,
-                multiplier: multiplier
-                    .parse()
-                    .with_context(|| "Invalid multiplier in OPT proxy")?,
+                exchange,
+                strike: strike.parse().map_err(|e| ("strike", e))?,
+                multiplier: multiplier.parse().map_err(|e| ("multiplier", e))?,
                 expiration_date: NaiveDate::parse_and_remainder(expiration_date.as_str(), "%Y%m%d")
-                    .with_context(|| "Invalid expiration date in OPT proxy")?
+                    .map_err(|_| ("expiration_date", ParseDateTimeError::Timestamp))?
                     .0,
                 underlying_contract_id: contract_id,
                 sector: String::default(),
@@ -2670,15 +2678,258 @@ fn deserialize_contract_proxy(fields: &mut Fields) -> anyhow::Result<Proxy<Contr
                 "C" => SecOption::Call(op_inner),
                 "P" => SecOption::Put(op_inner),
                 other => {
-                    return Err(anyhow::anyhow!(
-                        "Unexpected option right. Expected \'C\' or \'P\'. Found {}.",
-                        other
-                    ))
+                    return Err(DecodeError::Other(format!(
+                        "Unexpected option right. Expected \'C\' or \'P\'. Found {other}."
+                    )))
                 }
             };
             Contract::SecOption(op_outer)
         }
     };
 
-    Ok(Proxy { inner })
+    Ok(Proxy {
+        inner,
+        _exch: std::marker::PhantomData,
+    })
+}
+
+#[derive(Debug, Clone, Error)]
+pub(crate) enum DecodeError {
+    #[error("Missing data for field {field_name}.")]
+    /// The data is missing from the API callback
+    MissingData { field_name: &'static str },
+    #[error("Failed to parse integer field {field_name}. Cause: {int_error}")]
+    /// Failed to parse integer field
+    ParseIntError {
+        field_name: &'static str,
+        int_error: std::num::ParseIntError,
+    },
+    #[error("Failed to parse boolean field {field_name}. Cause: {bool_error}")]
+    /// Failed to parse boolean field
+    ParseBoolError {
+        field_name: &'static str,
+        bool_error: std::str::ParseBoolError,
+    },
+    #[error("Failed to parse float field {field_name}. Cause: {float_error}")]
+    /// Failed to parse floating point field
+    ParseFloatError {
+        field_name: &'static str,
+        float_error: std::num::ParseFloatError,
+    },
+    #[error("Failed to parse currency field {field_name}. Cause: {currency_error}")]
+    /// Failed to parse [`Currency`] field
+    ParseCurrencyError {
+        field_name: &'static str,
+        currency_error: crate::currency::ParseCurrencyError,
+    },
+    #[error("Failed to parse class field {field_name}. Cause: {class_error}")]
+    /// Failed to parse [`market::data::live_data::Class`] field
+    ParseClassError {
+        field_name: &'static str,
+        class_error: crate::market_data::live_data::ParseClassError,
+    },
+    #[error("Failed to parse tag field {field_name}. Cause: {tag_error}")]
+    /// Failed to parse [`Tag`] field
+    ParseTagError {
+        field_name: &'static str,
+        tag_error: account::ParseTagError,
+    },
+    #[error("Failed to parse exchange field {field_name}. Cause: {exchange_error}")]
+    /// Failed to parse [`Routing`] or [`Primary`] field
+    ParseExchangeError {
+        field_name: &'static str,
+        exchange_error: crate::exchange::ParseExchangeError,
+    },
+    #[error("Failed to parse contract ID field {field_name}. Cause: {contract_id_error}")]
+    /// Failed to parse [`ContractId`] field
+    ParseContractIdError {
+        field_name: &'static str,
+        contract_id_error: crate::contract::ParseContractIdError,
+    },
+    #[error("Failed to parse contract type field {field_name}. Cause: {contract_type_error}")]
+    /// Failed to parse [`ContractType`] field
+    ParseContractTypeError {
+        field_name: &'static str,
+        contract_type_error: crate::contract::ParseContractTypeError,
+    },
+    #[error("Failed to parse payload {field_name}. Cause: {payload_error}")]
+    /// Failed to parse any value in the [`crate::payload`] module
+    ParsePayloadError {
+        field_name: &'static str,
+        payload_error: crate::payload::ParsePayloadError,
+    },
+    #[error("Failed to parse attribute: {0}")]
+    /// Failed to parse an [`account::Attribute`] value
+    ParseAttributeError(ParseAttributeError),
+    #[error("Failed to parse datetime field {field_name}. Cause: {datetime_error}")]
+    /// Failed to parse an datetime value
+    ParseDateTimeError {
+        field_name: &'static str,
+        datetime_error: ParseDateTimeError,
+    },
+    #[error("Failed to parse order side field {field_name}")]
+    ParseOrderSideError {
+        field_name: &'static str,
+        order_side_error: ParseOrderSideError,
+    },
+    #[error("{0}")]
+    UnexpectedData(&'static str),
+    #[error("Error when sending data {0}")]
+    SendError(#[from] Box<tokio::sync::mpsc::error::SendError<ToClient>>),
+    #[error("{0}")]
+    Other(String),
+}
+
+#[derive(Debug, Error)]
+#[error("Decode error in function {function_name}. Cause {decode_error}")]
+pub(crate) struct DecodeContext {
+    decode_error: DecodeError,
+    function_name: &'static str,
+}
+
+impl DecodeError {
+    #[inline]
+    pub(crate) fn with_context(self, msg: &'static str) -> DecodeContext {
+        DecodeContext { decode_error: self, function_name: msg }
+    }
+}
+
+impl From<(&'static str, std::num::ParseIntError)> for DecodeError {
+    fn from(value: (&'static str, std::num::ParseIntError)) -> Self {
+        Self::ParseIntError {
+            field_name: value.0,
+            int_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, std::str::ParseBoolError)> for DecodeError {
+    fn from(value: (&'static str, std::str::ParseBoolError)) -> Self {
+        Self::ParseBoolError {
+            field_name: value.0,
+            bool_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, std::num::ParseFloatError)> for DecodeError {
+    fn from(value: (&'static str, std::num::ParseFloatError)) -> Self {
+        Self::ParseFloatError {
+            field_name: value.0,
+            float_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, crate::currency::ParseCurrencyError)> for DecodeError {
+    fn from(value: (&'static str, crate::currency::ParseCurrencyError)) -> Self {
+        Self::ParseCurrencyError {
+            field_name: value.0,
+            currency_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, crate::market_data::live_data::ParseClassError)> for DecodeError {
+    fn from(value: (&'static str, crate::market_data::live_data::ParseClassError)) -> Self {
+        Self::ParseClassError {
+            field_name: value.0,
+            class_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, account::ParseTagError)> for DecodeError {
+    fn from(value: (&'static str, account::ParseTagError)) -> Self {
+        Self::ParseTagError {
+            field_name: value.0,
+            tag_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, crate::exchange::ParseExchangeError)> for DecodeError {
+    fn from(value: (&'static str, crate::exchange::ParseExchangeError)) -> Self {
+        Self::ParseExchangeError {
+            field_name: value.0,
+            exchange_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, crate::contract::ParseContractIdError)> for DecodeError {
+    fn from(value: (&'static str, crate::contract::ParseContractIdError)) -> Self {
+        Self::ParseContractIdError {
+            field_name: value.0,
+            contract_id_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, crate::contract::ParseContractTypeError)> for DecodeError {
+    fn from(value: (&'static str, crate::contract::ParseContractTypeError)) -> Self {
+        Self::ParseContractTypeError {
+            field_name: value.0,
+            contract_type_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, crate::payload::ParsePayloadError)> for DecodeError {
+    fn from(value: (&'static str, crate::payload::ParsePayloadError)) -> Self {
+        Self::ParsePayloadError {
+            field_name: value.0,
+            payload_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, crate::execution::ParseOrderSideError)> for DecodeError {
+    fn from(value: (&'static str, crate::execution::ParseOrderSideError)) -> Self {
+        Self::ParseOrderSideError {
+            field_name: value.0,
+            order_side_error: value.1,
+        }
+    }
+}
+
+impl From<ParseAttributeError> for DecodeError {
+    fn from(value: ParseAttributeError) -> Self {
+        Self::ParseAttributeError(value)
+    }
+}
+
+impl From<(&'static str, ParseDateTimeError)> for DecodeError {
+    fn from(value: (&'static str, ParseDateTimeError)) -> Self {
+        Self::ParseDateTimeError {
+            field_name: value.0,
+            datetime_error: value.1,
+        }
+    }
+}
+
+impl From<(&'static str, std::convert::Infallible)> for DecodeError {
+    fn from(value: (&'static str, std::convert::Infallible)) -> Self {
+        unreachable!()
+    }
+}
+
+// impl<E: std::error::Error> From<E> for DecodeError {
+//     fn from(value: E) -> Self {
+//         Self::Other(value.to_string())
+//     }
+// }
+
+#[derive(Debug, Clone, Error)]
+/// An error returned when parsing a datetime fails.
+pub enum ParseDateTimeError {
+    /// Failed to parse an [`IbTimeZone`]
+    #[error("Failed to parse timezone")]
+    Timezone(#[from] ParseTimezoneError),
+    /// Invalid timestamp
+    #[error("Invalid timestamp: out-of-range number of seconds and/or invalid nanosecond")]
+    Timestamp,
+    /// Failed to resolve single timezone
+    #[error("Failed to resolve a single timezone from provided information")]
+    Single,
 }

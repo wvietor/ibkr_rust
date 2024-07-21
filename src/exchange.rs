@@ -411,6 +411,8 @@ pub enum Primary {
     ThFxCfdDealing,
     #[serde(rename = "TPLUS1")]
     TPlusOne,
+    #[serde(rename = "TPLUS0")]
+    TplusZero,
     #[serde(rename = "TRADEWEB")]
     TradewebCorporate,
     #[serde(rename = "TRADEWEBG")]
@@ -648,6 +650,7 @@ impl FromStr for Primary {
             "TGHEES" => Self::TurquoiseGlobalHoldingsEuropeBVSpain,
             "TGHEIT" => Self::TurquoiseGlobalHoldingsBVItaly,
             "THFXCFD" => Self::ThFxCfdDealing,
+            "TPLUS0" => Self::TplusZero,
             "TPLUS1" => Self::TPlusOne,
             "TRADEWEB" => Self::TradewebCorporate,
             "TRADEWEBG" => Self::TradewebGovernment,

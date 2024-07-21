@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::quote;
 use syn::{parse_str, Ident};
 use SecType::*;
 
@@ -62,34 +62,65 @@ impl From<&Ident> for SecType {
 const CONTRACTS: [SecType; 7] = [Forex, Crypto, Stock, Index, SecFuture, SecOption, Commodity];
 
 fn impl_try_from_other_contracts(name: &Ident) -> TokenStream {
-    let mut idents = CONTRACTS
+    let idents = CONTRACTS
         .into_iter()
-        .map(|c| parse_str(c.as_str()).unwrap())
-        .collect::<HashSet<Ident>>();
-    idents.remove(name);
-
-    let mut out = Vec::new();
-    for ident in idents {
-        let error_message = format!("Expected {} found {}", name, format_ident!("{}", ident));
-        out.push(quote! {
-            impl TryFrom<#ident> for #name {
-                type Error = UnexpectedSecurityType;
-
-                fn try_from(_: #ident) -> Result<Self, Self::Error> {
-                    Err(UnexpectedSecurityType(#error_message))
-                }
+        .filter_map(|c| {
+            if c == name.into() {
+                None
+            } else {
+                parse_str(c.as_str()).unwrap()
             }
-        });
-    }
+        })
+        .collect::<HashSet<Ident>>()
+        .into_iter();
 
-    quote! { #( #out )* }
+    quote! {
+        #(impl TryFrom<#idents> for #name {
+            type Error = UnexpectedSecurityType;
+
+            fn try_from(_: #idents) -> Result<Self, Self::Error> {
+                Err(UnexpectedSecurityType {
+                    expected: ContractType::#name,
+                    found: ContractType::#idents,
+                })
+            }
+        })*
+    }
 }
 
 fn impl_into_contract(name: &Ident) -> TokenStream {
+    let idents = CONTRACTS
+        .into_iter()
+        .filter_map(|c| {
+            if c == name.into() {
+                None
+            } else {
+                parse_str(c.as_str()).unwrap()
+            }
+        })
+        .collect::<HashSet<Ident>>()
+        .into_iter();
+
     quote! {
         impl From<#name> for Contract {
             fn from(value: #name) -> Self {
                 Self::#name(value)
+            }
+        }
+
+        impl TryFrom<Contract> for #name {
+            type Error = UnexpectedSecurityType;
+
+            fn try_from(value: Contract) -> Result<Self, Self::Error> {
+                match value {
+                    Contract::#name(t) => Ok(t),
+                    #(Contract::#idents(_) => Err(
+                        UnexpectedSecurityType {
+                            expected: ContractType::#name,
+                            found: ContractType::#idents
+                        }
+                    )),*
+                }
             }
         }
     }
@@ -251,20 +282,22 @@ pub fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
 
         impl serde::Serialize for #name {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-                (
-                    #contract_id,
-                    #symbol,
-                    #security_type,
-                    #expiration_date.map(|d| d.format("%Y%m%d").to_string()),
-                    #strike,
-                    #right,
-                    #multiplier,
-                    #exchange,
-                    #primary_exchange,
-                    #currency,
-                    #local_symbol,
-                    #trading_class
-                ).serialize(serializer)
+                let mut state = serializer.serialize_struct("Contract", 14)?;
+                state.serialize_field("contract_id", &#contract_id)?;
+                state.serialize_field("security_type", &#security_type)?;
+                state.serialize_field("symbol", &#symbol)?;
+                state.serialize_field("long_name", &#long_name)?;
+                state.serialize_field("min_tick", &#min_tick)?;
+                state.serialize_field("exchange", &#exchange)?;
+                state.serialize_field("primary_exchange", &#primary_exchange)?;
+                state.serialize_field("currency", &#currency)?;
+                state.serialize_field("local_symbol", &#local_symbol)?;
+                state.serialize_field("trading_class", &#trading_class)?;
+                state.serialize_field("expiration_date", &#expiration_date.map(|d| d.format("%Y%m%d").to_string()))?;
+                state.serialize_field("strike", &#strike)?;
+                state.serialize_field("option_class", &#right)?;
+                state.serialize_field("multiplier", &#multiplier)?;
+                state.end()
             }
         }
 

@@ -1,11 +1,34 @@
+use std::convert::Infallible;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
 use chrono::serde::ts_seconds;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
-use crate::contract::{Contract, Proxy};
+use crate::contract::{Contract, ExchangeProxy};
+
+#[derive(Debug, Clone, Error)]
+#[error("Invalid value encountered when attempting to parse a payload value.")]
+/// An error returned when parsing any value in the [`crate::payload`] module fails.
+pub enum ParsePayloadError {
+    /// Invalid locate
+    #[error("Invalid value encountered when attempting to parse locate. Expected \"locate\", found: {0}")]
+    Locate(String),
+    /// Invalid order status
+    #[error("Invalid value encountered when attempting to parse order status. No such order status: {0}")]
+    OrderStatus(String),
+    /// Invalid entry side
+    #[error("Invalid int encountered while parsing entry side")]
+    Entry,
+    /// Invalid MPID
+    #[error("Invalid value encountered when attempting to parse MPID.")]
+    Mpid,
+    /// Invalid operation integer code
+    #[error("Invalid int encountered while parsing operation")]
+    Operation,
+}
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 /// The result of a [`crate::client::Client::req_market_data`] request, which contains an identifier that can be passed to
@@ -18,32 +41,8 @@ impl std::fmt::Display for ExchangeId {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
-/// An error type returned when a given exchange ID cannot be parsed (likely due to invalid UTF-8)
-pub struct ParseExchangeIdError;
-
-impl std::error::Error for ParseExchangeIdError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-
-    fn description(&self) -> &str {
-        "description() is deprecated; use Display"
-    }
-
-    fn cause(&self) -> Option<&dyn std::error::Error> {
-        self.source()
-    }
-}
-
-impl std::fmt::Display for ParseExchangeIdError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Invalid exchange ID, likely due to a bad UTF-8 code")
-    }
-}
-
 impl FromStr for ExchangeId {
-    type Err = ParseExchangeIdError;
+    type Err = Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self(s.to_owned()))
@@ -58,6 +57,7 @@ pub mod market_depth {
     use serde::{de::Error, Deserialize, Serialize};
 
     use crate::exchange::Primary;
+    use crate::payload::ParsePayloadError;
 
     #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
     #[serde(tag = "operation")]
@@ -72,18 +72,14 @@ pub mod market_depth {
     }
 
     impl TryFrom<(i64, CompleteEntry)> for Operation {
-        type Error = anyhow::Error;
+        type Error = ParsePayloadError;
 
         fn try_from(value: (i64, CompleteEntry)) -> Result<Self, Self::Error> {
             Ok(match value.0 {
                 0 => Self::Insert(value.1),
                 1 => Self::Update(value.1),
                 2 => Self::Delete(value.1),
-                _ => {
-                    return Err(anyhow::Error::msg(
-                        "Invalid int encountered while parsing operation",
-                    ))
-                }
+                _ => return Err(ParsePayloadError::Operation),
             })
         }
     }
@@ -110,7 +106,7 @@ pub mod market_depth {
     }
 
     impl TryFrom<(u32, u64, f64, f64)> for Entry {
-        type Error = anyhow::Error;
+        type Error = ParsePayloadError;
 
         fn try_from(value: (u32, u64, f64, f64)) -> Result<Self, Self::Error> {
             Ok(match value.0 {
@@ -124,9 +120,7 @@ pub mod market_depth {
                     price: value.2,
                     size: value.3,
                 }),
-                _ => Err(anyhow::Error::msg(
-                    "Invalid int encountered while parsing side",
-                ))?,
+                _ => Err(ParsePayloadError::Entry)?,
             })
         }
     }
@@ -282,7 +276,7 @@ pub struct Last {
 /// A single position, comprising a single security and details about its current value, P&L, etc.
 pub struct Position {
     /// The ID of the underlying contract.
-    pub contract: Proxy<Contract>,
+    pub contract: ExchangeProxy<Contract>,
     /// The number of contracts owned.
     pub position: f64,
     /// The current market price of each contract.
@@ -303,7 +297,7 @@ pub struct Position {
 /// A single position, comprising a single security and a few details about its cost, account, etc.
 pub struct PositionSummary {
     /// The underlying contract
-    pub contract: Proxy<Contract>,
+    pub contract: ExchangeProxy<Contract>,
     /// The number of contracts owned.
     pub position: f64,
     /// The average cost per contract for the entire position.
@@ -362,6 +356,25 @@ pub enum OrderStatus {
     Inactive(OrderStatusCore),
 }
 
+impl TryFrom<(&str, OrderStatusCore)> for OrderStatus {
+    type Error = ParsePayloadError;
+
+    fn try_from(value: (&str, OrderStatusCore)) -> Result<Self, Self::Error> {
+        Ok(match value.0 {
+            "ApiPending" => OrderStatus::ApiPending(value.1),
+            "PendingSubmit" => OrderStatus::PendingSubmit(value.1),
+            "PendingCancel" => OrderStatus::PendingCancel(value.1),
+            "PreSubmitted" => OrderStatus::PreSubmitted(value.1),
+            "Submitted" => OrderStatus::Submitted(value.1),
+            "ApiCancelled" => OrderStatus::ApiCancelled(value.1),
+            "Cancelled" => OrderStatus::Cancelled(value.1),
+            "Filled" => OrderStatus::Filled(value.1),
+            "Inactive" => OrderStatus::Inactive(value.1),
+            s => return Err(ParsePayloadError::OrderStatus(s.to_owned())),
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
 /// The core fields of an Order's Status
 pub struct OrderStatusCore {
@@ -398,17 +411,16 @@ pub struct Fill {
 /// Indicates whether an order is being held because IBKR is trying to locate shares for a short sale.
 pub struct Locate;
 
-#[derive(Debug, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-/// An error that represents an invalid order status.
-pub struct ParseOrderStatusError(pub String);
+impl FromStr for Locate {
+    type Err = ParsePayloadError;
 
-impl std::fmt::Display for ParseOrderStatusError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Invalid order status message: {}", self.0)
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "locate" => Ok(Locate),
+            s => Err(ParsePayloadError::Locate(s.to_owned())),
+        }
     }
 }
-
-impl std::error::Error for ParseOrderStatusError {}
 
 #[allow(non_snake_case, missing_docs)]
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]

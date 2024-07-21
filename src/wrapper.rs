@@ -5,7 +5,7 @@ use ibapi_macros::debug_trait;
 
 use crate::account::{Attribute, TagValue};
 use crate::client::ActiveClient;
-use crate::contract::{Contract, Proxy};
+use crate::contract::{Contract, ExchangeProxy};
 use crate::execution::Execution;
 use crate::payload::{
     self, Bar, ExchangeId, HistogramEntry, OrderStatus, Pnl, PnlSingle, Position, PositionSummary,
@@ -172,7 +172,7 @@ pub trait LocalWrapper {
     fn open_order(
         &mut self,
         order_id: i64,
-        proxy: Proxy<Contract>,
+        proxy: ExchangeProxy<Contract>,
         client_id: i64,
         parent_id: Option<i64>,
         permanent_id: i64,

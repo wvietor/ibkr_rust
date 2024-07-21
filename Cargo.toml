@@ -11,14 +11,14 @@ categories = ["finance"]
 
 [dependencies]
 ibapi_macros = { version="0.1.0", path= "ibkr_rust_macros" }
-tokio = { version = "1.36.0", features = ["full"] }
-tokio-util = { version = "0.7.10", features = ["full"] }
-toml = "0.8.12"
-serde = { version = "1.0.197", features = ["derive"] }
-chrono = { version = "0.4.35", features = ["serde"] }
+tokio = { version = "1.38.1", features = ["full"] }
+tokio-util = { version = "0.7.11", features = ["full"] }
+toml = "0.8.15"
+serde = { version = "1.0.204", features = ["derive"] }
+chrono = { version = "0.4.38", features = ["serde"] }
 crossbeam = "0.8.4"
-bytes = "1.5.0"
-anyhow = "1.0.81"
-itoa = "1.0.10"
-ryu = "1.0.17"
-trait-variant = "0.1.1"
+bytes = "1.6.1"
+itoa = "1.0.11"
+ryu = "1.0.18"
+trait-variant = "0.1.2"
+thiserror = "1.0.63"

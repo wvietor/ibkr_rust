@@ -3,7 +3,7 @@ use chrono::Utc;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 
-use crate::contract::{Contract, ContractType, Proxy};
+use crate::contract::{Contract, ContractType, ExchangeProxy};
 use crate::exchange::Primary;
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -70,7 +70,7 @@ impl std::str::FromStr for OrderSide {
 /// Contains the core fields relating to an [`Execution`]. which occurs when a trade is made.
 pub struct Exec {
     /// The contract on which the trade was made.
-    pub contract: Proxy<Contract>,
+    pub contract: ExchangeProxy<Contract>,
     /// The ID of the order that produced the execution.
     pub order_id: i64,
     /// The execution ID.
