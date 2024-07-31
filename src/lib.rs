@@ -12,6 +12,13 @@
     clippy::single_char_lifetime_names
 )]
 
+pub(crate) use tracing::{
+    debug, debug_span, error, error_span, event, info, info_span, instrument, span, trace,
+    trace_span, warn, warn_span, Level,
+};
+pub(crate) use tracing_test::traced_test;
+pub(crate) use {tracing, tracing_test};
+
 /// Contains types related to account information.
 pub mod account;
 /// Contains the all-important [`client::Client`] struct and its methods, which facilitate
