@@ -1,18 +1,21 @@
 use ibapi::client::{ActiveClient, Builder, Host, Mode};
-use ibapi::prelude::Tag;
 use ibapi::wrapper::{CancelToken, Initializer, Wrapper};
 // use metadata::LevelFilter;
 use std::future::Future;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
 use tokio;
-use tracing_subscriber::EnvFilter;
+
 #[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 struct ScannerWrapper;
 
 impl ibapi::wrapper::Wrapper for ScannerWrapper {
     fn scanner_parameters(&mut self, req_id: i64, xml: String) -> impl Future + Send {
-        println!("scanner_parameters():");
+        println!(
+            "WRAPPER:scanner_parameters(): req_id:{req_id},  xml.len(): {}",
+            xml.len(),
+        );
+
         async move {
             let contains_tags = xml.contains("ScanParameterResponse")
                 && xml.contains("InstrumentList")
@@ -33,7 +36,10 @@ impl ibapi::wrapper::Initializer for ScannerWrapper {
         _cancel_loop: CancelToken,
     ) -> impl Future<Output = (Self::Wrap<'_>, Self::Recur<'_>)> + Send {
         async move {
-            let req_status = client.req_scanner_parameters().await;
+            for i in 0..10 {
+                let req_status = client.req_scanner_parameters().await;
+            }
+
             (self, ())
         }
     }
@@ -47,12 +53,7 @@ async fn test_req_scanner_parameters() -> Result<(), Box<dyn std::error::Error>>
         .remote(ScannerWrapper)
         .await;
 
-    // println!(" client.req_scanner_parameters().await");
-    // let req_status = client.req_scanner_parameters().await;
-    // println!(" client.req_scanner_parameters().await");
-    // println!("req_status2:{:?}", &req_status);
-
-    tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
     client.cancel(); //.await?;
     Ok(())
 }
