@@ -32,7 +32,7 @@ impl Reader {
                     if let Ok(Ok(len)) = self.inner.read_u32().await.map(usize::try_from) {
                         let mut buf = BytesMut::with_capacity(len);
 
-                        const MAX_MESSAGE_SIZE: usize = 10_000_000;
+                        const MAX_MESSAGE_SIZE: usize = 3_000_000;
                         if len > MAX_MESSAGE_SIZE {
                             warn!("Reader:run() -> Received message length ({}) exceeds the maximum allowed size", len);
                         }
