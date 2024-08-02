@@ -1037,7 +1037,7 @@ pub trait Local: wrapper::LocalWrapper {
             //     &xml.len()
             // );
 
-            let _ = xml.replace("\\n", "\n").replace("\\t", "\t");
+            let _ = xml.replace("\\n", "\n").replace("\\t", "\t"); // Temporary solution
             wrapper.scanner_parameters(req_id, xml).await;
             Ok(())
         }
