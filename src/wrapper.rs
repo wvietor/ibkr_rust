@@ -45,6 +45,11 @@ pub trait LocalWrapper {
     fn current_time(&mut self, req_id: i64, datetime: DateTime<Utc>) -> impl Future {}
     /// The callback message that corresponds to ETF Net Asset Value (NAV) data.
     fn etf_nav(&mut self, req_id: i64, nav: tick::EtfNav) -> impl Future {}
+    ///
+    fn req_scanner_parameters(&mut self, req_id: i64) -> impl Future + Send {}
+    ///
+    fn scanner_parameters(&mut self, req_id: i64, xml: String) -> impl Future + Send {}
+
     /// The callback message that corresponds to price data from [`crate::client::Client::req_market_data`].
     fn price_data(&mut self, req_id: i64, price: Class<Price>) -> impl Future {}
     /// The callback message that corresponds to size data from [`crate::client::Client::req_market_data`].

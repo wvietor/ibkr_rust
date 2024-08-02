@@ -1518,7 +1518,7 @@ impl std::str::FromStr for IbTimeZone {
             "Europe/Mariehamn" => Self::EuropeMariehamn,
             "Europe/Minsk" => Self::EuropeMinsk,
             "Europe/Monaco" => Self::EuropeMonaco,
-            "Europe/Moscow" => Self::EuropeMoscow,
+            "Europe/Moscow" | "MSK" => Self::EuropeMoscow,
             "Europe/Nicosia" => Self::EuropeNicosia,
             "Europe/Oslo" => Self::EuropeOslo,
             "Europe/Paris" => Self::EuropeParis,

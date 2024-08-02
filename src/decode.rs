@@ -1,3 +1,4 @@
+use super::*;
 use core::future::Future;
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
@@ -1023,7 +1024,21 @@ pub trait Local: wrapper::LocalWrapper {
         wrapper: &mut Self,
     ) -> impl Future<Output = DecodeResult> {
         async move {
-            println!("{:?}", &fields);
+            // println!("fields: {:?}", &fields);
+            decode_fields!(
+                fields =>
+                    req_id @ 1: i64,
+                    xml @ 0: String
+            );
+
+            // info!(
+            //     "scanner_parameters_msg() -> req_id: {}, xml.len:{}",
+            //     &req_id,
+            //     &xml.len()
+            // );
+
+            let _ = xml.replace("\\n", "\n").replace("\\t", "\t"); // Temporary solution
+            wrapper.scanner_parameters(req_id, xml).await;
             Ok(())
         }
     }
@@ -2793,7 +2808,10 @@ pub(crate) struct DecodeContext {
 impl DecodeError {
     #[inline]
     pub(crate) fn with_context(self, msg: &'static str) -> DecodeContext {
-        DecodeContext { decode_error: self, function_name: msg }
+        DecodeContext {
+            decode_error: self,
+            function_name: msg,
+        }
     }
 }
 
