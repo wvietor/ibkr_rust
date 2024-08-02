@@ -81,6 +81,9 @@ mod reader;
 pub mod tick;
 /// Contains a [`chrono::TimeZone`] enum to represent all the possible timezones available in the API.
 pub mod timezone;
+
+pub mod scanner;
+
 /// Contains the definition of the [`wrapper::LocalWrapper`] and [`wrapper::Wrapper`] traits. Implementing these traits for a
 /// type allows users to customize callback behavior.
 pub mod wrapper;
