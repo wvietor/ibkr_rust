@@ -1024,17 +1024,20 @@ pub trait Local: wrapper::LocalWrapper {
         wrapper: &mut Self,
     ) -> impl Future<Output = DecodeResult> {
         async move {
+            // println!("fields: {:?}", &fields);
             decode_fields!(
                 fields =>
                     req_id @ 1: i64,
                     xml @ 0: String
             );
-            info!(
-                "scanner_parameters_msg() -> req_id: {}, xml.len:{}",
-                &req_id,
-                &xml.len()
-            );
-            //xml.replace("\\n", "\n").replace("\\t", "\t"); ???
+
+            // info!(
+            //     "scanner_parameters_msg() -> req_id: {}, xml.len:{}",
+            //     &req_id,
+            //     &xml.len()
+            // );
+
+            let _ = xml.replace("\\n", "\n").replace("\\t", "\t");
             wrapper.scanner_parameters(req_id, xml).await;
             Ok(())
         }
