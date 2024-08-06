@@ -12,6 +12,7 @@
     clippy::single_char_lifetime_names
 )]
 
+pub(crate) use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
 pub(crate) use tracing::{
     debug, debug_span, error, error_span, event, info, info_span, instrument, span, trace,
     trace_span, warn, warn_span, Level,

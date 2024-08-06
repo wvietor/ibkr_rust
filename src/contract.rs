@@ -4,7 +4,7 @@ use std::{num::ParseIntError, str::FromStr};
 
 use chrono::NaiveDate;
 use ibapi_macros::{make_getters, Security};
-use serde::{Deserialize, Deserializer, Serialize, Serializer, ser::SerializeStruct};
+use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
 use crate::contract::proxy_indicators::{HasExchange, NoExchange};
@@ -310,11 +310,14 @@ pub async fn new<S: Security>(
     query: Query,
 ) -> Result<S, NewSecurityError> {
     client.send_contract_query(query).await?;
-    client.recv_contract_query()
+    client
+        .recv_contract_query()
         .await
         .ok_or(NewSecurityError::BadResponse)?
         .try_into()
-        .map_err(|e: <S as TryFrom<Contract>>::Error| NewSecurityError::UnexpectedSecurityType(e.into()))
+        .map_err(|e: <S as TryFrom<Contract>>::Error| {
+            NewSecurityError::UnexpectedSecurityType(e.into())
+        })
 }
 
 #[derive(Debug, Error)]
@@ -1085,7 +1088,9 @@ impl<S: Security + Clone + Debug, E: ProxyExchange> TryFrom<SerProxyHelp> for Pr
                 exchange: exchange.ok_or(SerializeProxyError::MissingData("exchange"))?,
                 sector: String::default(),
                 valid_exchanges: Vec::default(),
-            }.try_into().map_err(|e: <S as TryFrom<Stock>>::Error| e.into()),
+            }
+            .try_into()
+            .map_err(|e: <S as TryFrom<Stock>>::Error| e.into()),
             ContractType::Index => Index {
                 contract_id,
                 min_tick: f64::default(),
@@ -1096,7 +1101,9 @@ impl<S: Security + Clone + Debug, E: ProxyExchange> TryFrom<SerProxyHelp> for Pr
                 long_name: String::default(),
                 order_types: Vec::default(),
                 valid_exchanges: Vec::default(),
-            }.try_into().map_err(|e: <S as TryFrom<Index>>::Error| e.into()),
+            }
+            .try_into()
+            .map_err(|e: <S as TryFrom<Index>>::Error| e.into()),
             ContractType::Commodity => Commodity {
                 contract_id,
                 min_tick: f64::default(),
@@ -1109,7 +1116,9 @@ impl<S: Security + Clone + Debug, E: ProxyExchange> TryFrom<SerProxyHelp> for Pr
                 long_name: String::default(),
                 order_types: Vec::default(),
                 valid_exchanges: Vec::default(),
-            }.try_into().map_err(|e: <S as TryFrom<Commodity>>::Error| e.into()),
+            }
+            .try_into()
+            .map_err(|e: <S as TryFrom<Commodity>>::Error| e.into()),
             ContractType::Crypto => Crypto {
                 contract_id,
                 min_tick: f64::default(),
@@ -1121,7 +1130,9 @@ impl<S: Security + Clone + Debug, E: ProxyExchange> TryFrom<SerProxyHelp> for Pr
                 long_name: String::default(),
                 order_types: Vec::default(),
                 valid_exchanges: Vec::default(),
-            }.try_into().map_err(|e: <S as TryFrom<Crypto>>::Error| e.into()),
+            }
+            .try_into()
+            .map_err(|e: <S as TryFrom<Crypto>>::Error| e.into()),
             ContractType::Forex => Forex {
                 contract_id,
                 min_tick: f64::default(),
@@ -1134,7 +1145,9 @@ impl<S: Security + Clone + Debug, E: ProxyExchange> TryFrom<SerProxyHelp> for Pr
                 long_name: String::default(),
                 order_types: Vec::default(),
                 valid_exchanges: Vec::default(),
-            }.try_into().map_err(|e: <S as TryFrom<Forex>>::Error| e.into()),
+            }
+            .try_into()
+            .map_err(|e: <S as TryFrom<Forex>>::Error| e.into()),
             ContractType::SecFuture => SecFuture {
                 contract_id,
                 min_tick: f64::default(),
@@ -1151,7 +1164,9 @@ impl<S: Security + Clone + Debug, E: ProxyExchange> TryFrom<SerProxyHelp> for Pr
                 long_name: String::default(),
                 order_types: Vec::default(),
                 valid_exchanges: Vec::default(),
-            }.try_into().map_err(|e: <S as TryFrom<SecFuture>>::Error| e.into()),
+            }
+            .try_into()
+            .map_err(|e: <S as TryFrom<SecFuture>>::Error| e.into()),
             ContractType::SecOption => {
                 let inner = SecOptionInner {
                     contract_id,
@@ -1176,7 +1191,9 @@ impl<S: Security + Clone + Debug, E: ProxyExchange> TryFrom<SerProxyHelp> for Pr
                     SecOptionClass::Call => SecOption::Call(inner),
                     SecOptionClass::Put => SecOption::Put(inner),
                 }
-            }.try_into().map_err(|e: <S as TryFrom<SecOption>>::Error| e.into()),
+            }
+            .try_into()
+            .map_err(|e: <S as TryFrom<SecOption>>::Error| e.into()),
         };
 
         Ok(Self {
@@ -1408,8 +1425,9 @@ pub enum ContractType {
     #[serde(rename = "OPT")]
     /// A [`SecOption`] contract.
     SecOption,
+    // #[serde(rename = "BOND")]
+    // Bond,
     //FutureSecOption,
-    //Bond,
     //MutualFund,
     #[serde(rename = "CMDTY")]
     /// A [`Commodity`] contract.
@@ -1436,6 +1454,7 @@ impl FromStr for ContractType {
             "IND" => Self::Index,
             "FUT" => Self::SecFuture,
             "OPT" => Self::SecOption,
+            // "BOND" => Self::Bond,
             "CMDTY" => Self::Commodity,
             v => return Err(ParseContractTypeError(v.to_owned())),
         })
