@@ -7,6 +7,7 @@ use tracing_test::traced_test;
 
 const REQUESTS_COUNT: u8 = 10;
 
+
 #[derive(Debug, Default)]
 struct ScannerWrapper(u8);
 
@@ -16,7 +17,9 @@ impl ibapi::wrapper::Wrapper for ScannerWrapper {
             let contains_tags =
                 xml.contains("ScanParameterResponse") && xml.contains("/ScanParameterResponse");
             assert!(contains_tags);
+
             self.0 += 1;
+
             println!(
                 "{}/{REQUESTS_COUNT} Wrapper:scanner_parameters(): contains_tags:{contains_tags} req_id:{req_id},  xml.len(): {}",
                 self.0,
@@ -44,6 +47,7 @@ impl ibapi::wrapper::Initializer for ScannerWrapper {
         }
     }
 }
+
 #[traced_test]
 #[tokio::test]
 async fn test_req_scanner_parameters() -> Result<(), Box<dyn std::error::Error>> {

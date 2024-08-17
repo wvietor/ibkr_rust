@@ -1,0 +1,1462 @@
+use ibapi_macros::typed_variants;
+use quick_xml::Decoder;
+use scanner_subscription::ScannerDate;
+use tracing_subscriber::fmt::format;
+
+use super::*;
+use quick_xml::events::{BytesStart, Event};
+use quick_xml::Reader;
+use std::collections::{HashMap, HashSet};
+use std::error::Error;
+use std::fs;
+use std::path::Path;
+use std::str::ParseBoolError;
+
+fn testtttt() -> Result<(),ScannerParametersError>{
+    use scanner_subscription::ScannerSubscription;
+    
+    let scanner_wo_filters = ScannerSubscription::us_stocks().us_major().top_perc_gain();
+    let scanner_w_filters = scanner_wo_filters.clone().market_cap_above1e6(1000.0).price_below(100.0);
+
+    
+    Ok(())
+}
+#[derive(Debug, Clone)]
+struct Instrument {
+    name: String,
+    type_: String,
+    sec_type: String,
+    nscan_sec_type: String,
+    filters: Vec<String>,
+    group: String,
+    short_name: String,
+    cloud_scan_not_supported: bool,
+    feature_codes: String,
+}
+
+#[derive(Debug, Clone)]
+struct Location {
+    display_name: String,
+    short_name: String,
+    tooltip: String,
+    raw_price_only: String,
+    location_code: String,
+    instrument: String,
+    route_exchange: String,
+    delayed_only: String,
+    access: String,
+    child_locations: Vec<Location>,
+}
+
+#[derive(Debug, Clone)]
+struct ScanType {
+    display_name: String,
+    scan_code: String,
+    instruments: Vec<String>,
+    search_name: String,
+    access: String,
+    // feature?
+    // settings?
+    // respSizeLimit?
+    // snapshotSizeLimit?
+    // delayedAvail?
+    // searchDefault?
+    location_filter: Vec<String>,
+}
+
+#[derive(Debug)]
+struct Filter {
+    pub id: String,
+    pub category: String,
+    pub access: String,
+    pub abstract_fields: Vec<AbstractField>,
+}
+
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+enum ScannerFieldType {
+    Boolean,
+    Combo,
+    ConvertedCombo, // only 1 filer: ISSUER_COUNTRY_CODE; // if ComboField$ConvertedComboField -> scanner.filter.StringField -> Combo
+    Conid,     // only 1 filter: UNDCONID
+    Date,     // valid variants mm/yyyy or yyyymmdd
+    Double,
+    Int,
+    String,
+    StringList, // only 1 filter: BOND_STK_SYMBOL
+    SubstrList, // only 1 filter: BOND_ISSUER
+
+    NotYetImplementedOrInitState(String),
+}
+
+impl From<&str> for ScannerFieldType {
+    fn from(value: &str) -> Self {
+        match value {
+            "scanner.filter.BooleanField" => ScannerFieldType::Boolean,
+            "scanner.filter.ComboField" => ScannerFieldType::Combo,
+            "scanner.filter.StringField" => ScannerFieldType::Combo, // (!)
+            "scanner.filter.ComboField$ConvertedComboField" => ScannerFieldType::ConvertedCombo, // its StringField!!! -> Combo
+            "scanner.filter.ConidField" => ScannerFieldType::Conid,
+            "scanner.filter.DateField" => ScannerFieldType::Date,
+            "scanner.filter.DoubleField" => ScannerFieldType::Double,
+            "scanner.filter.IntField" => ScannerFieldType::Int,
+            // "scanner.filter.StringField" => ScannerFieldType::String,
+            "scanner.filter.StringListField" => ScannerFieldType::StringList,
+            "scanner.filter.SubstrListField" => ScannerFieldType::SubstrList,
+            new => {
+                warn!("Not covered filters field type: {}", new);
+                ScannerFieldType::NotYetImplementedOrInitState(new.to_string())
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct AbstractField {
+    parameter_type: ScannerFieldType,
+    code: String,
+    code_not: String,
+    display_name: String,
+    tooltip: String,
+    separator: String,
+    combo_values: Vec<ComboValue>,
+}
+
+#[derive(Debug, Clone)]
+struct ComboValue {
+    code: String,
+    display_name: String,
+    tooltip: String,
+    default: String,
+    // synthetic_all: bool,
+}
+
+use thiserror::Error;
+
+
+#[derive(Debug, Error)]
+pub enum ScannerParametersError {
+    #[error("Failed parsing Int. Cause {0}")]
+    /// Failed parsing Int.
+    ParsingDate(#[from] std::num::ParseIntError),
+
+    #[error("Incorrect day number in date. Cause {0}")]
+    /// Incorrect month number in date.
+    IncorrectDayNumberInDate(u8),
+    #[error("Incorrect month number in date. Cause {0}")]
+    /// Incorrect month number in date.
+    IncorrectMonthNumberInDate(u8),
+    #[error("Incorrect year number in date. Cause {0}")]
+    /// Incorrect year number in date.
+    IncorrectYearNumberInDate(u16),
+    #[error("Init state")]
+    /// Init state
+    InitState,
+    #[error("No result")]
+    /// No result
+    NoResult,
+    #[error("Cause {0}")]
+    /// quick_xml::Error error
+    QuickXml(#[from] quick_xml::Error),
+}
+
+
+
+static EMPTY_STR: &str = "";
+
+pub fn to_snake_case(s: &str) -> String {
+    let mut result = String::new();
+    let mut prev_char_is_lowercase = false;
+
+    for (i, c) in s.char_indices() {
+        if c == '(' || c == ')' {
+            continue;
+        }
+        if c.is_uppercase() {
+            if i > 0 && prev_char_is_lowercase {
+                result.push('_');
+            }
+            result.push(c.to_lowercase().next().unwrap());
+        } else if c.is_whitespace() || c == '-' || c == '.' {
+            result.push('_');
+        } else {
+            result.push(c);
+        }
+        prev_char_is_lowercase = c.is_lowercase();
+    }
+
+    result
+}
+
+pub fn to_camel_case_save_acronyms(s: &str) -> String {
+    let mut result = String::new();
+    let mut capitalize_next = true;
+
+    for c in s.chars() {
+        if c.is_alphanumeric() {
+            if capitalize_next || c.is_uppercase() {
+                result.extend(c.to_uppercase());
+                capitalize_next = false;
+            } else {
+                result.extend(c.to_lowercase());
+            }
+        } else {
+            capitalize_next = true;
+        }
+    }
+
+    result
+}
+
+pub fn camel_to_snake_case(s: &str) -> String {
+    let mut result = String::new();
+    let mut chars = s.chars().peekable();
+
+    while let Some(current_char) = chars.next() {
+        if !result.is_empty() && result.chars().last().unwrap() != '_' {
+            result.push('_');
+            }
+            if current_char.is_uppercase() {
+            result.push(current_char.to_lowercase().next().unwrap());
+        } else {
+            result.push(current_char);
+        }
+
+        if let Some(&next_char) = chars.peek() {
+            if next_char.is_uppercase() && current_char.is_lowercase() {
+                result.push('_');
+            }
+        }
+    }
+    result.to_lowercase()
+}
+
+pub fn capitalize_first_letter(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+    }
+}
+
+
+
+#[traced_test]
+#[tokio::test]
+async fn test_case_manipulation() {
+    // println!("camel_to_snake_case:");
+    // println!("{}", camel_to_snake_case("bondNextCallDateAbove"));
+    // println!("{}", camel_to_snake_case("marketCapBelow1e6"));
+    // println!("{}", camel_to_snake_case("esgControversiesScoreAbove"));
+
+    // println!("{}", camel_to_snake_case("esgCorpGovPillarScoreAbove"));
+
+    // println!("\n capitalize_first_letter:");
+    // println!("{}", capitalize_first_letter("bondNextCallDateAbove"));
+    // println!("{}", capitalize_first_letter("marketCapBelow1e6"));
+    // println!("{}", capitalize_first_letter("esgControversiesScoreAbove"));
+    // println!("{}", capitalize_first_letter("esgCorpGovPillarScoreAbove"));
+
+    // println!("\n to_snake_case:");
+    // let inputs = vec![
+    //     "US Stocks",
+    //     "US Equity ETFs",
+    //     "US Fixed Income ETFs",
+    //     "US Futures",
+    //     "US Indexes",
+    //     "Corporate Bonds",
+    //     "US CDs",
+    //     "US Agency Bonds",
+    //     "US Treasuries",
+    //     "US Municipal Bonds",
+    //     "Non-US Sovereign Bonds",
+    //     "US SBLs",
+    //     "Mutual Funds",
+    //     "America Non-US Stocks",
+    //     "America Non-US Futures",
+    //     "America Non-US SSFs",
+    //     "Europe Stocks",
+    //     "Europe Futures",
+    //     "Europe Indexes",
+    //     "Europe SSFs",
+    //     "MidEast Stocks",
+    //     "Asia Stocks",
+    //     "Asia Futures",
+    //     "Asia Indexes",
+    //     "Asia SSFs",
+    //     "Native Combos",
+    //     "Global Futures",
+    //     "Global Indexes",
+    //     "Global SSFs",
+    //     "Global Stocks",
+    // ];
+
+    // for input in inputs {
+    //     println!("{}: {}", input, to_snake_case(input));
+    // }
+
+    // println!("camel_to_snake_case:");
+    // println!("{}", "bondNextCallDateAbove".to_case(Case::Snake));
+    // println!("{}", "marketCapBelow1e6".to_case(Case::Snake));
+    // println!("{}", "esgControversiesScoreAbove".to_case(Case::Snake));
+    // println!("{}", "esgCorpGovPillarScoreAbove".to_case(Case::Snake));
+
+    // println!("\n capitalize_first_letter:");
+    // println!("{}", "marketCapBelow1e6".to_case(Case::UpperCamel));
+    // println!("{}", "esgControversiesScoreAbove".to_case(Case::UpperCamel));
+    // println!("{}", "esgCorpGovPillarScoreAbove".to_case(Case::UpperCamel));
+    
+    println!("\n to_snake_case:");
+    let inputs = vec![
+        "US Stocks",
+        "US Equity ETFs",
+        "US Fixed Income ETFs",
+        "US Futures",
+        "US Indexes",
+        "Corporate Bonds",
+        "US CDs",
+        "US Agency Bonds",
+        "US Treasuries",
+        "US Municipal Bonds",
+        "Non-US Sovereign Bonds",
+        "US SBLs",
+        "Mutual Funds",
+        "America Non-US Stocks",
+        "America Non-US Futures",
+        "America Non-US SSFs",
+        "Europe Stocks",
+        "Europe Futures",
+        "Europe Indexes",
+        "Europe SSFs",
+        "MidEast Stocks",
+        "Asia Stocks",
+        "Asia Futures",
+        "Asia Indexes",
+        "Asia SSFs",
+        "Native Combos",
+        "Global Stocks",
+        "Global Futures",
+        "Global Indexes",
+        "Global SSFs",
+        ];
+        
+        for input in inputs {
+            println!(
+                "{} - {} - {}",
+                input,
+                to_snake_case(input),
+                to_camel_case_save_acronyms(input)
+                );
+                }
+                }
+                
+// #[tokio::test]
+// #[traced_test]
+#[test]
+fn test_parse_xml() {
+    let scanner_parameters = parse_xml();
+    
+    let Ok(ParsedParameters {
+        all_instruments,
+        all_locations,
+        all_scan_types,
+        all_filters,
+    }) = parse_xml()
+    else {
+       println!("Something went wrong");
+       return;
+    };
+    
+    let all_instruments = all_instruments.unwrap();
+    let all_locations = all_locations.unwrap();
+    let all_scan_types = all_scan_types.unwrap();
+    let all_filters = all_filters.unwrap();
+
+    let mut gen_instrument = vec![];
+    let mut gen_location = vec![];
+    let mut gen_scan_code = vec![];
+    let mut gen_enums = vec![];
+    let mut gen_filters = vec![];
+    
+    let mut unimplemented_filters = HashSet::new();
+
+    let mut map_instrument_code_to_instrument_struct_name = HashMap::new();
+    let mut map_instrument_to_locations_struct_names: HashMap<String, Vec<String>> = HashMap::new();
+    let postfix_select_location = "SelectLocation";
+    let postfix_select_location_next = "SelectScanCode".to_string();
+    
+    // === INSTRUMENTS ===
+
+    gen_instrument
+    .push("impl_select_instrument![ ScannerSubscription =>".to_string());
+    
+    for value in all_instruments.iter() {
+        let Instrument {
+            name,
+            type_,
+            sec_type,
+            nscan_sec_type,
+            filters,
+            group,
+            short_name,
+            cloud_scan_not_supported,
+            feature_codes,
+            } = value;
+            
+            // println!("{}", "bondNextCallDateAbove".to_case(Case::UpperCamel));
+        let mut struct_instrument_name = to_camel_case_save_acronyms(name);
+
+        let mut struct_name_select_location = struct_instrument_name.clone();
+        struct_name_select_location.push_str(&postfix_select_location);
+        
+        map_instrument_code_to_instrument_struct_name.insert(type_, struct_instrument_name);
+
+        let mut row_instrument = String::new();
+        row_instrument.push_str("(\"");
+        row_instrument.push_str(&name.to_string());
+        row_instrument.push_str("\",");
+        row_instrument.push_str(&to_snake_case(name));
+        row_instrument.push_str(",");
+        row_instrument.push_str(&struct_name_select_location);
+        row_instrument.push_str(",\"");
+        row_instrument.push_str(type_);
+        row_instrument.push_str("\"),");
+
+        gen_instrument.push(row_instrument);
+
+        gen_location.push(format!(
+            "\n impl_select_location![ {} =>",
+            struct_name_select_location
+        ));
+        
+        // === LOCATIONS ===
+        if let Some(location) = all_locations.get(type_) {
+            recursion_over_location(
+                location,
+                &mut gen_location,
+                &postfix_select_location_next,
+                &mut map_instrument_to_locations_struct_names,
+            );
+            gen_location.push("]; \n".to_string());
+        }
+
+        continue;
+    }
+    gen_instrument.push("];".to_string());
+
+
+    // === SCAN CODES ===
+    
+    for (key, value) in all_scan_types.iter() {
+        let ScanType {
+            display_name,
+            scan_code,
+            instruments,
+            search_name,
+            access,
+            location_filter,
+        } = value;
+
+        let func_name = to_snake_case(scan_code);
+
+        let mut row_scan_code = String::new();
+        row_scan_code.push_str("impl_select_scan_code![\"");
+        row_scan_code.push_str(&display_name);
+        row_scan_code.push_str("\",\"");
+        row_scan_code.push_str(search_name);
+        row_scan_code.push_str("\",");
+        row_scan_code.push_str(&func_name);
+        row_scan_code.push_str(",\"");
+        row_scan_code.push_str(scan_code);
+        row_scan_code.push_str("\" => (");
+
+        for i_string in instruments {
+            if let Some(struct_names) = map_instrument_to_locations_struct_names.get(i_string) {
+                for select_scan_code_struct_name in struct_names {
+                    //gen_scan_code
+
+                    row_scan_code.push_str(&select_scan_code_struct_name);
+                    row_scan_code.push_str(",");
+                    // row_scan_code.push_str(i_string);
+                    // row_scan_code.push_str(",");
+
+                    //i_string(instrument code) -> (Vec<scan codes>)
+                    // map_instrument_code_to_instrument_struct_name
+
+                    // println!(
+                    //     "({},{},{},{},{}),",
+                    //     display_name,
+                    //     search_name,
+                    //     func_name,
+                    //     select_scan_code_struct_name,
+                    //     scan_code
+                    // );
+                }
+
+                // for i in &all_instruments {
+                //     // if i.type_ {}
+                // }
+            }
+        }
+        row_scan_code.pop();
+        row_scan_code.push_str(")];\n");
+        gen_scan_code.push(row_scan_code);
+    }
+
+
+    // === FILTERS ===
+
+    
+    gen_filters.push("impl_select_filters![".to_string());
+
+    #[allow(clippy::collapsible_if)]
+    for (ref key, ref value) in all_filters.iter() {
+        for abstract_field in value.abstract_fields.iter() {
+
+            // FIXME: FieldType::ConvertedCombo missing;
+            // if value.id.eq("ISSUER_COUNTRY_CODE") {
+            // println!("{key} - value \n {:#?}", value);
+
+            let filted_id = &value.id;
+
+            let AbstractField {
+                parameter_type,
+                code,
+                code_not,
+                display_name,
+                tooltip,
+                separator,
+                combo_values,
+            } = abstract_field;
+
+            // ! Copy all below? to filters v2
+
+            let parameter_struct_name = match  code.as_str() {
+                "bondAssetSubTypeStrBeginsWithOneOf"  => "BondAssetSubTypeStr",
+                "bondUSStateLike"  => "BondUSState",
+                c => &capitalize_first_letter(c),
+                };
+            let parameter_struct_name = parameter_struct_name.to_string().replace("Above", "").replace("Below", "");
+
+            let parameter_type =  match parameter_type {
+                ScannerFieldType::Combo | &ScannerFieldType::ConvertedCombo => parameter_struct_name,
+                ScannerFieldType::Double => "f64".to_string(),
+                ScannerFieldType::Int => "i64".to_string(),
+                ScannerFieldType::String => "String".to_string(),
+                ScannerFieldType::Boolean => "bool".to_string(),
+                ScannerFieldType::Conid => "u64".to_string(),
+                ScannerFieldType::Date => "ScannerDate".to_string(),
+                ScannerFieldType::StringList => "BondStkSymbols".to_string(),
+                ScannerFieldType::SubstrList => "BondIssuers".to_string(),
+                ScannerFieldType::NotYetImplementedOrInitState(_) => unreachable!()
+            };
+            
+            
+            let display_name = display_name.replace("&amp;", "n");
+
+
+
+            let doc = if !display_name.is_empty() && !tooltip.is_empty(){
+                format!("{display_name}. {tooltip}")
+            }else if display_name.is_empty() {
+                tooltip.to_string()
+            } else { display_name.to_string() };
+
+            let doc = format!("\"{}\"", doc);
+
+
+            let mut row_filter_parameter_struct = String::new();
+            row_filter_parameter_struct.push_str("(");
+            row_filter_parameter_struct.push_str(&to_snake_case(&code));
+            row_filter_parameter_struct.push_str(",\"");
+            row_filter_parameter_struct.push_str(&code);
+            row_filter_parameter_struct.push_str("\",");
+            row_filter_parameter_struct.push_str(&parameter_type);
+            row_filter_parameter_struct.push_str(",");
+            row_filter_parameter_struct.push_str(&doc);
+            row_filter_parameter_struct.push_str("),");
+            gen_filters.push(row_filter_parameter_struct);
+
+            // println!(
+            //     "({}, {}, {})",
+            //     &code, &parameter_type, &doc
+            //     );
+    
+            if !code_not.is_empty(){
+                let mut row_filter_parameter_struct = String::new();
+                row_filter_parameter_struct.push_str("(");
+                row_filter_parameter_struct.push_str(&to_snake_case(&code_not));
+                row_filter_parameter_struct.push_str(",\"");
+                row_filter_parameter_struct.push_str(&code_not);
+                row_filter_parameter_struct.push_str("\",");
+                row_filter_parameter_struct.push_str(&parameter_type);
+                row_filter_parameter_struct.push_str(",");
+                row_filter_parameter_struct.push_str(&doc);
+                row_filter_parameter_struct.push_str("),");
+                gen_filters.push(row_filter_parameter_struct);
+            // println!(
+            //     "({}, {}, {})",
+            //     &code_not, &parameter_type, &doc
+            //     );
+            }
+    
+            if abstract_field.combo_values.len() > 0 {
+
+                let mut row_filter_parameter_struct = String::new();
+                row_filter_parameter_struct.push_str("create_enums_for_filters![");
+                row_filter_parameter_struct.push_str(&parameter_type);
+                row_filter_parameter_struct.push_str(" => ");
+
+                // let mut combos = vec![];
+                for combo_value in &abstract_field.combo_values {
+                    let ComboValue {
+                        code,
+                        //Documentation 2
+                        display_name,
+                        //Documentation 1
+                        tooltip,
+                        default,
+                    } = combo_value;
+                    if default == "true" {
+                        continue;
+                    }
+
+                    let mut enum_var_name = if tooltip.is_empty() { display_name} else {tooltip} .replace("T-", "T").replace('-', "minus").replace('+', "plus");
+
+                    if enum_var_name.is_empty(){
+                        enum_var_name = code.clone();
+                    }
+
+                    row_filter_parameter_struct.push_str("(");
+                    row_filter_parameter_struct.push_str(&to_camel_case_save_acronyms(&enum_var_name));
+                    row_filter_parameter_struct.push_str(",\"");
+                    row_filter_parameter_struct.push_str(&code);
+                    row_filter_parameter_struct.push_str("\"),");
+                }
+                row_filter_parameter_struct.push_str("];\n");
+                gen_enums.push(row_filter_parameter_struct);
+                // println!("{id} - value \n {:#?}", value);
+                // println!("{key} - combo_values.len(): {}", abs.combo_values.len());
+                // }
+            }
+        }
+        // print!("]");
+    }
+    gen_filters.push("];".to_string());
+
+    // ! === INSTRUMENTS 2222222222222222222 ===
+    for value in all_instruments.iter() {
+        let Instrument {
+            name,
+            type_,
+            sec_type,
+            nscan_sec_type,
+            filters,
+            group,
+            short_name,
+            cloud_scan_not_supported,
+            feature_codes,
+            } = value; 
+
+        for filter_code in filters {
+            // type_ == instrument code
+            // f == filter code
+
+            let structs_name_for_impl_filters = map_instrument_to_locations_struct_names.get(type_);
+            
+            if let Some(filter) = all_filters.get(filter_code){
+                // println!("{}, {:?} -> {:?}",type_, filter, structs_name_for_impl_filters);
+                // println!("{}, {}, {:?}",type_, f,  filter);
+
+
+                for abstract_field in filter.abstract_fields.iter() {
+
+                    // FIXME: FieldType::ConvertedCombo missing;
+                    // if value.id.eq("ISSUER_COUNTRY_CODE") {
+                    // println!("{key} - value \n {:#?}", value);
+        
+                    let AbstractField {
+                        parameter_type,
+                        code,
+                        code_not,
+                        display_name,
+                        tooltip,
+                        separator,
+                        combo_values,
+                    } = abstract_field;
+                }        
+
+                // filter for impl here
+            }else {
+                unimplemented_filters.insert(filter_code);
+            }
+        
+        }
+    }
+    // ! === INSTRUMENTS 2222222222222222222 ===
+
+
+    // gen_instrument.iter().for_each(|gi| println!("{}", gi));
+    // gen_location.iter().for_each(|gi| println!("{}", gi));
+    // gen_scan_code.iter().for_each(|gi| println!("{}", gi));
+    // gen_enums.iter().for_each(|gi| println!("{}", gi));
+    
+    // gen_filters.iter().for_each(|gi| println!("{}", gi));
+
+    // println!("gen_scan_code: {}", gen_scan_code.len());
+
+
+
+    println!("");
+    println!("all_instruments: {}", &all_instruments.len());
+    println!("all_locations: {}", &all_locations.len());
+    println!("all_scan_types: {}", &all_scan_types.len());
+    println!("all_filters: {}", &all_filters.len());
+
+}
+
+fn recursion_over_location(
+    location: &Location,
+    all_location: &mut Vec<String>,
+    postfix_select_location_next: &String,
+    map_instrument_select_scan_code: &mut HashMap<String, Vec<String>>,
+) {
+    let Location {
+        display_name,
+        short_name,
+        tooltip,
+        raw_price_only,
+        location_code,
+        instrument,
+        route_exchange,
+        delayed_only,
+        access,
+        child_locations,
+    } = location;
+
+    let name = if !tooltip.is_empty() {
+        tooltip
+    } else {
+        display_name
+    };
+
+    let func_name = if name.eq("Listed/NASDAQ") {
+        &location_code
+            .replace("STK.", "")
+            .replace("ETF.EQ.", "")
+            .replace("ETF.FI.", "")
+    } else {
+        name
+    };
+
+    let mut struct_name = to_camel_case_save_acronyms(&to_snake_case(location_code));
+    struct_name.push_str(postfix_select_location_next);
+
+    if let Some(x) = map_instrument_select_scan_code.get_mut(instrument) {
+        x.push(struct_name.clone());
+    } else {
+        map_instrument_select_scan_code.insert(instrument.to_string(), vec![struct_name.clone()]);
+    }
+
+    let mut row_location = String::new();
+    row_location.push_str("(\"");
+    row_location.push_str(&name.to_string());
+    row_location.push_str("\",");
+    row_location.push_str(&to_snake_case(func_name));
+    row_location.push_str(",");
+    row_location.push_str(&struct_name);
+    row_location.push_str(postfix_select_location_next);
+    row_location.push_str(",\"");
+    row_location.push_str(location_code);
+    row_location.push_str("\"),");
+
+    all_location.push(row_location);
+    // println!(
+    //     "({}, {}, {}, {})",
+    //     name,
+    //     to_snake_case(func_name),
+    //     struct_name,
+    //     location_code
+    // );
+
+    for next_location in child_locations {
+        recursion_over_location(
+            next_location,
+            all_location,
+            postfix_select_location_next,
+            map_instrument_select_scan_code,
+        );
+    }
+}
+
+
+struct ParsedParameters {
+    // todo: add comment for Keys
+    all_filters: Result<HashMap<String, Filter>, ScannerParametersError>,
+    all_instruments: Result<Vec<Instrument>, ScannerParametersError>,
+    all_locations: Result<HashMap<String, Location>, ScannerParametersError>,
+    all_scan_types: Result<HashMap<String, ScanType>, ScannerParametersError>,
+}
+
+#[allow(clippy::single_match)]
+fn parse_xml() -> Result<ParsedParameters, ScannerParametersError> {
+    let path = Path::new("resources/resp_scan_param_rust.xml");
+    let xml_content = fs::read_to_string(path).unwrap();
+
+    let mut reader = Reader::from_str(&xml_content);
+    reader.config_mut().trim_text(true);
+
+    let mut all_filters: Result<HashMap<String, Filter>, ScannerParametersError> =
+        Err(ScannerParametersError::InitState);
+    let mut all_instruments: Result<Vec<Instrument>, ScannerParametersError> =
+        Err(ScannerParametersError::InitState);
+    let mut all_locations: Result<HashMap<String, Location>, ScannerParametersError> =
+        Err(ScannerParametersError::InitState);
+    let mut all_scan_types: Result<HashMap<String, ScanType>, ScannerParametersError> =
+        Err(ScannerParametersError::InitState);
+
+    let location_start = BytesStart::new("LocationTree");
+
+    loop {
+        match reader.read_event() {
+            Err(e) => return Err(ScannerParametersError::QuickXml(e)),
+            Ok(Event::Eof) => {
+                break;
+            }
+            Ok(Event::Start(e)) if e.name().as_ref() == b"InstrumentList" => {
+                // <InstrumentList varName="fullInstrumentList">
+
+                let attr = e
+                    .attributes()
+                    .map(|a| String::from_utf8(a.unwrap().value.into_owned()).unwrap())
+                    .collect::<Vec<_>>()[0]
+                    .clone();
+                if attr.eq("fullInstrumentList") {
+                    all_instruments = parse_instruments(&mut reader);
+                }
+            }
+            Ok(Event::Start(e)) if e.name().as_ref() == b"LocationTree" => {
+                // <LocationTree varName="locationTree">
+
+                let inner_text = reader
+                    .read_text(location_start.to_end().to_owned().name())
+                    .unwrap();
+                let mut reader = Reader::from_str(&inner_text);
+                all_locations = parse_locations(&mut reader);
+            }
+            Ok(Event::Start(e)) if e.name().as_ref() == b"ScanTypeList" => {
+                // <ScanTypeList varName="scanTypeList">
+                // At present, there is only one ScanTypeList.
+                all_scan_types = parse_scan_types(&mut reader);
+            }
+            Ok(Event::Start(e)) if e.name().as_ref() == b"FilterList" => {
+                // <FilterList varName="filterList">
+                let attr = e
+                    .attributes()
+                    .map(|a| String::from_utf8(a.unwrap().value.into_owned()).unwrap())
+                    .collect::<Vec<_>>()[0]
+                    .clone();
+                if attr.eq("filterList") {
+                    all_filters = parse_filters(&mut reader);
+                }
+            }
+            _ => (),
+        }
+    }
+
+    Ok(ParsedParameters {
+        all_instruments,
+        all_locations,
+        all_scan_types,
+        all_filters,
+    })
+}
+
+#[allow(clippy::single_match)]
+fn parse_instruments(
+    reader: &mut Reader<&[u8]>,
+) -> Result<Vec<Instrument>, ScannerParametersError> {
+    // <InstrumentList varName="fullInstrumentList">
+
+    let mut name = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut type_ = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut sec_type = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut nscan_sec_type = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut filters = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut group = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut short_name = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut cloud_scan_not_supported = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut feature_codes = std::borrow::Cow::Borrowed(EMPTY_STR);
+
+    let mut all_instruments: Vec<Instrument> = vec![];
+
+    loop {
+        match reader.read_event() {
+            Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),
+            Ok(Event::End(e)) if e.name().as_ref() == b"InstrumentList" => {
+                return Ok(all_instruments);
+            }
+
+            Ok(Event::End(e)) if e.name().as_ref() == b"Instrument" => {
+                all_instruments.push(Instrument {
+                    name: name.clone().into_owned(),
+                    type_: type_.clone().into_owned(),
+                    sec_type: sec_type.clone().into_owned(),
+                    nscan_sec_type: nscan_sec_type.clone().into_owned(),
+                    filters: filters.clone().split(",").map(|e| e.to_string()).collect(),
+                    group: group.clone().into_owned(),
+                    short_name: short_name.clone().into_owned(),
+                    cloud_scan_not_supported: cloud_scan_not_supported
+                        .clone()
+                        .into_owned()
+                        .parse::<bool>()
+                        .unwrap_or(false),
+                    feature_codes: feature_codes.clone().into_owned(),
+                });
+
+                name = std::borrow::Cow::Borrowed(EMPTY_STR);
+                type_ = std::borrow::Cow::Borrowed(EMPTY_STR);
+                sec_type = std::borrow::Cow::Borrowed(EMPTY_STR);
+                nscan_sec_type = std::borrow::Cow::Borrowed(EMPTY_STR);
+                filters = std::borrow::Cow::Borrowed(EMPTY_STR);
+                group = std::borrow::Cow::Borrowed(EMPTY_STR);
+                short_name = std::borrow::Cow::Borrowed(EMPTY_STR);
+                cloud_scan_not_supported = std::borrow::Cow::Borrowed(EMPTY_STR);
+                feature_codes = std::borrow::Cow::Borrowed(EMPTY_STR);
+            }
+            Ok(Event::Start(e)) => match e.name().as_ref() {
+                b"name" => {
+                    name = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"type" => {
+                    type_ = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"secType" => {
+                    sec_type = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"nscanSecType" => {
+                    nscan_sec_type = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"filters" => {
+                    filters = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+
+                b"group" => {
+                    group = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"shortName" => {
+                    short_name = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"cloudScanNotSupported" => {
+                    cloud_scan_not_supported = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"featureCodes" => {
+                    feature_codes = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+}
+
+#[allow(clippy::single_match)]
+fn parse_locations(
+    reader: &mut Reader<&[u8]>,
+) -> Result<HashMap<String, Location>, ScannerParametersError> {
+    // <LocationTree varName="locationTree">
+    let mut display_name = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut short_name = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut tooltip = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut raw_price_only = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut location_code = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut instrument = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut route_exchange = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut delayed_only = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut access = std::borrow::Cow::Borrowed(EMPTY_STR);
+
+    let mut all_locations: HashMap<String, Location> = HashMap::new();
+    let mut deep = 0;
+    let mut not_completed_locations: HashMap<usize, Location> = HashMap::with_capacity(26);
+
+    let child_locations = vec![];
+    let mut location_tree_end_right_now = false;
+
+    loop {
+        match reader.read_event()? {
+            Event::Eof => {
+                return Ok(all_locations);
+            }
+            Event::Start(e) if e.name().as_ref() == b"Location" => {
+                //
+            }
+            Event::End(e) if e.name().as_ref() == b"Location" => {
+                if location_tree_end_right_now {
+                    location_tree_end_right_now = false;
+                    continue;
+                }
+
+                let location = Location {
+                    access: access.clone().into_owned(),
+                    short_name: short_name.clone().into_owned(),
+                    tooltip: tooltip.clone().into_owned(),
+                    delayed_only: delayed_only.clone().into_owned(),
+                    raw_price_only: raw_price_only.clone().into_owned(),
+                    display_name: display_name.clone().into_owned(),
+                    location_code: location_code.clone().into_owned(),
+                    instrument: instrument.clone().into_owned(),
+                    route_exchange: route_exchange.clone().into_owned(),
+                    child_locations: child_locations.clone(),
+                };
+
+                if let Some(l) = not_completed_locations.get_mut(&deep) {
+                    l.child_locations.push(location.clone());
+                } else if deep == 0 {
+                    all_locations.insert(location.instrument.clone(), location.clone());
+                }
+
+                display_name = std::borrow::Cow::Borrowed(EMPTY_STR);
+                short_name = std::borrow::Cow::Borrowed(EMPTY_STR);
+                tooltip = std::borrow::Cow::Borrowed(EMPTY_STR);
+                raw_price_only = std::borrow::Cow::Borrowed(EMPTY_STR);
+                location_code = std::borrow::Cow::Borrowed(EMPTY_STR);
+                instrument = std::borrow::Cow::Borrowed(EMPTY_STR);
+                route_exchange = std::borrow::Cow::Borrowed(EMPTY_STR);
+                delayed_only = std::borrow::Cow::Borrowed(EMPTY_STR);
+                access = std::borrow::Cow::Borrowed(EMPTY_STR);
+            }
+
+            Event::Start(e) if e.name().as_ref() == b"LocationTree" => {
+                deep += 1;
+
+                let location = Location {
+                    access: access.clone().into_owned(),
+                    short_name: short_name.clone().into_owned(),
+                    tooltip: tooltip.clone().into_owned(),
+                    delayed_only: delayed_only.clone().into_owned(),
+                    raw_price_only: raw_price_only.clone().into_owned(),
+                    display_name: display_name.clone().into_owned(),
+                    location_code: location_code.clone().into_owned(),
+                    instrument: instrument.clone().into_owned(),
+                    route_exchange: route_exchange.clone().into_owned(),
+                    child_locations: child_locations.clone(),
+                };
+
+                not_completed_locations.insert(deep, location);
+
+                display_name = std::borrow::Cow::Borrowed(EMPTY_STR);
+                short_name = std::borrow::Cow::Borrowed(EMPTY_STR);
+                tooltip = std::borrow::Cow::Borrowed(EMPTY_STR);
+                raw_price_only = std::borrow::Cow::Borrowed(EMPTY_STR);
+                location_code = std::borrow::Cow::Borrowed(EMPTY_STR);
+                instrument = std::borrow::Cow::Borrowed(EMPTY_STR);
+                route_exchange = std::borrow::Cow::Borrowed(EMPTY_STR);
+                delayed_only = std::borrow::Cow::Borrowed(EMPTY_STR);
+                access = std::borrow::Cow::Borrowed(EMPTY_STR);
+            }
+            Event::End(e) if e.name().as_ref() == b"LocationTree" => {
+                location_tree_end_right_now = true;
+
+                if let Some(location) = not_completed_locations.remove(&deep) {
+                    deep -= 1;
+
+                    if deep == 0 {
+                        all_locations.insert(location.instrument.clone(), location);
+                    } else if let Some(location2) = not_completed_locations.get_mut(&(deep)) {
+                        location2.child_locations.push(location)
+                    }
+                };
+            }
+            Event::Start(e) => match e.name().as_ref() {
+                b"displayName" => {
+                    display_name = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"shortName" => {
+                    short_name = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"tooltip" => {
+                    tooltip = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"nscanSecType" => {
+                    raw_price_only = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"locationCode" => {
+                    location_code = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"instruments" => {
+                    instrument = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"routeExchange" => {
+                    route_exchange = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"delayedOnly" => {
+                    delayed_only = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"access" => {
+                    access = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+}
+
+#[allow(clippy::single_match)]
+fn parse_scan_types(
+    reader: &mut Reader<&[u8]>,
+) -> Result<HashMap<String, ScanType>, ScannerParametersError> {
+    let mut display_name = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut scan_code = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut instruments = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut search_name = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut access = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut location_filter = std::borrow::Cow::Borrowed(EMPTY_STR);
+
+    let mut all_scan_types = HashMap::with_capacity(450);
+
+    loop {
+        match reader.read_event()? {
+            Event::Eof => {}
+            Event::End(e) if e.name().as_ref() == b"ScanTypeList" => {
+                return Ok(all_scan_types);
+            }
+            Event::End(e) if e.name().as_ref() == b"ScanType" => {
+                all_scan_types.insert(
+                    scan_code.clone().into_owned(),
+                    ScanType {
+                        display_name: display_name.clone().into_owned(),
+                        scan_code: scan_code.clone().into_owned(),
+                        instruments: instruments
+                            .clone()
+                            .split(",")
+                            .map(|e| e.to_string())
+                            .collect(),
+                        search_name: search_name.clone().into_owned(),
+                        access: access.clone().into_owned(),
+                        location_filter: location_filter
+                            .clone()
+                            .split(":")
+                            .map(|e| e.to_string())
+                            .collect(),
+                    },
+                );
+
+                display_name = std::borrow::Cow::Borrowed(EMPTY_STR);
+                scan_code = std::borrow::Cow::Borrowed(EMPTY_STR);
+                instruments = std::borrow::Cow::Borrowed(EMPTY_STR);
+                search_name = std::borrow::Cow::Borrowed(EMPTY_STR);
+                access = std::borrow::Cow::Borrowed(EMPTY_STR);
+                location_filter = std::borrow::Cow::Borrowed(EMPTY_STR);
+            }
+
+            Event::Start(e) => match e.name().as_ref() {
+                b"displayName" => {
+                    display_name = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"scanCode" => {
+                    scan_code = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"instruments" => {
+                    instruments = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"searchName" => {
+                    search_name = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"access" => {
+                    access = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                b"locationFilter" => {
+                    location_filter = reader
+                        .read_text(e.name())
+                        .expect("Cannot decode text value");
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+}
+
+#[allow(clippy::single_match)]
+fn parse_filters(
+    reader: &mut Reader<&[u8]>,
+) -> Result<HashMap<String, Filter>, ScannerParametersError> {
+    let mut filter_id = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut filter_category = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut filter_access = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut filter_abstract_fields = Vec::new();
+
+    let mut abst_field_parameter_type =
+        ScannerFieldType::NotYetImplementedOrInitState("".to_string());
+    let mut abst_field_code = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut abst_field_code_not = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut abst_field_display_name = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut abst_field_tooltip = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut abst_field_separator = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut abst_field_combo_values = Vec::new();
+
+    let mut combo_value_code = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut combo_value_display_name = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut combo_value_tooltip = std::borrow::Cow::Borrowed(EMPTY_STR);
+    let mut combo_value_default = std::borrow::Cow::Borrowed(EMPTY_STR);
+
+    let mut inside_filter = false;
+    let mut inside_abstract_field = false;
+    let mut inside_combo_values = false;
+
+    let mut all_filters = HashMap::with_capacity(280); // 242 + 37 1
+
+    // TODO
+    // +TripleComboFilter
+    // +cover all FieldType
+
+    loop {
+        match reader.read_event() {
+            Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),
+            Ok(Event::End(e)) => match e.name().as_ref() {
+                b"FilterList" => {
+                    return Ok(all_filters);
+                }
+                _ => {}
+            },
+            Ok(Event::Start(e)) => match e.name().as_ref() {
+                b"RangeFilter" | b"SimpleFilter" => {
+                    //add <TripleComboFilter> ?
+                    inside_filter = true;
+                    loop {
+                        match reader.read_event()? {
+                            Event::Start(e) => match e.name().as_ref() {
+                                b"id" if inside_filter => {
+                                    filter_id = reader
+                                        .read_text(e.name())
+                                        .expect("Cannot decode text value");
+                                }
+                                b"category" if inside_filter => {
+                                    filter_category = reader
+                                        .read_text(e.name())
+                                        .expect("Cannot decode text value");
+                                }
+                                b"access" if inside_filter => {
+                                    filter_access = reader
+                                        .read_text(e.name())
+                                        .expect("Cannot decode text value");
+                                }
+                                // ─── AbstractField ───────────────────────────────────────────────────
+                                b"AbstractField" => {
+                                    // if filter_id == "ISSUER_COUNTRY_CODE" {
+                                    //     let x = e
+                                    //         .attributes()
+                                    //         .map(|a| {
+                                    //             String::from_utf8(a.unwrap().value.into_owned())
+                                    //                 .unwrap()
+                                    //         })
+                                    //         .collect::<Vec<_>>()[0]
+                                    //         .clone();
+                                    //     println!("X:{:?}", x);
+                                    // }
+
+                                    inside_abstract_field = true;
+
+                                    abst_field_parameter_type = e
+                                        .attributes()
+                                        .map(|a| {
+                                            ScannerFieldType::from(
+                                                String::from_utf8(a.unwrap().value.into_owned())
+                                                    .unwrap()
+                                                    .as_str(),
+                                            )
+                                        })
+                                        .collect::<Vec<_>>()[0]
+                                        .clone();
+                                }
+                                b"code" if inside_abstract_field && !inside_combo_values => {
+                                    abst_field_code = reader
+                                        .read_text(e.name())
+                                        .expect("Cannot decode text value");
+                                }
+                                b"codeNot" if inside_abstract_field && !inside_combo_values => {
+                                    abst_field_code_not = reader
+                                        .read_text(e.name())
+                                        .expect("Cannot decode text value");
+                                }
+                                b"displayName" if inside_abstract_field && !inside_combo_values => {
+                                    abst_field_display_name = reader
+                                        .read_text(e.name())
+                                        .expect("Cannot decode text value");
+                                }
+                                b"tooltip" if inside_abstract_field && !inside_combo_values => {
+                                    abst_field_tooltip = reader
+                                        .read_text(e.name())
+                                        .expect("Cannot decode text value");
+                                }
+                                b"separator" if inside_abstract_field && !inside_combo_values => {
+                                    abst_field_separator = reader
+                                        .read_text(e.name())
+                                        .expect("Cannot decode text value");
+                                }
+                                b"varName" if inside_abstract_field && !inside_combo_values => {
+                                    // unimplemented
+                                }
+
+                                // ─── ComboValues ───────────────────────────────────────────────────
+                                b"ComboValues" if inside_abstract_field => {
+                                    inside_combo_values = true;
+                                }
+
+                                b"code" if inside_combo_values => {
+                                    combo_value_code = reader
+                                        .read_text(e.name())
+                                        .expect("Cannot decode text value");
+                                }
+
+                                b"displayName" if inside_combo_values => {
+                                    combo_value_display_name = reader
+                                        .read_text(e.name())
+                                        .expect("Cannot decode text value");
+                                }
+                                b"tooltip" if inside_combo_values => {
+                                    combo_value_tooltip = reader
+                                        .read_text(e.name())
+                                        .expect("Cannot decode text value");
+                                }
+                                b"default" if inside_combo_values => {
+                                    combo_value_default = reader
+                                        .read_text(e.name())
+                                        .expect("Cannot decode text value");
+                                }
+                                _ => {}
+                            },
+                            Event::End(e) => {
+                                match e.name().as_ref() {
+                                    // ─── Filter ──────────────────────────────────────────────────────────
+                                    b"RangeFilter" | b"SimpleFilter" | b"TripleComboFilter" => {
+                                        inside_filter = false;
+
+                                        all_filters.insert(
+                                            filter_id.clone().into_owned(),
+                                            Filter {
+                                                id: filter_id.clone().into_owned(),
+                                                category: filter_category.clone().into_owned(),
+                                                access: filter_access.clone().into_owned(),
+                                                abstract_fields: filter_abstract_fields.clone(),
+                                            },
+                                        );
+
+                                        filter_id = std::borrow::Cow::Borrowed(EMPTY_STR);
+                                        filter_category = std::borrow::Cow::Borrowed(EMPTY_STR);
+                                        filter_access = std::borrow::Cow::Borrowed(EMPTY_STR);
+                                        filter_abstract_fields.clear();
+
+                                        break;
+                                    }
+                                    // ─── AbstractField ───────────────────────────────────────────────────
+                                    b"AbstractField" if inside_abstract_field => {
+                                        inside_abstract_field = false;
+
+                                        filter_abstract_fields.push(AbstractField {
+                                            parameter_type: abst_field_parameter_type.clone(),
+                                            code: abst_field_code.clone().into_owned(),
+                                            code_not: abst_field_code_not.clone().into_owned(),
+                                            display_name: abst_field_display_name
+                                                .clone()
+                                                .into_owned(),
+                                            tooltip: abst_field_tooltip.clone().into_owned(),
+                                            separator: abst_field_separator.clone().into_owned(),
+                                            combo_values: abst_field_combo_values.clone(),
+                                        });
+
+                                        abst_field_parameter_type =
+                                            ScannerFieldType::NotYetImplementedOrInitState(
+                                                EMPTY_STR.to_string(),
+                                            );
+                                        abst_field_code = std::borrow::Cow::Borrowed(EMPTY_STR);
+                                        abst_field_code_not = std::borrow::Cow::Borrowed(EMPTY_STR);
+                                        abst_field_display_name =
+                                            std::borrow::Cow::Borrowed(EMPTY_STR);
+                                        abst_field_tooltip = std::borrow::Cow::Borrowed(EMPTY_STR);
+                                        abst_field_separator =
+                                            std::borrow::Cow::Borrowed(EMPTY_STR);
+                                        abst_field_combo_values.clear();
+                                        // println!("{:?}", f);
+                                    }
+
+                                    // ─── ComboValues ───────────────────────────────────────────────────
+                                    b"ComboValue" => {
+                                        abst_field_combo_values.push(ComboValue {
+                                            code: combo_value_code.clone().into_owned(),
+                                            display_name: combo_value_display_name
+                                                .clone()
+                                                .into_owned(),
+                                            tooltip: combo_value_tooltip.clone().into_owned(),
+                                            default: combo_value_default.clone().into_owned(),
+                                        });
+
+                                        combo_value_code = std::borrow::Cow::Borrowed(EMPTY_STR);
+                                        combo_value_display_name =
+                                            std::borrow::Cow::Borrowed(EMPTY_STR);
+                                        combo_value_tooltip = std::borrow::Cow::Borrowed(EMPTY_STR);
+                                        combo_value_default = std::borrow::Cow::Borrowed(EMPTY_STR);
+                                    }
+                                    b"ComboValues" if inside_abstract_field => {
+                                        inside_combo_values = false;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => (),
+            },
+            _ => (),
+        }
+    }
+}

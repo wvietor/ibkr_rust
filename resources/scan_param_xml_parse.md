@@ -11,6 +11,7 @@ xmllint --xpath '//ScanParameterResponse/InstrumentList[@varName="fullInstrument
 // === locationTree === //
 
 xmllint --xpath '//ScanParameterResponse/LocationTree[@varName="locationTree"]/Location' ./resp_scan_param_rust.xml
+xmllint --xpath '//ScanParameterResponse/LocationTree[@varName="locationTree"]/Location/@\*' ./resp_scan_param_rust.xml
 
 // === ScanType === //
 
@@ -29,13 +30,33 @@ xmllint --xpath '//ScanParameterResponse/SettingList[@varName="settingList"]' ./
 
 // === filterList === //
 
-xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]' ./resp_scan_param_rust.xml
+xmllint --xpath '//ScanParameterResponse/FilterList/@\_' ./resp_scan_param_rust.xml
+xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/\*' ./resp_scan_param_rust.xml
 
 xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/RangeFilter/id/text()' ./resp_scan_param_rust.xml
 xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/SimpleFilter/id/text()' ./resp_scan_param_rust.xml
 xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/TripleComboFilter/id/text()' ./resp_scan_param_rust.xml
 
 xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/RangeFilter/id/text() | //ScanParameterResponse/FilterList[@varName="filterList"]/SimpleFilter/id/text() | //ScanParameterResponse/FilterList[@varName="filterList"]/TripleComboFilter/id/text()' ./resp_scan_param_rust.xml
+
+xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/RangeFilter/AbstractField/@\*' ./resp_scan_param_rust.xml | sort | uniq
+
+xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/SimpleFilter/AbstractField/@\*' ./resp_scan_param_rust.xml
+
+xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/RangeFilter/AbstractField/@_ | //ScanParameterResponse/FilterList[@varName="filterList"]/SimpleFilter/AbstractField/@_' ./resp_scan_param_rust.xml | sort | uniq
+
+type="scanner.filter.BooleanField"
+type="scanner.filter.ComboField"
+type="scanner.filter.ComboField$ConvertedComboField"
+type="scanner.filter.ConidField"
+type="scanner.filter.DateField"
+type="scanner.filter.DoubleField"
+type="scanner.filter.IntField"
+type="scanner.filter.StringListField"
+type="scanner.filter.SubstrListField"
+varName="field"
+varName="max"
+varName="min"
 
 // === scannerLayoutList === //
 
@@ -59,9 +80,8 @@ xmllint --xpath '//ScanParameterResponse/SidecarScannerTemplateList[@varName="sc
 
 xmllint --xpath '//ScanParameterResponse/ScannerProductTypeList[@varName="scannerProductTypeList"]' ./resp_scan_param_rust.xml
 
-//-
-<FieldsConfigurationList varName="fieldsConfigurationList">
-<AdvancedScannerDefaults varName="advancedScannerDefaults">
+//- <FieldsConfigurationList varName="fieldsConfigurationList">
+//- <AdvancedScannerDefaults varName="advancedScannerDefaults">
 
 //+ AbstractField and SimpleFilter
 xmllint --xpath '//ScanParameterResponse/FilterList[@varName="uiFilters"]' ./resp_scan_param_rust.xml

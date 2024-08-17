@@ -1780,7 +1780,7 @@ impl Client<indicators::Active> {
         self.writer.add_body((Out::ReqScannerParameters, VERSION))?;
         self.writer.send().await
     }
-    // === Scanner Subscribtion ===
+    // === Scanner Subscription ===
 
     // public synchronized void reqScannerSubscription(int tickerId,
     //         ScannerSubscription subscription,
