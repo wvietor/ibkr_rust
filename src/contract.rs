@@ -356,6 +356,18 @@ pub enum Query {
     Figi(Figi),
 }
 
+impl From<ContractId> for Query {
+    fn from(value: ContractId) -> Self {
+        Self::IbContractId(value, Routing::Smart)
+    }
+}
+
+impl From<Figi> for Query {
+    fn from(value: Figi) -> Self {
+        Self::Figi(value)
+    }
+}
+
 #[derive(Debug, Clone, Error)]
 /// An error type representing the potential ways that a [`Query`] can be invalid.
 pub enum ParseQueryError {
