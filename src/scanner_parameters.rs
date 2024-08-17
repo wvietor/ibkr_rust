@@ -1,26 +1,67 @@
-use ibapi_macros::typed_variants;
-use quick_xml::Decoder;
-use scanner_subscription::ScannerDate;
-use tracing_subscriber::fmt::format;
-
 use super::*;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 use std::collections::{HashMap, HashSet};
-use std::error::Error;
 use std::fs;
 use std::path::Path;
-use std::str::ParseBoolError;
 
-fn testtttt() -> Result<(),ScannerParametersError>{
-    use scanner_subscription::ScannerSubscription;
-    
-    let scanner_wo_filters = ScannerSubscription::us_stocks().us_major().top_perc_gain();
-    let scanner_w_filters = scanner_wo_filters.clone().market_cap_above1e6(1000.0).price_below(100.0);
+// === instrumentList === //
+// xmllint --xpath '//ScanParameterResponse/InstrumentList[@varName="instrumentList"]/Instrument' ./resp_scan_param_rust.xml
 
-    
-    Ok(())
-}
+// === fullInstrumentList === //
+// xmllint --xpath '//ScanParameterResponse/InstrumentList[@varName="fullInstrumentList"]/Instrument' ./resp_scan_param_rust.xml
+// xmllint --xpath '//ScanParameterResponse/InstrumentList[@varName="fullInstrumentList"]/Instrument/name | //ScanParameterResponse/InstrumentList[@varName="fullInstrumentList"]/Instrument/type' ./resp_scan_param_rust.xml
+
+// === locationTree === //
+// xmllint --xpath '//ScanParameterResponse/LocationTree[@varName="locationTree"]/Location' ./resp_scan_param_rust.xml
+// xmllint --xpath '//ScanParameterResponse/LocationTree[@varName="locationTree"]/Location/@*' ./resp_scan_param_rust.xml
+
+// === ScanType === //
+// xmllint --xpath '//ScanParameterResponse/ScanTypeList[@varName="scanTypeList"]/ScanType/scanCode/text()' ./resp_scan_param_rust.xml
+
+// xmllint --xpath '//ScanParameterResponse/ScanTypeList[@varName="scanTypeList"]/ScanType/scanCode/text() | //ScanParameterResponse/ScanTypeList[@varName="scanTypeList"]/ScanType/displayName/text() | //ScanParameterResponse/ScanTypeList[@varName="scanTypeList"]/ScanType/instruments/text() ' ./resp_scan_param_rust.xml
+
+// === filterList === //
+// xmllint --xpath '//ScanParameterResponse/FilterList/@*' ./resp_scan_param_rust.xml
+// xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/*' ./resp_scan_param_rust.xml
+
+// xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/RangeFilter/id/text()' ./resp_scan_param_rust.xml
+// xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/SimpleFilter/id/text()' ./resp_scan_param_rust.xml
+// xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/TripleComboFilter/id/text()' ./resp_scan_param_rust.xml
+
+// xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/RangeFilter/id/text() | //ScanParameterResponse/FilterList[@varName="filterList"]/SimpleFilter/id/text() | //ScanParameterResponse/FilterList[@varName="filterList"]/TripleComboFilter/id/text()' ./resp_scan_param_rust.xml
+
+// xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/RangeFilter/AbstractField/@*' ./resp_scan_param_rust.xml | sort | uniq
+
+// xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/SimpleFilter/AbstractField/@*' ./resp_scan_param_rust.xml
+
+// xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/RangeFilter/AbstractField/@* | //ScanParameterResponse/FilterList[@varName="filterList"]/SimpleFilter/AbstractField/@*' ./resp_scan_param_rust.xml | sort | uniq
+
+// // === Other === //
+// xmllint --xpath '//ScanParameterResponse/SettingList[@varName="settingList"]' ./resp_scan_param_rust.xml
+
+// xmllint --xpath '//ScanParameterResponse/ScannerLayoutList[@varName="scannerLayoutList"]/ScannerLayout' ./resp_scan_param_rust.xml
+
+// xmllint --xpath '//ScanParameterResponse/InstrumentGroupList[@varName="instrumentGroupList"]/InstrumentGroup' ./resp_scan_param_rust.xml
+
+// xmllint --xpath '//ScanParameterResponse/InstrumentGroupList[@varName="instrumentGroupList"]/InstrumentGroup' ./resp_scan_param_rust.xml
+
+// xmllint --xpath '//ScanParameterResponse/SimilarProductsDefaults[@varName="similarProductsDefaults"]' ./resp_scan_param_rust.xml
+
+// xmllint --xpath '//ScanParameterResponse/MainScreenDefaultTickers[@varName="mainScreenDefaultTickers"]' ./resp_scan_param_rust.xml
+
+// xmllint --xpath '//ScanParameterResponse/MainScreenDefaultTickers[@varName="mainScreenDefaultTickers"]' ./resp_scan_param_rust.xml
+
+// xmllint --xpath '//ScanParameterResponse/ColumnSets[@varName="columnSets"]' ./resp_scan_param_rust.xml
+
+// xmllint --xpath '//ScanParameterResponse/SidecarScannerDefaults[@varName="sidecarScannerDefaults"]' ./resp_scan_param_rust.xml
+
+// xmllint --xpath '//ScanParameterResponse/SidecarScannerTemplateList[@varName="scannerTemplateList"]/SidecarScannerTemplate' ./resp_scan_param_rust.xml
+
+// xmllint --xpath '//ScanParameterResponse/ScannerProductTypeList[@varName="scannerProductTypeList"]' ./resp_scan_param_rust.xml
+
+// xmllint --xpath '//ScanParameterResponse/FilterList[@varName="uiFilters"]' ./resp_scan_param_rust.xml
+
 #[derive(Debug, Clone)]
 struct Instrument {
     name: String,
@@ -52,7 +93,7 @@ struct Location {
 struct ScanType {
     display_name: String,
     scan_code: String,
-    instruments: Vec<String>,
+    instruments: HashSet<String>,
     search_name: String,
     access: String,
     // feature?
@@ -72,14 +113,13 @@ struct Filter {
     pub abstract_fields: Vec<AbstractField>,
 }
 
-
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 enum ScannerFieldType {
     Boolean,
     Combo,
     ConvertedCombo, // only 1 filer: ISSUER_COUNTRY_CODE; // if ComboField$ConvertedComboField -> scanner.filter.StringField -> Combo
-    Conid,     // only 1 filter: UNDCONID
-    Date,     // valid variants mm/yyyy or yyyymmdd
+    Conid,          // only 1 filter: UNDCONID
+    Date,           // valid variants mm/yyyy or yyyymmdd
     Double,
     Int,
     String,
@@ -133,7 +173,6 @@ struct ComboValue {
 
 use thiserror::Error;
 
-
 #[derive(Debug, Error)]
 pub enum ScannerParametersError {
     #[error("Failed parsing Int. Cause {0}")]
@@ -159,8 +198,6 @@ pub enum ScannerParametersError {
     /// quick_xml::Error error
     QuickXml(#[from] quick_xml::Error),
 }
-
-
 
 static EMPTY_STR: &str = "";
 
@@ -215,8 +252,8 @@ pub fn camel_to_snake_case(s: &str) -> String {
     while let Some(current_char) = chars.next() {
         if !result.is_empty() && result.chars().last().unwrap() != '_' {
             result.push('_');
-            }
-            if current_char.is_uppercase() {
+        }
+        if current_char.is_uppercase() {
             result.push(current_char.to_lowercase().next().unwrap());
         } else {
             result.push(current_char);
@@ -238,8 +275,6 @@ pub fn capitalize_first_letter(s: &str) -> String {
         Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
     }
 }
-
-
 
 #[traced_test]
 #[tokio::test]
@@ -305,7 +340,7 @@ async fn test_case_manipulation() {
     // println!("{}", "marketCapBelow1e6".to_case(Case::UpperCamel));
     // println!("{}", "esgControversiesScoreAbove".to_case(Case::UpperCamel));
     // println!("{}", "esgCorpGovPillarScoreAbove".to_case(Case::UpperCamel));
-    
+
     println!("\n to_snake_case:");
     let inputs = vec![
         "US Stocks",
@@ -338,400 +373,331 @@ async fn test_case_manipulation() {
         "Global Futures",
         "Global Indexes",
         "Global SSFs",
-        ];
-        
-        for input in inputs {
-            println!(
-                "{} - {} - {}",
-                input,
-                to_snake_case(input),
-                to_camel_case_save_acronyms(input)
-                );
-                }
-                }
-                
-// #[tokio::test]
-// #[traced_test]
+    ];
+
+    for input in inputs {
+        println!(
+            "{} - {} - {}",
+            input,
+            to_snake_case(input),
+            to_camel_case_save_acronyms(input)
+        );
+    }
+}
+
 #[test]
-fn test_parse_xml() {
+fn test_gen_data_for_macros_input() {
+    let GenDataForMacrosInput {
+        gen_instrument,
+        gen_location,
+        gen_scan_code,
+        gen_enums,
+        gen_filters,
+        list_of_filters_struct,
+        unimplemented_filters,
+    } = gen_data_for_macros_input().unwrap();
+    // === OUTPUT ===
+
+    println!("=== gen_instrument ===");
+    gen_instrument.iter().for_each(|e| println!("{}", e));
+    println!("=== gen_location ===");
+    gen_location.iter().for_each(|e| println!("{}", e));
+    println!("=== gen_scan_code ===");
+    gen_scan_code.iter().for_each(|e| println!("{}", e));
+    println!("=== gen_enums ===");
+    gen_enums.iter().for_each(|e| println!("{}", e));
+    println!("=== gen_filters ===");
+    gen_filters.iter().for_each(|e| println!("{}", e));
+
+    // println("=== list_of_filters_struct ===");
+    // list_of_filters_struct.iter().for_each(|e| println!("{}", e));
+    // println("=== unimplemented_filters ===");
+    // unimplemented_filters.iter().for_each(|e| println!("{}", e));
+}
+
+struct GenDataForMacrosInput {
+    gen_instrument: Vec<String>,
+    gen_location: Vec<String>,
+    gen_scan_code: Vec<String>,
+    gen_enums: Vec<String>,
+    gen_filters: Vec<String>,
+    list_of_filters_struct: Vec<String>,
+    unimplemented_filters: HashSet<String>,
+}
+
+fn gen_data_for_macros_input() -> Result<GenDataForMacrosInput, ScannerParametersError> {
     let scanner_parameters = parse_xml();
-    
-    let Ok(ParsedParameters {
+
+    let ParsedParameters {
         all_instruments,
         all_locations,
         all_scan_types,
         all_filters,
-    }) = parse_xml()
-    else {
-       println!("Something went wrong");
-       return;
+    } = match parse_xml() {
+        Ok(result) => result,
+        Err(error) => Err(error)?,
     };
-    
+
     let all_instruments = all_instruments.unwrap();
     let all_locations = all_locations.unwrap();
     let all_scan_types = all_scan_types.unwrap();
     let all_filters = all_filters.unwrap();
+
+    println!("────────────");
+    println!("all_instruments: {}", &all_instruments.len());
+    println!("all_locations: {}", &all_locations.len());
+    println!("all_scan_types: {}", &all_scan_types.len());
+    println!("all_filters: {}", &all_filters.len());
+    println!("────────────");
 
     let mut gen_instrument = vec![];
     let mut gen_location = vec![];
     let mut gen_scan_code = vec![];
     let mut gen_enums = vec![];
     let mut gen_filters = vec![];
-    
+
+    let mut list_of_filters_struct = vec![];
+
     let mut unimplemented_filters = HashSet::new();
 
-    let mut map_instrument_code_to_instrument_struct_name = HashMap::new();
-    let mut map_instrument_to_locations_struct_names: HashMap<String, Vec<String>> = HashMap::new();
-    let postfix_select_location = "SelectLocation";
-    let postfix_select_location_next = "SelectScanCode".to_string();
-    
-    // === INSTRUMENTS ===
+    let mut map_instrument_code_to_scan_code_struct_names: HashMap<String, String> = HashMap::new();
+    let mut check_if_enum_name_created = HashSet::new();
 
-    gen_instrument
-    .push("impl_select_instrument![ ScannerSubscription =>".to_string());
-    
+    let postfix_select_location = "SelectLocation".to_string();
+    let postfix_select_scan_code = "SelectScanCode".to_string();
+    let postfix_select_filters = "SelectFilters".to_string();
+
+    // === INSTRUMENTS ===
+    gen_instrument.push("impl_select_instrument![ ScannerSubscription =>".to_string());
+
     for value in all_instruments.iter() {
         let Instrument {
             name,
             type_,
-            sec_type,
-            nscan_sec_type,
             filters,
-            group,
-            short_name,
-            cloud_scan_not_supported,
-            feature_codes,
-            } = value;
-            
-            // println!("{}", "bondNextCallDateAbove".to_case(Case::UpperCamel));
-        let mut struct_instrument_name = to_camel_case_save_acronyms(name);
+            ..
+        } = value;
+
+        let struct_instrument_name = to_camel_case_save_acronyms(name);
 
         let mut struct_name_select_location = struct_instrument_name.clone();
         struct_name_select_location.push_str(&postfix_select_location);
-        
-        map_instrument_code_to_instrument_struct_name.insert(type_, struct_instrument_name);
 
-        let mut row_instrument = String::new();
-        row_instrument.push_str("(\"");
-        row_instrument.push_str(&name.to_string());
-        row_instrument.push_str("\",");
-        row_instrument.push_str(&to_snake_case(name));
-        row_instrument.push_str(",");
-        row_instrument.push_str(&struct_name_select_location);
-        row_instrument.push_str(",\"");
-        row_instrument.push_str(type_);
-        row_instrument.push_str("\"),");
+        let mut struct_name_select_scan_code = struct_instrument_name.clone();
+        struct_name_select_scan_code.push_str(&postfix_select_scan_code);
 
-        gen_instrument.push(row_instrument);
+        gen_instrument.push(format!(
+            r#"    ("{}", {}, {}, "{}"),"#,
+            name.to_string(),
+            to_snake_case(name),
+            struct_name_select_location,
+            type_
+        ));
+
+        // === LOCATIONS ===
 
         gen_location.push(format!(
-            "\n impl_select_location![ {} =>",
-            struct_name_select_location
+            "\n impl_select_location![ {}, {}  =>",
+            struct_name_select_location, struct_name_select_scan_code
         ));
-        
-        // === LOCATIONS ===
+
+        map_instrument_code_to_scan_code_struct_names
+            .insert(type_.to_string(), struct_name_select_scan_code);
+
         if let Some(location) = all_locations.get(type_) {
-            recursion_over_location(
-                location,
-                &mut gen_location,
-                &postfix_select_location_next,
-                &mut map_instrument_to_locations_struct_names,
-            );
+            recursion_over_location(location, &mut gen_location);
             gen_location.push("]; \n".to_string());
         }
 
-        continue;
-    }
-    gen_instrument.push("];".to_string());
+        // === SCAN CODES ===
 
+        let mut structs_name_for_impl_filters = struct_instrument_name.clone();
+        structs_name_for_impl_filters.push_str(&postfix_select_filters);
 
-    // === SCAN CODES ===
-    
-    for (key, value) in all_scan_types.iter() {
-        let ScanType {
-            display_name,
-            scan_code,
-            instruments,
-            search_name,
-            access,
-            location_filter,
-        } = value;
-
-        let func_name = to_snake_case(scan_code);
-
-        let mut row_scan_code = String::new();
-        row_scan_code.push_str("impl_select_scan_code![\"");
-        row_scan_code.push_str(&display_name);
-        row_scan_code.push_str("\",\"");
-        row_scan_code.push_str(search_name);
-        row_scan_code.push_str("\",");
-        row_scan_code.push_str(&func_name);
-        row_scan_code.push_str(",\"");
-        row_scan_code.push_str(scan_code);
-        row_scan_code.push_str("\" => (");
-
-        for i_string in instruments {
-            if let Some(struct_names) = map_instrument_to_locations_struct_names.get(i_string) {
-                for select_scan_code_struct_name in struct_names {
-                    //gen_scan_code
-
-                    row_scan_code.push_str(&select_scan_code_struct_name);
-                    row_scan_code.push_str(",");
-                    // row_scan_code.push_str(i_string);
-                    // row_scan_code.push_str(",");
-
-                    //i_string(instrument code) -> (Vec<scan codes>)
-                    // map_instrument_code_to_instrument_struct_name
-
-                    // println!(
-                    //     "({},{},{},{},{}),",
-                    //     display_name,
-                    //     search_name,
-                    //     func_name,
-                    //     select_scan_code_struct_name,
-                    //     scan_code
-                    // );
-                }
-
-                // for i in &all_instruments {
-                //     // if i.type_ {}
-                // }
-            }
+        if let Some(old_struct_name) = map_instrument_code_to_scan_code_struct_names.get(type_) {
+            gen_scan_code.push(format!(
+                "impl_select_scan_code![ {}, {} =>",
+                old_struct_name, structs_name_for_impl_filters
+            ));
         }
-        row_scan_code.pop();
-        row_scan_code.push_str(")];\n");
-        gen_scan_code.push(row_scan_code);
-    }
 
+        for (_key, value) in all_scan_types.iter() {
+            if value.instruments.get(type_).is_some() {
+                let ScanType {
+                    display_name,
+                    scan_code,
+                    search_name,
+                    ..
+                } = value;
 
-    // === FILTERS ===
-
-    
-    gen_filters.push("impl_select_filters![".to_string());
-
-    #[allow(clippy::collapsible_if)]
-    for (ref key, ref value) in all_filters.iter() {
-        for abstract_field in value.abstract_fields.iter() {
-
-            // FIXME: FieldType::ConvertedCombo missing;
-            // if value.id.eq("ISSUER_COUNTRY_CODE") {
-            // println!("{key} - value \n {:#?}", value);
-
-            let filted_id = &value.id;
-
-            let AbstractField {
-                parameter_type,
-                code,
-                code_not,
-                display_name,
-                tooltip,
-                separator,
-                combo_values,
-            } = abstract_field;
-
-            // ! Copy all below? to filters v2
-
-            let parameter_struct_name = match  code.as_str() {
-                "bondAssetSubTypeStrBeginsWithOneOf"  => "BondAssetSubTypeStr",
-                "bondUSStateLike"  => "BondUSState",
-                c => &capitalize_first_letter(c),
+                let doc = if !display_name.is_empty() && !search_name.is_empty() {
+                    display_name.to_string() + "." + search_name
+                } else if search_name.is_empty() {
+                    display_name.to_string()
+                } else {
+                    search_name.to_string()
                 };
-            let parameter_struct_name = parameter_struct_name.to_string().replace("Above", "").replace("Below", "");
 
-            let parameter_type =  match parameter_type {
-                ScannerFieldType::Combo | &ScannerFieldType::ConvertedCombo => parameter_struct_name,
-                ScannerFieldType::Double => "f64".to_string(),
-                ScannerFieldType::Int => "i64".to_string(),
-                ScannerFieldType::String => "String".to_string(),
-                ScannerFieldType::Boolean => "bool".to_string(),
-                ScannerFieldType::Conid => "u64".to_string(),
-                ScannerFieldType::Date => "ScannerDate".to_string(),
-                ScannerFieldType::StringList => "BondStkSymbols".to_string(),
-                ScannerFieldType::SubstrList => "BondIssuers".to_string(),
-                ScannerFieldType::NotYetImplementedOrInitState(_) => unreachable!()
-            };
-            
-            
-            let display_name = display_name.replace("&amp;", "n");
-
-
-
-            let doc = if !display_name.is_empty() && !tooltip.is_empty(){
-                format!("{display_name}. {tooltip}")
-            }else if display_name.is_empty() {
-                tooltip.to_string()
-            } else { display_name.to_string() };
-
-            let doc = format!("\"{}\"", doc);
-
-
-            let mut row_filter_parameter_struct = String::new();
-            row_filter_parameter_struct.push_str("(");
-            row_filter_parameter_struct.push_str(&to_snake_case(&code));
-            row_filter_parameter_struct.push_str(",\"");
-            row_filter_parameter_struct.push_str(&code);
-            row_filter_parameter_struct.push_str("\",");
-            row_filter_parameter_struct.push_str(&parameter_type);
-            row_filter_parameter_struct.push_str(",");
-            row_filter_parameter_struct.push_str(&doc);
-            row_filter_parameter_struct.push_str("),");
-            gen_filters.push(row_filter_parameter_struct);
-
-            // println!(
-            //     "({}, {}, {})",
-            //     &code, &parameter_type, &doc
-            //     );
-    
-            if !code_not.is_empty(){
-                let mut row_filter_parameter_struct = String::new();
-                row_filter_parameter_struct.push_str("(");
-                row_filter_parameter_struct.push_str(&to_snake_case(&code_not));
-                row_filter_parameter_struct.push_str(",\"");
-                row_filter_parameter_struct.push_str(&code_not);
-                row_filter_parameter_struct.push_str("\",");
-                row_filter_parameter_struct.push_str(&parameter_type);
-                row_filter_parameter_struct.push_str(",");
-                row_filter_parameter_struct.push_str(&doc);
-                row_filter_parameter_struct.push_str("),");
-                gen_filters.push(row_filter_parameter_struct);
-            // println!(
-            //     "({}, {}, {})",
-            //     &code_not, &parameter_type, &doc
-            //     );
-            }
-    
-            if abstract_field.combo_values.len() > 0 {
-
-                let mut row_filter_parameter_struct = String::new();
-                row_filter_parameter_struct.push_str("create_enums_for_filters![");
-                row_filter_parameter_struct.push_str(&parameter_type);
-                row_filter_parameter_struct.push_str(" => ");
-
-                // let mut combos = vec![];
-                for combo_value in &abstract_field.combo_values {
-                    let ComboValue {
-                        code,
-                        //Documentation 2
-                        display_name,
-                        //Documentation 1
-                        tooltip,
-                        default,
-                    } = combo_value;
-                    if default == "true" {
-                        continue;
-                    }
-
-                    let mut enum_var_name = if tooltip.is_empty() { display_name} else {tooltip} .replace("T-", "T").replace('-', "minus").replace('+', "plus");
-
-                    if enum_var_name.is_empty(){
-                        enum_var_name = code.clone();
-                    }
-
-                    row_filter_parameter_struct.push_str("(");
-                    row_filter_parameter_struct.push_str(&to_camel_case_save_acronyms(&enum_var_name));
-                    row_filter_parameter_struct.push_str(",\"");
-                    row_filter_parameter_struct.push_str(&code);
-                    row_filter_parameter_struct.push_str("\"),");
-                }
-                row_filter_parameter_struct.push_str("];\n");
-                gen_enums.push(row_filter_parameter_struct);
-                // println!("{id} - value \n {:#?}", value);
-                // println!("{key} - combo_values.len(): {}", abs.combo_values.len());
-                // }
+                gen_scan_code.push(format!(
+                    r#"    ("{}", {}, "{}"),"#,
+                    doc,
+                    to_snake_case(scan_code),
+                    scan_code
+                ));
             }
         }
-        // print!("]");
-    }
-    gen_filters.push("];".to_string());
+        gen_scan_code.push("];".to_string());
 
-    // ! === INSTRUMENTS 2222222222222222222 ===
-    for value in all_instruments.iter() {
-        let Instrument {
-            name,
-            type_,
-            sec_type,
-            nscan_sec_type,
-            filters,
-            group,
-            short_name,
-            cloud_scan_not_supported,
-            feature_codes,
-            } = value; 
+        // === FILTERS ===
+
+        let mut structs_name_for_impl_filters = struct_instrument_name.clone();
+        structs_name_for_impl_filters.push_str(&postfix_select_filters);
+
+        list_of_filters_struct.push(structs_name_for_impl_filters.clone() + ",");
+
+        gen_filters.push(format!(
+            "impl_select_filters![ {} =>",
+            structs_name_for_impl_filters
+        ));
 
         for filter_code in filters {
-            // type_ == instrument code
-            // f == filter code
-
-            let structs_name_for_impl_filters = map_instrument_to_locations_struct_names.get(type_);
-            
-            if let Some(filter) = all_filters.get(filter_code){
-                // println!("{}, {:?} -> {:?}",type_, filter, structs_name_for_impl_filters);
-                // println!("{}, {}, {:?}",type_, f,  filter);
-
-
+            if let Some(filter) = all_filters.get(filter_code) {
                 for abstract_field in filter.abstract_fields.iter() {
-
-                    // FIXME: FieldType::ConvertedCombo missing;
-                    // if value.id.eq("ISSUER_COUNTRY_CODE") {
-                    // println!("{key} - value \n {:#?}", value);
-        
                     let AbstractField {
                         parameter_type,
                         code,
                         code_not,
                         display_name,
                         tooltip,
-                        separator,
-                        combo_values,
+                        ..
                     } = abstract_field;
-                }        
 
-                // filter for impl here
-            }else {
-                unimplemented_filters.insert(filter_code);
+                    let parameter_struct_name = match code.as_str() {
+                        "bondAssetSubTypeStrBeginsWithOneOf" => "BondAssetSubTypeStr",
+                        "bondUSStateLike" => "BondUSState",
+                        c => &capitalize_first_letter(c),
+                    };
+                    let parameter_struct_name = parameter_struct_name
+                        .to_string()
+                        .replace("Above", "")
+                        .replace("Below", "");
+
+                    let parameter_type = match parameter_type {
+                        ScannerFieldType::Combo | &ScannerFieldType::ConvertedCombo => {
+                            parameter_struct_name
+                        }
+                        ScannerFieldType::Double => "f64".to_string(),
+                        ScannerFieldType::Int => "i64".to_string(),
+                        ScannerFieldType::String => "String".to_string(),
+                        ScannerFieldType::Boolean => "bool".to_string(),
+                        ScannerFieldType::Conid => "u64".to_string(),
+                        ScannerFieldType::Date => "ScannerDate".to_string(),
+                        ScannerFieldType::StringList => "BondStkSymbols".to_string(),
+                        ScannerFieldType::SubstrList => "BondIssuers".to_string(),
+                        ScannerFieldType::NotYetImplementedOrInitState(_) => unreachable!(),
+                    };
+
+                    let display_name = display_name.replace("&amp;", "n");
+
+                    let doc = if !display_name.is_empty() && !tooltip.is_empty() {
+                        format!("{display_name}. {tooltip}")
+                    } else if display_name.is_empty() {
+                        tooltip.to_string()
+                    } else {
+                        display_name.to_string()
+                    };
+
+                    gen_filters.push(format!(
+                        r#"    ({}, "{}", {}, "{}"),"#,
+                        to_snake_case(&code),
+                        code,
+                        parameter_type,
+                        doc
+                    ));
+
+                    if !code_not.is_empty() {
+                        gen_filters.push(format!(
+                            r#"    ({}, "{}", {}, "{}"),"#,
+                            to_snake_case(&code),
+                            code_not,
+                            parameter_type,
+                            doc
+                        ));
+                    }
+
+                    // === GEN COMBO ENUMS ===
+
+                    if check_if_enum_name_created.get(&parameter_type).is_none() {
+                        if abstract_field.combo_values.len() > 0 {
+                            gen_enums.push(format!(
+                                r#"create_enums_for_filters![ {}  => "#,
+                                parameter_type
+                            ));
+
+                            let mut enum_variants = String::new();
+                            for combo_value in &abstract_field.combo_values {
+                                let ComboValue {
+                                    code,
+                                    //Documentation 2
+                                    display_name,
+                                    //Documentation 1
+                                    tooltip,
+                                    default,
+                                } = combo_value;
+                                if default == "true" {
+                                    continue;
+                                }
+
+                                let mut enum_var_name = if tooltip.is_empty() {
+                                    display_name
+                                } else {
+                                    tooltip
+                                }
+                                .replace("T-", "T")
+                                .replace('-', "minus")
+                                .replace('+', "plus");
+
+                                if enum_var_name.is_empty() {
+                                    enum_var_name = code.clone();
+                                }
+
+                                enum_variants.push_str(&format!(
+                                    r#"({}, "{}"),"#,
+                                    to_camel_case_save_acronyms(&enum_var_name),
+                                    code
+                                ));
+                            }
+                            gen_enums.push(enum_variants + "];\n");
+                        }
+                        check_if_enum_name_created.insert(parameter_type);
+                    }
+                }
+            } else {
+                unimplemented_filters.insert(filter_code.clone());
             }
-        
         }
+        gen_filters.push("];".to_string());
     }
-    // ! === INSTRUMENTS 2222222222222222222 ===
+    gen_instrument.push("];".to_string());
 
-
-    // gen_instrument.iter().for_each(|gi| println!("{}", gi));
-    // gen_location.iter().for_each(|gi| println!("{}", gi));
-    // gen_scan_code.iter().for_each(|gi| println!("{}", gi));
-    // gen_enums.iter().for_each(|gi| println!("{}", gi));
-    
-    // gen_filters.iter().for_each(|gi| println!("{}", gi));
-
-    // println!("gen_scan_code: {}", gen_scan_code.len());
-
-
-
-    println!("");
-    println!("all_instruments: {}", &all_instruments.len());
-    println!("all_locations: {}", &all_locations.len());
-    println!("all_scan_types: {}", &all_scan_types.len());
-    println!("all_filters: {}", &all_filters.len());
-
+    Ok(GenDataForMacrosInput {
+        gen_instrument,
+        gen_location,
+        gen_scan_code,
+        gen_enums,
+        gen_filters,
+        list_of_filters_struct,
+        unimplemented_filters,
+    })
 }
 
-fn recursion_over_location(
-    location: &Location,
-    all_location: &mut Vec<String>,
-    postfix_select_location_next: &String,
-    map_instrument_select_scan_code: &mut HashMap<String, Vec<String>>,
-) {
+fn recursion_over_location(location: &Location, all_location: &mut Vec<String>) {
     let Location {
         display_name,
-        short_name,
         tooltip,
-        raw_price_only,
         location_code,
-        instrument,
-        route_exchange,
-        delayed_only,
-        access,
         child_locations,
+        ..
     } = location;
 
     let name = if !tooltip.is_empty() {
@@ -749,46 +715,17 @@ fn recursion_over_location(
         name
     };
 
-    let mut struct_name = to_camel_case_save_acronyms(&to_snake_case(location_code));
-    struct_name.push_str(postfix_select_location_next);
-
-    if let Some(x) = map_instrument_select_scan_code.get_mut(instrument) {
-        x.push(struct_name.clone());
-    } else {
-        map_instrument_select_scan_code.insert(instrument.to_string(), vec![struct_name.clone()]);
-    }
-
-    let mut row_location = String::new();
-    row_location.push_str("(\"");
-    row_location.push_str(&name.to_string());
-    row_location.push_str("\",");
-    row_location.push_str(&to_snake_case(func_name));
-    row_location.push_str(",");
-    row_location.push_str(&struct_name);
-    row_location.push_str(postfix_select_location_next);
-    row_location.push_str(",\"");
-    row_location.push_str(location_code);
-    row_location.push_str("\"),");
-
-    all_location.push(row_location);
-    // println!(
-    //     "({}, {}, {}, {})",
-    //     name,
-    //     to_snake_case(func_name),
-    //     struct_name,
-    //     location_code
-    // );
+    all_location.push(format!(
+        r#"    ("{}", {}, "{}"),"#,
+        name.to_string(),
+        to_snake_case(func_name),
+        location_code
+    ));
 
     for next_location in child_locations {
-        recursion_over_location(
-            next_location,
-            all_location,
-            postfix_select_location_next,
-            map_instrument_select_scan_code,
-        );
+        recursion_over_location(next_location, all_location);
     }
 }
-
 
 struct ParsedParameters {
     // todo: add comment for Keys

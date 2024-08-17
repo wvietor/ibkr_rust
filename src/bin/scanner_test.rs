@@ -1,5 +1,4 @@
-use ibapi::client::{ActiveClient, Builder, Host, Mode};
-use ibapi::prelude::Tag;
+use ibapi::client::{ActiveClient, Builder};
 use ibapi::wrapper::{CancelToken, Initializer, Wrapper};
 use std::future::Future;
 use std::net::Ipv4Addr;
@@ -13,9 +12,7 @@ use tracing_subscriber::EnvFilter;
 #[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 struct ScannerWrapper;
 
-use ibapi::*;
-
-impl ibapi::wrapper::Wrapper for ScannerWrapper {
+impl Wrapper for ScannerWrapper {
     fn scanner_parameters(&mut self, req_id: i64, xml: String) -> impl Future + Send {
         async move {
             info!(
@@ -26,7 +23,7 @@ impl ibapi::wrapper::Wrapper for ScannerWrapper {
     }
 }
 
-impl ibapi::wrapper::Initializer for ScannerWrapper {
+impl Initializer for ScannerWrapper {
     type Wrap<'c> = ScannerWrapper;
     type Recur<'c> = ();
 
@@ -37,8 +34,8 @@ impl ibapi::wrapper::Initializer for ScannerWrapper {
         _cancel_loop: CancelToken,
     ) -> impl Future<Output = (Self::Wrap<'_>, Self::Recur<'_>)> + Send {
         async move {
-            let req_status = client.req_current_time().await;
-            let req_status = client.req_scanner_parameters().await;
+            let _ = client.req_current_time().await;
+            let _ = client.req_scanner_parameters().await;
 
             (self, ())
         }
@@ -97,7 +94,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rt = init_tokio();
 
     rt.block_on(async {
-        let mut client = Builder::manual(4002, Ipv4Addr::from_str("127.0.0.1").ok())
+        let client = Builder::manual(4002, Ipv4Addr::from_str("127.0.0.1").ok())
             .connect(5)
             .await?
             .remote(ScannerWrapper)
