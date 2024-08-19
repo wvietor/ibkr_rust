@@ -5,6 +5,7 @@ use super::*;
 // === TODO ===
 // impl BondStkSymbols{} for BOND_STK_SYMBOL
 // impl BondIssuers{} for BOND_ISSUER
+// impl scannerSubscriptionOptions? (codes?)
 // impl skip() for scanCode?
 // impl ScannerSubscription: scanner_setting_pairs? 
 // xmllint command? remove? comments?
@@ -380,18 +381,19 @@ impl_select_location![ USStocksSelectLocation, USStocksSelectScanCode  =>
 ]; 
 
 
-
 macro_rules! impl_select_scan_code {
     [ $old_struct_name:ident, $new_struct_name:ident => $(($doc:expr, $func_name:ident, $code:expr),)+  $(,)?  ] => {
 
         #[derive(Debug, Clone)]
         pub struct $new_struct_name {
-            instrument_type: String,
+          	instrument_type: String,
             location_code: String,
             scan_code: String,
             number_of_rows: i32,
             filters: Vec<(String, String)>
         }
+        
+
         
         $(
 
@@ -408,6 +410,7 @@ macro_rules! impl_select_scan_code {
                         filters: Vec::new(),
                     }
                 }
+                                
             }
 
         )+
@@ -2547,59 +2550,6 @@ impl BondIssuers{
         unimplemented!()
     }
 }
-
-
-macro_rules! impl_number_of_rows {
-    [ $struct_name:ident, $parameter_type: ty, $doc: expr => ($($enum_name:ident),+ $(,)?)] => {
-        $(
-            impl $enum_name {
-                #[inline]
-                #[must_use]
-                #[doc=stringify!($doc)]
-                pub fn $struct_name(mut self, parameter: $parameter_type) -> Self {
-
-                    Self {
-                        instrument_type: self.instrument_type,
-                        location_code: self.location_code,
-                        scan_code: self.scan_code,
-                        number_of_rows: parameter,
-                        filters: self.filters,
-                    }
-                }
-            }
-        )*
-
-   };
-}
-
-impl_number_of_rows![ number_of_result_rows, i32, "Selecting the maximum number of results."  =>
-    (USStocksSelectFilters,
-    USEquityETFsSelectFilters,
-    USFixedIncomeETFsSelectFilters,
-    USFuturesSelectFilters,
-    USIndexesSelectFilters,
-    CorporateBondsSelectFilters,
-    USCDsSelectFilters,
-    USAgencyBondsSelectFilters,
-    USTreasuriesSelectFilters,
-    USMunicipalBondsSelectFilters,
-    NonUSSovereignBondsSelectFilters,
-    USSBLsSelectFilters,
-    MutualFundsSelectFilters,
-    AmericaNonUSStocksSelectFilters,
-    AmericaNonUSFuturesSelectFilters,
-    AmericaNonUSSSFsSelectFilters,
-    EuropeStocksSelectFilters,
-    EuropeFuturesSelectFilters,
-    EuropeIndexesSelectFilters,
-    EuropeSSFsSelectFilters,
-    MidEastStocksSelectFilters,
-    AsiaStocksSelectFilters,
-    AsiaFuturesSelectFilters,
-    AsiaIndexesSelectFilters,
-    AsiaSSFsSelectFilters,
-    NativeCombosSelectFilters,)
-];
 
 
 macro_rules! impl_select_filters {
@@ -4973,4 +4923,118 @@ impl_select_filters![ AsiaSSFsSelectFilters =>
 ];
 impl_select_filters![ NativeCombosSelectFilters =>
   (under_con_id,"underConID",u64,"Underlying Contract"),
+];
+
+
+
+
+
+macro_rules! impl_number_of_rows {
+    [ $struct_name:ident, $parameter_type: ty, $doc: expr => ($($enum_name:ident),+ $(,)?)] => {
+        $(
+            impl $enum_name {
+                #[inline]
+                #[must_use]
+                #[doc=stringify!($doc)]
+                pub fn $struct_name(mut self, parameter: $parameter_type) -> Self {
+
+                    Self {
+                        instrument_type: self.instrument_type,
+                        location_code: self.location_code,
+                        scan_code: self.scan_code,
+                        number_of_rows: parameter,
+                        filters: self.filters,
+                    }
+                }
+            }
+        )*
+
+   };
+}
+
+impl_number_of_rows![ number_of_result_rows, i32, "Selecting the maximum number of results."  =>
+    (USStocksSelectFilters,
+    USEquityETFsSelectFilters,
+    USFixedIncomeETFsSelectFilters,
+    USFuturesSelectFilters,
+    USIndexesSelectFilters,
+    CorporateBondsSelectFilters,
+    USCDsSelectFilters,
+    USAgencyBondsSelectFilters,
+    USTreasuriesSelectFilters,
+    USMunicipalBondsSelectFilters,
+    NonUSSovereignBondsSelectFilters,
+    USSBLsSelectFilters,
+    MutualFundsSelectFilters,
+    AmericaNonUSStocksSelectFilters,
+    AmericaNonUSFuturesSelectFilters,
+    AmericaNonUSSSFsSelectFilters,
+    EuropeStocksSelectFilters,
+    EuropeFuturesSelectFilters,
+    EuropeIndexesSelectFilters,
+    EuropeSSFsSelectFilters,
+    MidEastStocksSelectFilters,
+    AsiaStocksSelectFilters,
+    AsiaFuturesSelectFilters,
+    AsiaIndexesSelectFilters,
+    AsiaSSFsSelectFilters,
+    NativeCombosSelectFilters,)
+];
+
+
+macro_rules! impl_number_of_rows {
+    [ ($($enum_name:ident),+ $(,)?) ] => {
+    
+        $(
+        		#[doc=concat!("The implementation of ScannerSubscriptionIsComplete indicates that the structure", stringify!($enum_name), "is ready to create a call to req_scanner_subscription.")]
+            impl ScannerSubscriptionIsComplete for $enum_name {
+				       	fn get_instrument_type(&self) -> &String {
+									&self.instrument_type
+								}
+								fn get_location_code(&self)-> &String {
+									&self.location_code
+								}
+								fn get_scan_code(&self)-> &String {
+									&self.scan_code
+								}
+								fn get_number_of_rows(&self) -> &i32 {
+									&self.number_of_rows
+								}
+								fn get_filters(&self) -> &Vec<(String, String)> {
+									&self.filters
+								}
+            }
+        )*
+
+   };
+}
+
+
+impl_number_of_rows![
+    (USStocksSelectFilters,
+    USEquityETFsSelectFilters,
+    USFixedIncomeETFsSelectFilters,
+    USFuturesSelectFilters,
+    USIndexesSelectFilters,
+    CorporateBondsSelectFilters,
+    USCDsSelectFilters,
+    USAgencyBondsSelectFilters,
+    USTreasuriesSelectFilters,
+    USMunicipalBondsSelectFilters,
+    NonUSSovereignBondsSelectFilters,
+    USSBLsSelectFilters,
+    MutualFundsSelectFilters,
+    AmericaNonUSStocksSelectFilters,
+    AmericaNonUSFuturesSelectFilters,
+    AmericaNonUSSSFsSelectFilters,
+    EuropeStocksSelectFilters,
+    EuropeFuturesSelectFilters,
+    EuropeIndexesSelectFilters,
+    EuropeSSFsSelectFilters,
+    MidEastStocksSelectFilters,
+    AsiaStocksSelectFilters,
+    AsiaFuturesSelectFilters,
+    AsiaIndexesSelectFilters,
+    AsiaSSFsSelectFilters,
+    NativeCombosSelectFilters,)
 ];

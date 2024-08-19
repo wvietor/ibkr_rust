@@ -5,6 +5,10 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 
+// At the moment, parsing is only available to developers to create a ScannerSubsctiption.
+
+// Some commands for manual search:
+
 // === instrumentList === //
 // xmllint --xpath '//ScanParameterResponse/InstrumentList[@varName="instrumentList"]/Instrument' ./resp_scan_param_rust.xml
 
