@@ -70,6 +70,14 @@
 		"reveal": "always"
 	},
 	{
+		"label": "TEST IBKR_RUST ACCOUNT scanner_subscription",
+		"command": "RUSTFLAGS=-Awarnings cargo test -- --nocapture test_req_scanner_subscription",
+		// "env": { "foo": "bar" },
+		"use_new_terminal": false,
+		"allow_concurrent_runs": false,
+		"reveal": "always"
+	},
+	{
 		"label": "TEST IBKR_RUST SCANNER parse_xml",
 		"command": "RUSTFLAGS=-Awarnings cargo test -- --nocapture test_gen_data_for_macros_input",
 		// "env": { "foo": "bar" },
@@ -78,3 +86,5 @@
 		"reveal": "always"
 	}
 ]
+
+//test_req_scanner_subscription

@@ -4981,6 +4981,13 @@ impl_number_of_rows![ number_of_result_rows, i32, "Selecting the maximum number 
     NativeCombosSelectFilters,)
 ];
 
+pub trait ScannerSubscriptionIsComplete{
+	fn get_instrument_type(&self) -> &String;
+	fn get_location_code(&self)-> &String;
+	fn get_scan_code(&self)-> &String;
+	fn get_number_of_rows(&self) -> &i32; 
+	fn get_filters(&self) -> &Vec<(String, String)> ;
+}
 
 macro_rules! impl_number_of_rows {
     [ ($($enum_name:ident),+ $(,)?) ] => {
