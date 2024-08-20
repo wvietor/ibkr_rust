@@ -11,6 +11,7 @@ use crate::payload::{
     self, Bar, ExchangeId, HistogramEntry, OrderStatus, Pnl, PnlSingle, Position, PositionSummary,
     TickData,
 };
+use crate::scanner_subscription::ScannerContract;
 use crate::tick::{
     self, Accessibility, AuctionData, Class, Dividends, ExtremeValue, Ipo, MarkPrice, News,
     OpenInterest, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
@@ -45,8 +46,16 @@ pub trait LocalWrapper {
     fn current_time(&mut self, req_id: i64, datetime: DateTime<Utc>) -> impl Future {}
     /// The callback message that corresponds to ETF Net Asset Value (NAV) data.
     fn etf_nav(&mut self, req_id: i64, nav: tick::EtfNav) -> impl Future {}
+
+    // void scannerParameters(String xml);
+    // void scannerData(int reqId, int rank, ContractDetails contractDetails, String distance,
+    // 		String benchmark, String projection, String legsStr);
+    // void scannerDataEnd(int reqId);
+
     ///
-    fn req_scanner_parameters(&mut self, req_id: i64) -> impl Future + Send {}
+    fn scanner_data(&mut self, req_id: i64, result: Vec<ScannerContract>) -> impl Future + Send {}
+    ///
+    fn scanner_data_end(&mut self, req_id: i64) -> impl Future + Send {}
     ///
     fn scanner_parameters(&mut self, req_id: i64, xml: String) -> impl Future + Send {}
 

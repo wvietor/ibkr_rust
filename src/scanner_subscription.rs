@@ -19,6 +19,28 @@ use super::*;
 // task has warning and the output is cut in half(VScode) ?
 
 
+#[derive(Debug, Clone)]
+pub struct ScannerContract {
+    pub result_number: i32, // remove?
+    pub contract_id: ContractId,
+    pub symbol: String,
+    pub sec_type: ContractType,
+    pub expiration_date: String,
+    pub strike: String,
+    pub class: String, // right
+    pub exchange: Routing,
+    pub currency: Currency,
+    pub local_symbol: String,
+    pub market_name: String,
+    pub trading_class: String,
+
+    pub distance: String,
+    pub benchmark: String,
+    pub projection: String,
+    pub legs_str: String,
+}
+
+
 const NO_ROW_NUMBER_SPECIFIED: i32 = -1;
 
 /// Defines a market scanner request, including its filters.
@@ -45,6 +67,8 @@ pub struct ScannerSubscription {
     // number_of_rows: i32, // implemented!
 }
 
+use exchange::Routing;
+use prelude::{ContractId, ContractType, Currency};
 use scanner_parameters::*;
 macro_rules! impl_select_instrument {
 	[$base:ident => $(($doc:expr, $func_name: ident, $struct_name: ident, $code:expr)),+ $(,)?] => {

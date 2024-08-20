@@ -16,6 +16,7 @@ use crate::market_data::{
     updating_historical_bar,
 };
 use crate::message::{In, Out, ToClient, ToWrapper};
+use crate::scanner_subscription::*;
 use crate::wrapper::{CancelToken, Initializer, LocalInitializer, LocalWrapper, Wrapper};
 use crate::{
     account::Tag,
@@ -1774,34 +1775,51 @@ impl Client<indicators::Active> {
     }
 
     // === Scanner Parameters ===
+    ///
     pub async fn req_scanner_parameters(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
 
         self.writer.add_body((Out::ReqScannerParameters, VERSION))?;
         self.writer.send().await
     }
+
     // === Scanner Subscription ===
+    pub async fn req_scanner_subscription<T: ScannerSubscriptionIsComplete>(
+        &mut self,
+        subsctiption: &T,
+    ) -> ReqResult {
+        // - scannerSubscriptionOptions ?
+        let req_id = self.get_next_req_id();
 
-    // public synchronized void reqScannerSubscription(int tickerId,
-    //         ScannerSubscription subscription,
-    //         List<TagValue> scannerSubscriptionOptions,
-    //         List<TagValue> scannerSubscriptionFilterOptions) {
-    pub async fn req_scanner_subscription(&mut self) -> ReqResult {
-        //+ scannerSubscriptionOptions
-        //+ scannerSubscriptionFilterOptions
-        const VERSION: u8 = 4;
+        self.writer.add_body((
+            Out::ReqScannerSubscription,
+            req_id,
+            subsctiption.get_number_of_rows(),
+            subsctiption.get_instrument_type(),
+            subsctiption.get_location_code(),
+            subsctiption.get_scan_code(),
+            [""; 18],
+            subsctiption
+                .get_filters()
+                .iter()
+                .fold(String::new(), |mut output, (tag, value)| {
+                    output += &format!("{}={};", tag, value);
+                    output
+                }),
+            "",
+        ))?;
 
-        self.writer.add_body((Out::ReqScannerParameters, VERSION))?;
         self.writer.send().await
     }
 
-    //    public synchronized void cancelScannerSubscription( int tickerId) {
-    pub async fn cancel_scanner_subscription(&mut self, tickerId: i32) -> ReqResult {
+    ///
+    pub async fn cancel_scanner_subscription(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
         self.writer
-            .add_body((Out::CancelScannerSubscription, VERSION, tickerId))?;
+            .add_body((Out::CancelScannerSubscription, VERSION, req_id))?;
         self.writer.send().await
     }
+
     // === Historical Market Data ===
 
     /// Request historical bar data for a given security. See [`historical_bar`] for

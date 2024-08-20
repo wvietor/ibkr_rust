@@ -2,6 +2,7 @@ use super::*;
 use core::future::Future;
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
+use scanner_subscription::ScannerContract;
 use thiserror::Error;
 
 use crate::account::{self, ParseAttributeError, Tag, TagValue};
@@ -1024,18 +1025,11 @@ pub trait Local: wrapper::LocalWrapper {
         wrapper: &mut Self,
     ) -> impl Future<Output = DecodeResult> {
         async move {
-            // println!("fields: {:?}", &fields);
             decode_fields!(
                 fields =>
                     req_id @ 1: i64,
                     xml @ 0: String
             );
-
-            // info!(
-            //     "scanner_parameters_msg() -> req_id: {}, xml.len:{}",
-            //     &req_id,
-            //     &xml.len()
-            // );
 
             let _ = xml.replace("\\n", "\n").replace("\\t", "\t"); // Temporary solution
             wrapper.scanner_parameters(req_id, xml).await;
@@ -1049,7 +1043,64 @@ pub trait Local: wrapper::LocalWrapper {
         wrapper: &mut Self,
     ) -> impl Future<Output = DecodeResult> {
         async move {
-            println!("{:?}", &fields);
+            // println!("{:?}", &fields);
+
+            decode_fields!(
+                fields =>
+                    msg_code @ 0: i64,
+                    who_knows @ 0: i64,
+                    req_id @ 0: i64,
+                    number_of_elements @ 0: i32,
+            );
+
+            let mut results = Vec::with_capacity(number_of_elements as usize);
+
+            for index in 0..number_of_elements {
+                decode_fields!(
+                    fields =>
+                        result_number @ 0: i32,
+                        contract_id @ 0: ContractId,
+                        symbol @ 0: String,
+                        sec_type @ 0: ContractType,
+                        expiration_date @ 0: String,
+                        strike @ 0: String,
+                        class @ 0: String, // right
+                        exchange @ 0: Routing,
+                        currency @ 0: Currency,
+                        local_symbol @ 0: String,
+                        market_name @ 0: String,
+                        trading_class @ 0: String,
+
+                        distance @ 0: String,
+                        benchmark @ 0: String,
+                        projection @ 0: String,
+                        legs_str @ 0: String,
+
+                );
+                let sc = ScannerContract {
+                    result_number,
+                    contract_id,
+                    symbol,
+                    sec_type,
+                    expiration_date,
+                    strike,
+                    class, // right
+                    exchange,
+                    currency,
+                    local_symbol,
+                    market_name,
+                    trading_class,
+
+                    distance,
+                    benchmark,
+                    projection,
+                    legs_str,
+                };
+                results.push(sc)
+            }
+
+            wrapper.scanner_data(req_id, results).await;
+            wrapper.scanner_data_end(req_id).await;
             Ok(())
         }
     }

@@ -1,30 +1,38 @@
 use ibapi::client::{ActiveClient, Builder};
-use ibapi::scanner_subscription::ScannerSubscription;
+use ibapi::scanner_subscription::{ScannerContract, ScannerSubscription};
 use ibapi::wrapper::CancelToken;
 use std::future::Future;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
+use tracing::info;
 use tracing_test::traced_test;
 
-const REQUESTS_COUNT: u8 = 1;
+const REQUESTS_COUNT: u8 = 10;
+const NUMBER_OF_RESULT: usize = 7;
 
 #[derive(Debug, Default)]
 struct ScannerWrapper(u8);
 
 impl ibapi::wrapper::Wrapper for ScannerWrapper {
-    fn scanner_data(&mut self, req_id: i64) -> impl Future + Send + Send {
+    fn scanner_data(
+        &mut self,
+        req_id: i64,
+        result: Vec<ScannerContract>,
+    ) -> impl Future + Send + Send {
         async move {
             self.0 += 1;
-            println!("scanner req: {req_id}");
-
-            // println!("{}/{REQUESTS_COUNT} {}", self.0,);
+            println!(
+                "scanner req: {req_id}, assert: {}",
+                result.len() == NUMBER_OF_RESULT
+            );
+            // result.iter().for_each(|r| println!("{:?}", r));
+            assert!(result.len() == NUMBER_OF_RESULT);
         }
     }
     fn scanner_data_end(&mut self, req_id: i64) -> impl Future + Send + Send {
         async move {
             self.0 -= 1;
-            println!("scanner end: {req_id}");
-            // println!("{}/{REQUESTS_COUNT} {}", self.0,);
+            println!("scanner req: {req_id} end!");
         }
     }
 }
@@ -43,9 +51,9 @@ impl ibapi::wrapper::Initializer for ScannerWrapper {
             for _ in 0..REQUESTS_COUNT {
                 let subscription = ScannerSubscription::us_stocks()
                     .us_major()
-                    .hot_by_opt_volume()
-                    .number_of_result_rows(11)
-                    .price_below(30.0);
+                    .top_perc_gain()
+                    .number_of_result_rows(NUMBER_OF_RESULT as i32);
+                // .price_below(30.0);
                 let _ = client.req_scanner_subscription(&subscription).await;
             }
             (self, ())
