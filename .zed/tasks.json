@@ -70,7 +70,7 @@
 		"reveal": "always"
 	},
 	{
-		"label": "TEST IBKR_RUST ACCOUNT scanner_subscription",
+		"label": "TEST IBKR_RUST SCANNER scanner_subscription",
 		"command": "RUSTFLAGS=-Awarnings cargo test -- --nocapture test_req_scanner_subscription",
 		// "env": { "foo": "bar" },
 		"use_new_terminal": false,

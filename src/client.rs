@@ -1784,10 +1784,11 @@ impl Client<indicators::Active> {
     }
 
     // === Scanner Subscription ===
+    ///
     pub async fn req_scanner_subscription<T: ScannerSubscriptionIsComplete>(
         &mut self,
         subsctiption: &T,
-    ) -> ReqResult {
+    ) -> IdResult {
         // - scannerSubscriptionOptions ?
         let req_id = self.get_next_req_id();
 
@@ -1809,7 +1810,8 @@ impl Client<indicators::Active> {
             "",
         ))?;
 
-        self.writer.send().await
+        self.writer.send().await;
+        Ok(req_id)
     }
 
     ///
