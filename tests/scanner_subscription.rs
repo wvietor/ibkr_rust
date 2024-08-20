@@ -4,17 +4,20 @@ use ibapi::wrapper::CancelToken;
 use std::future::Future;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::LazyLock;
 use tracing::info;
 use tracing_test::traced_test;
 
-const REQUESTS_COUNT: i32 = 14;
-const COMPLITED_REQUEST_COUNT: usize = REQUESTS_COUNT as usize / 2;
+const REQUESTS_COUNT: i32 = 13;
+const COMPLITED_REQUEST_COUNT: i32 = REQUESTS_COUNT / 2;
 const NUMBER_OF_RESULT: usize = 10;
+
+static TOTAL_REQUESTS: AtomicI32 = AtomicI32::new(0);
 
 #[derive(Debug, Default)]
 struct ScannerWrapper {
-    reqwests: i32,
-    good_responces: Vec<(i64, usize)>,
+    responces: i32,
 }
 
 impl ibapi::wrapper::Wrapper for ScannerWrapper {
@@ -24,31 +27,23 @@ impl ibapi::wrapper::Wrapper for ScannerWrapper {
         result: Vec<ScannerContract>,
     ) -> impl Future + Send + Send {
         async move {
-            self.reqwests += 1;
-            self.good_responces.push((req_id, result.len()));
+            self.responces += 1;
 
-            // println!(
-            //     "scanner req: {req_id}, assert: {}",
-            //     result.len() == NUMBER_OF_RESULT
-            // );
             // result.iter().for_each(|r| println!("{:?}", r));
+
             assert_eq!(result.len(), NUMBER_OF_RESULT);
         }
     }
     fn scanner_data_end(&mut self, req_id: i64) -> impl Future + Send + Send {
         async move {
-            // self.reqwests -= 1;
-
             println!(
                 "Results with responces: {}/{}",
-                self.good_responces.len(),
-                COMPLITED_REQUEST_COUNT
+                self.responces, COMPLITED_REQUEST_COUNT
             );
-            if self.reqwests - req_id as i32 == REQUESTS_COUNT {
-                assert_eq!(self.good_responces.len(), COMPLITED_REQUEST_COUNT);
-            }
 
-            // println!("scanner req: {req_id} end!");
+            if TOTAL_REQUESTS.load(Ordering::SeqCst) - self.responces == 0 {
+                assert_eq!(self.responces, COMPLITED_REQUEST_COUNT);
+            }
         }
     }
 }
@@ -70,7 +65,7 @@ impl ibapi::wrapper::Initializer for ScannerWrapper {
                     .top_perc_gain()
                     .number_of_result_rows(NUMBER_OF_RESULT as i32);
                 // .price_below(30.0);
-
+                TOTAL_REQUESTS.fetch_add(1, Ordering::SeqCst);
                 if let Ok(req_id) = client.req_scanner_subscription(&subscription).await {
                     if req_id % 2 == 0 {
                         let _ = client.cancel_scanner_subscription(req_id).await;
@@ -85,15 +80,10 @@ impl ibapi::wrapper::Initializer for ScannerWrapper {
 #[traced_test]
 #[tokio::test]
 async fn test_req_scanner_subscription() -> Result<(), Box<dyn std::error::Error>> {
-    let scanner_wrapper = ScannerWrapper {
-        reqwests: 0,
-        good_responces: vec![],
-    };
-
     let client = Builder::manual(4002, Ipv4Addr::from_str("127.0.0.1").ok())
         .connect(5)
         .await?
-        .remote(scanner_wrapper)
+        .remote(ScannerWrapper { responces: 0 })
         .await;
 
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
