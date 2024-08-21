@@ -1507,7 +1507,7 @@ impl Client<indicators::Active> {
     // === Methods That Return Attributes of the Client ===
     // ====================================================
 
-    // Don't worry about the allow: This function will NEVER panic
+    // Don't worry about the "allow": This function will NEVER panic
     #[inline]
     #[allow(clippy::missing_panics_doc, clippy::unwrap_used)]
     /// Get the next valid *order* ID, as determined by the client's internal counter
@@ -1518,7 +1518,7 @@ impl Client<indicators::Active> {
         self.status.order_id.next().unwrap()
     }
 
-    // Don't worry about the allow: This function will NEVER panic
+    // Don't worry about the "allow": This function will NEVER panic
     #[inline]
     #[allow(clippy::missing_panics_doc, clippy::unwrap_used)]
     /// Get the next valid *request* ID, as determined by the client's internal counter
@@ -1642,7 +1642,7 @@ impl Client<indicators::Active> {
     /// error if a provided `account_number` is not in the client's managed accounts.
     ///
     /// # Returns
-    /// Returns the unique ID associated with the request.
+    /// The unique ID associated with the request.
     pub async fn req_pnl(&mut self, account_number: &String) -> IdResult {
         let req_id = self.get_next_req_id();
         check_valid_account(self, account_number)?;
@@ -1678,7 +1678,7 @@ impl Client<indicators::Active> {
     /// error if a provided `account_number` is not in the client's managed accounts.
     ///
     /// # Returns
-    /// Returns the unique ID associated with the request.
+    /// The unique ID associated with the request.
     pub async fn req_single_position_pnl(
         &mut self,
         account_number: &String,
@@ -1729,7 +1729,7 @@ impl Client<indicators::Active> {
     /// * `tags` - The list of data tags to include in the subscription.
     ///
     /// # Returns
-    /// Returns the unique ID associated with the request.
+    /// The unique ID associated with the request.
     ///
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
@@ -1761,7 +1761,7 @@ impl Client<indicators::Active> {
     /// Request user info details for the user associated with the calling client.
     ///
     /// # Returns
-    /// Returns the unique ID associated with the request.
+    /// The unique ID associated with the request.
     ///
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
@@ -1781,7 +1781,7 @@ impl Client<indicators::Active> {
     /// # Arguments
     /// * `security` - The security for which to request data.
     /// * `end_date_time` - The last datetime for which data will be returned.
-    /// * `duration` - The duration for which historical data be returned (ie. the difference
+    /// * `duration` - The duration for which historical data be returned (i.e. the difference
     ///   between the first bar's datetime and the last bar's datetime).
     /// * `bar_size` - The size of each individual bar.
     /// * `data` - The type of data that to return (price, volume, volatility, etc.).
@@ -1791,7 +1791,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     ///
     /// # Returns
-    /// Returns the unique ID associated with the request.
+    /// The unique ID associated with the request.
     pub async fn req_historical_bar<S, D>(
         &mut self,
         security: &S,
@@ -1830,7 +1830,7 @@ impl Client<indicators::Active> {
     ///
     /// # Arguments
     /// * `security` - The security for which to request data.
-    /// * `duration` - The duration for which historical data be returned (ie. the difference
+    /// * `duration` - The duration for which historical data be returned (i.e. the difference
     ///   between the first bar's datetime and the last bar's datetime).
     /// * `bar_size` - The size of each individual bar.
     /// * `data` - The type of data that to return (price, volume, volatility, etc.).
@@ -1840,7 +1840,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     ///
     /// # Returns
-    /// Returns the unique ID associated with the request.
+    /// The unique ID associated with the request.
     pub async fn req_updating_historical_bar<S, D>(
         &mut self,
         security: &S,
@@ -1900,7 +1900,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     ///
     /// # Returns
-    /// Returns the unique ID associated with the request.
+    /// The unique ID associated with the request.
     pub async fn req_head_timestamp<S, D>(
         &mut self,
         security: &S,
@@ -1949,7 +1949,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     ///
     /// # Returns
-    /// Returns the unique ID associated with the request.
+    /// The unique ID associated with the request.
     pub async fn req_histogram_data<S>(
         &mut self,
         security: &S,
@@ -1999,7 +1999,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     ///
     /// # Returns
-    /// Returns the unique ID associated with the request.
+    /// The unique ID associated with the request.
     pub async fn req_historical_ticks<S, D>(
         &mut self,
         security: &S,
@@ -2047,7 +2047,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     ///
     /// # Returns
-    /// Returns the unique ID associated with the request.
+    /// The unique ID associated with the request.
     pub async fn req_market_data<S, D>(
         &mut self,
         security: &S,
@@ -2119,7 +2119,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     ///
     /// # Returns
-    /// Returns the unique ID associated with the request.
+    /// The unique ID associated with the request.
     pub async fn req_real_time_bars<S, D>(
         &mut self,
         security: &S,
@@ -2177,7 +2177,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     ///
     /// # Returns
-    /// Returns the unique ID associated with the request.
+    /// The unique ID associated with the request.
     pub async fn req_tick_by_tick_data<S, D>(
         &mut self,
         security: &S,
@@ -2227,7 +2227,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     ///
     /// # Returns
-    /// Returns the unique ID associated with the request.
+    /// The unique ID associated with the request.
     pub async fn req_market_depth<S>(&mut self, security: &S, number_of_rows: u32) -> IdResult
     where
         S: Security,
@@ -2282,7 +2282,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     ///
     /// # Returns
-    /// Returns the unique ID associated with the request.
+    /// The unique ID associated with the request.
     pub async fn req_smart_components(&mut self, exchange_id: ExchangeId) -> IdResult {
         let id = self.get_next_req_id();
 
@@ -2304,7 +2304,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     ///
     /// # Returns
-    /// Returns the unique ID associated with the request.
+    /// The unique ID associated with the request.
     pub async fn req_place_order<S, E>(&mut self, order: &Order<'_, S, E>) -> IdResult
     where
         S: Security,
@@ -2335,7 +2335,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while writing the outgoing message.
     ///
     /// # Returns
-    /// Returns the unique ID associated with the request.
+    /// The unique ID associated with the request.
     pub async fn req_modify_order<S, E>(&mut self, order: &Order<'_, S, E>, id: i64) -> IdResult
     where
         S: Security,
@@ -2381,7 +2381,7 @@ impl Client<indicators::Active> {
 
     /// Request all the open orders placed from all API clients and from TWS.
     ///
-    /// Note that this will request all of the orders associated with a given IBKR account and
+    /// Note that this will request all the orders associated with a given IBKR account and
     /// therefore will contain orders placed by another [`Client`].
     ///
     /// # Errors
@@ -2506,7 +2506,7 @@ impl Client<indicators::Active> {
     /// Returns any error encountered while flushing and shutting down the outgoing buffer.
     ///
     /// # Returns
-    /// Returns a [`Builder`] with the same port and address as the existing client.
+    /// A [`Builder`] with the same port and address as the existing client.
     pub async fn disconnect(mut self) -> Result<Builder, std::io::Error> {
         self.writer.flush().await?;
         self.writer.shutdown().await?;

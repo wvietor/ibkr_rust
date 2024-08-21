@@ -113,7 +113,7 @@ impl From<SerializeMessageError> for Error {
     }
 }
 
-// Don't worry about the allow. Our serializer doesn't need all of the fields it's given
+// Don't worry about the "allow." Our serializer doesn't need all the fields it's given
 #[allow(unused_variables)]
 pub(crate) mod ser {
     use std::io::Write;

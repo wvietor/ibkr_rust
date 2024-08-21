@@ -346,7 +346,7 @@ pub enum OrderStatus {
     PreSubmitted(OrderStatusCore),
     /// Indicates that your order has been accepted at the order destination and is working.
     Submitted(OrderStatusCore),
-    /// After an order has been submitted and before it has been acknowledged, an API client client can request its cancellation, producing this state.
+    /// After an order has been submitted and before it has been acknowledged, an API client can request its cancellation, producing this state.
     ApiCancelled(OrderStatusCore),
     /// Indicates that the balance of your order has been confirmed canceled by the IB system. This could occur unexpectedly when IB or the destination has rejected your order.
     Cancelled(OrderStatusCore),

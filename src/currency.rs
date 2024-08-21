@@ -51,7 +51,7 @@ pub enum Currency {
     /// The Norwegian Krone (NOK) is the currency of Norway.
     NorwegianKrone,
     #[serde(rename = "SEK")]
-    /// The Swedish Krona (SEK) is the currency of Sweden.
+    /// The Swedish Króna (SEK) is the currency of Sweden.
     SwedishKrona,
     #[serde(rename = "CHF")]
     /// The Swiss Franc (CHF) is the currency of Switzerland.

@@ -197,7 +197,7 @@ pub enum TimeStamp {
 pub enum AuctionData {
     /// The number of shares that would trade if no new orders were received and the auction were held now.
     Volume(f64),
-    /// The price at which the auction would occur if no new orders were received and the auction were held now- the indicative price for the auction. Typically received after Auction imbalance (tick type 36)
+    /// The price at which the auction would occur if no new orders were received and the auction were held now — the indicative price for the auction. Typically received after Auction imbalance (tick type 36)
     Price(f64),
     /// The number of unmatched shares for the next auction; returns how many more shares are on one side of the auction than the other. Typically received after Auction Volume (tick type 34)
     Imbalance(f64),
@@ -209,7 +209,7 @@ pub enum AuctionData {
 #[serde(tag = "mark_price")]
 /// Represents a callback containing to mark prices.
 pub enum MarkPrice {
-    /// The mark price is the current theoretical calculated value of an instrument. Since it is a calculated value, it will typically have many digits of precision.
+    /// The mark price is the current theoretically-calculated value of an instrument. Since it is a calculated value, it will typically have many digits of precision.
     Standard(f64),
     /// Slower mark price update used in system calculations
     Slow(f64),
