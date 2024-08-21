@@ -2793,7 +2793,10 @@ pub(crate) struct DecodeContext {
 impl DecodeError {
     #[inline]
     pub(crate) fn with_context(self, msg: &'static str) -> DecodeContext {
-        DecodeContext { decode_error: self, function_name: msg }
+        DecodeContext {
+            decode_error: self,
+            function_name: msg,
+        }
     }
 }
 

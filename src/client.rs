@@ -9,6 +9,7 @@ use tokio::task::JoinHandle;
 use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
 
 use crate::contract::{ContractId, Query, Security};
+use crate::decode::DecodeError;
 use crate::exchange::Routing;
 use crate::market_data::{
     histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks,
@@ -26,7 +27,6 @@ use crate::{
     reader::Reader,
     timezone,
 };
-use crate::decode::DecodeError;
 // ======================================
 // === Types for Handling Config File ===
 // ======================================
@@ -325,7 +325,10 @@ async fn decode_msg_remote<W>(
     W: Wrapper,
 {
     let status = match fields.first() {
-        None => Err(DecodeError::MissingData { field_name: "In-message identifier" }.with_context("None")),
+        None => Err(DecodeError::MissingData {
+            field_name: "In-message identifier",
+        }
+        .with_context("None")),
         Some(s) => match s.parse() {
             Ok(In::TickPrice) => decode::Remote::tick_price_msg(&mut fields.into_iter(), remote)
                 .await
@@ -736,7 +739,10 @@ async fn decode_msg_local<W>(
     W: LocalWrapper,
 {
     let status = match fields.first() {
-        None => Err(DecodeError::MissingData { field_name: "In-message identifier" }.with_context("None")),
+        None => Err(DecodeError::MissingData {
+            field_name: "In-message identifier",
+        }
+        .with_context("None")),
         Some(s) => match s.parse() {
             Ok(In::TickPrice) => decode::Local::tick_price_msg(&mut fields.into_iter(), local)
                 .await
@@ -744,11 +750,9 @@ async fn decode_msg_local<W>(
             Ok(In::TickSize) => decode::Local::tick_size_msg(&mut fields.into_iter(), local)
                 .await
                 .map_err(|e| e.with_context("tick size msg")),
-            Ok(In::OrderStatus) => {
-                decode::Local::order_status_msg(&mut fields.into_iter(), local)
-                    .await
-                    .map_err(|e| e.with_context("order status msg"))
-            }
+            Ok(In::OrderStatus) => decode::Local::order_status_msg(&mut fields.into_iter(), local)
+                .await
+                .map_err(|e| e.with_context("order status msg")),
             Ok(In::ErrMsg) => decode::Local::err_msg_msg(&mut fields.into_iter(), local)
                 .await
                 .map_err(|e| e.with_context("err msg msg")),
@@ -783,11 +787,9 @@ async fn decode_msg_local<W>(
                     .await
                     .map_err(|e| e.with_context("execution data msg"))
             }
-            Ok(In::MarketDepth) => {
-                decode::Local::market_depth_msg(&mut fields.into_iter(), local)
-                    .await
-                    .map_err(|e| e.with_context("market depth msg"))
-            }
+            Ok(In::MarketDepth) => decode::Local::market_depth_msg(&mut fields.into_iter(), local)
+                .await
+                .map_err(|e| e.with_context("market depth msg")),
             Ok(In::MarketDepthL2) => {
                 decode::Local::market_depth_l2_msg(&mut fields.into_iter(), local)
                     .await
@@ -821,32 +823,26 @@ async fn decode_msg_local<W>(
                     .await
                     .map_err(|e| e.with_context("scanner parameters msg"))
             }
-            Ok(In::ScannerData) => {
-                decode::Local::scanner_data_msg(&mut fields.into_iter(), local)
-                    .await
-                    .map_err(|e| e.with_context("scanner data msg"))
-            }
+            Ok(In::ScannerData) => decode::Local::scanner_data_msg(&mut fields.into_iter(), local)
+                .await
+                .map_err(|e| e.with_context("scanner data msg")),
             Ok(In::TickOptionComputation) => {
                 decode::Local::tick_option_computation_msg(&mut fields.into_iter(), local)
                     .await
                     .map_err(|e| e.with_context("tick option computation msg"))
             }
-            Ok(In::TickGeneric) => {
-                decode::Local::tick_generic_msg(&mut fields.into_iter(), local)
-                    .await
-                    .map_err(|e| e.with_context("tick generic msg"))
-            }
+            Ok(In::TickGeneric) => decode::Local::tick_generic_msg(&mut fields.into_iter(), local)
+                .await
+                .map_err(|e| e.with_context("tick generic msg")),
             Ok(In::TickString) => decode::Local::tick_string_msg(&mut fields.into_iter(), local)
                 .await
                 .map_err(|e| e.with_context("tick string msg")),
             Ok(In::TickEfp) => decode::Local::tick_efp_msg(&mut fields.into_iter(), local)
                 .await
                 .map_err(|e| e.with_context("tick efp msg")),
-            Ok(In::CurrentTime) => {
-                decode::Local::current_time_msg(&mut fields.into_iter(), local)
-                    .await
-                    .map_err(|e| e.with_context("current time msg"))
-            }
+            Ok(In::CurrentTime) => decode::Local::current_time_msg(&mut fields.into_iter(), local)
+                .await
+                .map_err(|e| e.with_context("current time msg")),
             Ok(In::RealTimeBars) => {
                 decode::Local::real_time_bars_msg(&mut fields.into_iter(), local)
                     .await
@@ -902,11 +898,9 @@ async fn decode_msg_local<W>(
                     .await
                     .map_err(|e| e.with_context("position data msg"))
             }
-            Ok(In::PositionEnd) => {
-                decode::Local::position_end_msg(&mut fields.into_iter(), local)
-                    .await
-                    .map_err(|e| e.with_context("position end msg"))
-            }
+            Ok(In::PositionEnd) => decode::Local::position_end_msg(&mut fields.into_iter(), local)
+                .await
+                .map_err(|e| e.with_context("position end msg")),
             Ok(In::AccountSummary) => {
                 decode::Local::account_summary_msg(&mut fields.into_iter(), local)
                     .await
@@ -972,27 +966,25 @@ async fn decode_msg_local<W>(
                     &mut fields.into_iter(),
                     local,
                 )
-                    .await
-                    .map_err(|e| e.with_context("security definition option parameter msg"))
+                .await
+                .map_err(|e| e.with_context("security definition option parameter msg"))
             }
             Ok(In::SecurityDefinitionOptionParameterEnd) => {
                 decode::Local::security_definition_option_parameter_end_msg(
                     &mut fields.into_iter(),
                     local,
                 )
-                    .await
-                    .map_err(|e| e.with_context("security definition option parameter end msg"))
+                .await
+                .map_err(|e| e.with_context("security definition option parameter end msg"))
             }
             Ok(In::SoftDollarTiers) => {
                 decode::Local::soft_dollar_tiers_msg(&mut fields.into_iter(), local)
                     .await
                     .map_err(|e| e.with_context("soft dollar tiers msg"))
             }
-            Ok(In::FamilyCodes) => {
-                decode::Local::family_codes_msg(&mut fields.into_iter(), local)
-                    .await
-                    .map_err(|e| e.with_context("family codes msg"))
-            }
+            Ok(In::FamilyCodes) => decode::Local::family_codes_msg(&mut fields.into_iter(), local)
+                .await
+                .map_err(|e| e.with_context("family codes msg")),
             Ok(In::SymbolSamples) => {
                 decode::Local::symbol_samples_msg(&mut fields.into_iter(), local)
                     .await
@@ -1013,11 +1005,9 @@ async fn decode_msg_local<W>(
                     .await
                     .map_err(|e| e.with_context("smart components msg"))
             }
-            Ok(In::NewsArticle) => {
-                decode::Local::news_article_msg(&mut fields.into_iter(), local)
-                    .await
-                    .map_err(|e| e.with_context("news article msg"))
-            }
+            Ok(In::NewsArticle) => decode::Local::news_article_msg(&mut fields.into_iter(), local)
+                .await
+                .map_err(|e| e.with_context("news article msg")),
             Ok(In::TickNews) => decode::Local::tick_news_msg(&mut fields.into_iter(), local)
                 .await
                 .map_err(|e| e.with_context("tick news msg")),
@@ -1106,11 +1096,9 @@ async fn decode_msg_local<W>(
                     .await
                     .map_err(|e| e.with_context("replace fa end msg"))
             }
-            Ok(In::WshMetaData) => {
-                decode::Local::wsh_meta_data_msg(&mut fields.into_iter(), local)
-                    .await
-                    .map_err(|e| e.with_context("wsh meta data msg"))
-            }
+            Ok(In::WshMetaData) => decode::Local::wsh_meta_data_msg(&mut fields.into_iter(), local)
+                .await
+                .map_err(|e| e.with_context("wsh meta data msg")),
             Ok(In::WshEventData) => {
                 decode::Local::wsh_event_data_msg(&mut fields.into_iter(), local)
                     .await
@@ -1135,8 +1123,6 @@ async fn decode_msg_local<W>(
         }
     }
 }
-
-
 
 pub(crate) mod indicators {
     use std::collections::HashSet;
@@ -2502,9 +2488,7 @@ impl Client<indicators::Active> {
     }
 
     #[inline]
-    pub(crate) async fn recv_contract_query(
-        &mut self,
-    ) -> Option<crate::contract::Contract> {
+    pub(crate) async fn recv_contract_query(&mut self) -> Option<crate::contract::Contract> {
         if let Some(ToClient::NewContract(c)) = self.status.rx.recv().await {
             Some(c)
         } else {
