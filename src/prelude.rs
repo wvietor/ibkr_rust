@@ -19,4 +19,4 @@ pub use crate::payload::{
     OrderStatusCore, Pnl, PnlSingle, Position, PositionSummary, TickData, Trade,
 };
 pub use crate::tick;
-pub use crate::wrapper::{CancelToken, Initializer, Wrapper};
+pub use crate::wrapper::{CancelToken, Initializer, Wrapper, Recurring};
