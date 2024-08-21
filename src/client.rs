@@ -172,7 +172,7 @@ impl Builder {
     ///
     /// # Arguments
     /// * `mode` - Specifies whether the builder will create a live (real money) or paper (fake
-    /// money) trading environment.
+    ///   money) trading environment.
     /// * `host` - Specifies the platform used for communication with IBKR's trading systems.
     /// * `path` - An optional string slice that overrides the default location of "./config.toml".
     ///
@@ -209,10 +209,10 @@ impl Builder {
     /// # Errors
     /// This function will error if any of the following occurs:
     /// 1) An error occurs while initiating a TCP connection on the port and address specified in
-    /// either [`Builder::manual`] or in the "config.toml" file specified in
-    /// [`Builder::from_config_file`].
+    ///    either [`Builder::manual`] or in the "config.toml" file specified in
+    ///    [`Builder::from_config_file`].
     /// 2) An error occurs while reading or writing the handshake message that initiates a
-    /// connection with IBKR's trading systems.
+    ///    connection with IBKR's trading systems.
     ///
     /// # Returns
     /// An inactive [`Client`] that will become active upon calling [`Client::local`] or
@@ -1360,7 +1360,7 @@ impl Client<indicators::Inactive> {
     ///
     /// # Arguments
     /// * `init` - A [`LocalInitializer`], which defines how incoming data from the IBKR trading systems
-    /// should be handled.
+    ///   should be handled.
     /// * `disconnect_token` - If provided, the client will disconnect when this token is cancelled.
     ///
     /// # Returns
@@ -1414,7 +1414,7 @@ impl Client<indicators::Inactive> {
     ///
     /// # Arguments
     /// * `init` - An [`Initializer`], which defines how incoming data from the IBKR trading systems
-    /// should be handled.
+    ///   should be handled.
     ///
     /// # Returns
     /// A [`CancelToken`] that can be used to terminate the main loop and disconnect the client.
@@ -1573,7 +1573,7 @@ impl Client<indicators::Active> {
     ///
     /// # Arguments
     /// * `account_number` - The account number for which to subscribe to account data (optional for
-    /// single account structures)
+    ///   single account structures)
     ///
     /// # Errors
     /// Returns any error encountered while writing the outgoing message. Additionally, returns an
@@ -1593,7 +1593,7 @@ impl Client<indicators::Active> {
     ///
     /// # Arguments
     /// * `account_number` - The account number for which to subscribe to account data (optional for
-    /// single account structures)
+    ///   single account structures)
     ///
     /// # Errors
     /// Returns any error encountered while writing the outgoing message. Additionally, returns an
@@ -1671,7 +1671,7 @@ impl Client<indicators::Active> {
     /// # Arguments
     /// * `account_number` - The account number with which to create the subscription.
     /// * `contract_id` - The contract ID to create a subscription to changes for a specific
-    /// security
+    ///   security
     ///
     /// # Errors
     /// Returns any error encountered while writing the outgoing message. Additionally, returns an
@@ -1782,7 +1782,7 @@ impl Client<indicators::Active> {
     /// * `security` - The security for which to request data.
     /// * `end_date_time` - The last datetime for which data will be returned.
     /// * `duration` - The duration for which historical data be returned (ie. the difference
-    /// between the first bar's datetime and the last bar's datetime).
+    ///   between the first bar's datetime and the last bar's datetime).
     /// * `bar_size` - The size of each individual bar.
     /// * `data` - The type of data that to return (price, volume, volatility, etc.).
     /// * `regular_trading_hours_only` - When [`true`], only return bars from regular trading hours.
@@ -1831,7 +1831,7 @@ impl Client<indicators::Active> {
     /// # Arguments
     /// * `security` - The security for which to request data.
     /// * `duration` - The duration for which historical data be returned (ie. the difference
-    /// between the first bar's datetime and the last bar's datetime).
+    ///   between the first bar's datetime and the last bar's datetime).
     /// * `bar_size` - The size of each individual bar.
     /// * `data` - The type of data that to return (price, volume, volatility, etc.).
     /// * `regular_trading_hours_only` - When [`true`], only return bars from regular trading hours.
@@ -1894,7 +1894,7 @@ impl Client<indicators::Active> {
     /// `security` - The security for which to make the request.
     /// `data` - The data for which to make the request.
     /// * `regular_trading_hours_only` - When [`true`], only return ticks from regular trading
-    /// hours.
+    ///   hours.
     ///
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
@@ -2038,10 +2038,10 @@ impl Client<indicators::Active> {
     /// * `security` - The security for which to request data.
     /// * `data` - The type of data to return (`RealTimeVolume`, `MarkPrice`, etc.).
     /// * `refresh_type` - How often to refresh the data (a one-time snapshot or a continuous
-    /// streaming connection)
+    ///   streaming connection)
     /// * `use_regulatory_snapshot` - When set to [`true`], return a NBBO snapshot even if no
-    /// appropriate subscription exists for streaming data. Note that doing so will cost 1 cent per
-    /// snapshot.
+    ///   appropriate subscription exists for streaming data. Note that doing so will cost 1 cent per
+    ///   snapshot.
     ///
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
@@ -2113,7 +2113,7 @@ impl Client<indicators::Active> {
     /// * `security` - The security for which to request the bars.
     /// * `data` - The type of data to return (trades, bid, ask, midpoint).
     /// * `regular_trading_hours_only` -  When [`true`], only return ticks from regular trading
-    /// hours.
+    ///   hours.
     ///
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
@@ -2170,7 +2170,7 @@ impl Client<indicators::Active> {
     /// * `security` - The security for which to request data.
     /// * `tick_data` - The type of data to return.
     /// * `number_of_historical_ticks` - The number of historical ticks to return before the live
-    /// data.
+    ///   data.
     /// * `ignore_size` - Ignore the size parameter in the returned ticks when set to [`true`].
     ///
     /// # Errors
@@ -2276,7 +2276,7 @@ impl Client<indicators::Active> {
     ///
     /// # Arguments
     /// * `exchange_id` - The identifier containing information about the component exchanges, which
-    /// is attained from an initial market data callback.
+    ///   is attained from an initial market data callback.
     ///
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
