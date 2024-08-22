@@ -44,14 +44,7 @@
 	//
 	// ─── IBKR_RUST ──────────────────────────────────────────────────────────────────────
 	//
-	{
-		"label": "TEST IBKR_RUST SCANNER test_req_scanner_parameters",
-		"command": "RUSTFLAGS=-Awarnings cargo test -- --nocapture test_req_scanner_parameters",
-		// "env": { "foo": "bar" },
-		"use_new_terminal": false,
-		"allow_concurrent_runs": false,
-		"reveal": "always"
-	},
+
 	{
 		"label": "TEST IBKR_RUST ACCOUNT account_summary",
 		"command": "RUSTFLAGS=-Awarnings cargo test -- --nocapture account_summary",
@@ -60,7 +53,14 @@
 		"allow_concurrent_runs": false,
 		"reveal": "always"
 	},
-
+	{
+		"label": "TEST IBKR_RUST SCANNER test_req_scanner_parameters",
+		"command": "RUSTFLAGS=-Awarnings cargo test -- --nocapture test_req_scanner_parameters",
+		// "env": { "foo": "bar" },
+		"use_new_terminal": false,
+		"allow_concurrent_runs": false,
+		"reveal": "always"
+	},
 	{
 		"label": "RUN IBKR_RUST SCANNER scanner_test",
 		"command": "RUSTFLAGS=-Awarnings cargo run -p ibapi --bin scanner_test",
@@ -71,7 +71,7 @@
 	},
 	{
 		"label": "TEST IBKR_RUST SCANNER scanner_subscription",
-		"command": "RUSTFLAGS=-Awarnings cargo test -- --nocapture test_req_scanner_subscription",
+		"command": "RUSTFLAGS=-Awarnings cargo test -- --nocapture req_scanner_subscription_test",
 		// "env": { "foo": "bar" },
 		"use_new_terminal": false,
 		"allow_concurrent_runs": false,
@@ -80,6 +80,14 @@
 	{
 		"label": "TEST IBKR_RUST SCANNER parse_xml",
 		"command": "RUSTFLAGS=-Awarnings cargo test -- --nocapture test_gen_data_for_macros_input",
+		// "env": { "foo": "bar" },
+		"use_new_terminal": false,
+		"allow_concurrent_runs": false,
+		"reveal": "always"
+	},
+	{
+		"label": "TEST IBKR_RUST LIMITER limiter_50_rps",
+		"command": "RUSTFLAGS=-Awarnings cargo test -- --nocapture test_limiter_50_rps",
 		// "env": { "foo": "bar" },
 		"use_new_terminal": false,
 		"allow_concurrent_runs": false,

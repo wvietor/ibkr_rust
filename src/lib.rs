@@ -83,6 +83,7 @@ pub mod tick;
 /// Contains a [`chrono::TimeZone`] enum to represent all the possible timezones available in the API.
 pub mod timezone;
 
+pub mod limits;
 pub mod scanner_parameters;
 pub mod scanner_subscription;
 
