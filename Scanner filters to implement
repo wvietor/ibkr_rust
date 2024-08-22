@@ -1,3 +1,9 @@
+
+//Easy to do:
+BOND_STK_SYMBOL (impl BondStkSymbols sctruct: simbols with  separator '|'; look scanner_subscription.rs )
+BOND_ISSUER (impl BondStkSymbols sctruct:  separator '|'; look scanner_subscription.rs)
+
+// I don't have these filters, I need xml files from others!
 ABSCHANGEPERC
 AV1MOCHNG
 AV3MOCHNG

@@ -42,7 +42,10 @@ pub struct ScannerContract {
 
 
 const NO_ROW_NUMBER_SPECIFIED: i32 = -1;
-
+fn asd(){
+	let scanner_wo_filters = ScannerSubscription::us_stocks().us_major().top_perc_gain();
+	let scanner_w_filters = scanner_wo_filters.clone().number_of_result_rows(100).market_cap_above1e6(1000.0).price_below(100.0);
+}
 /// Defines a market scanner request, including its filters.
 /// Using the builder, set the instrument, location, sorting and filters.
 ///
@@ -52,17 +55,23 @@ const NO_ROW_NUMBER_SPECIFIED: i32 = -1;
 /// containing filters that refine the scanning results. It allows specifying the
 /// instrument type, location, market scan parameters, price, volume, ratings, and more.
 /// 
+/// # Usage
+/// ```rust
+/// ScannerSubscription::select_instrument_type().select_location().select_scanner_code().select_filter().select_filter();
+/// ```
+/// 
 /// # Example
-/// 
-/// let scanner_wo_filters = ScannerSubscription::us_stocks().us_major().top_perc_gain();
-/// let scanner_w_filters = scanner_wo_filters.clone().market_cap_above1e6(1000.0).price_below(100.0);
-/// 
+/// ```rust
+/// let scanner_wo_filters = ScannerSubscription::us_stocks().us_major().top_perc_gain(); 
+/// let scanner_w_filters = scanner_wo_filters.clone().number_of_result_rows(100).market_cap_above1e6(1000.0).price_below(100.0);
 /// client.req_scanner_subscription(scanner_w_filters).await;
+/// ```
+
 
 #[derive(Debug, Clone)]
 pub struct ScannerSubscription {
-    // Not found in FIlters:
-    // /// For example, a pairing "Annual, true" used on the "top Option Implied Vol % Gainers" scan would return annualized volatilities.
+    // (!!!) Not found in FIlters (!!!):
+    // // For example, a pairing "Annual, true" used on the "top Option Implied Vol % Gainers" scan would return annualized volatilities.
     // scanner_setting_pairs: String,
     // number_of_rows: i32, // implemented!
 }
