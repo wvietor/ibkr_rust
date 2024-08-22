@@ -18,7 +18,10 @@ impl ibapi::wrapper::Initializer for SendWrapper {
         _cancel_loop: CancelToken,
     ) -> impl Future<Output = (Self::Wrap<'_>, Self::Recur<'_>)> + Send {
         async move {
-            let aapl: ibapi::contract::Stock = ibapi::contract::new(client, "BBG000B9XRY4".parse().unwrap()).await.unwrap();
+            let aapl: ibapi::contract::Stock =
+                ibapi::contract::new(client, "BBG000B9XRY4".parse().unwrap())
+                    .await
+                    .unwrap();
             assert_eq!(aapl.symbol(), "AAPL");
             (self, ())
         }
@@ -42,7 +45,10 @@ impl ibapi::wrapper::LocalInitializer for NonSendWrapper {
         cancel_loop: CancelToken,
     ) -> impl Future<Output = (Self::Wrap<'_>, Self::Recur<'_>)> {
         async {
-            let aapl: ibapi::contract::Stock = ibapi::contract::new(client, "BBG000B9XRY4".parse().unwrap()).await.unwrap();
+            let aapl: ibapi::contract::Stock =
+                ibapi::contract::new(client, "BBG000B9XRY4".parse().unwrap())
+                    .await
+                    .unwrap();
             assert_eq!(aapl.symbol(), "AAPL");
             (self, Recur { cancel_loop })
         }
@@ -71,7 +77,8 @@ async fn disaggregated_remote() -> Result<(), Box<dyn std::error::Error>> {
         .disaggregated(SendWrapper)
         .await;
     client.req_current_time().await?;
-    let aapl: ibapi::contract::Stock = ibapi::contract::new(&mut client, "BBG000B9XRY4".parse()?).await?;
+    let aapl: ibapi::contract::Stock =
+        ibapi::contract::new(&mut client, "BBG000B9XRY4".parse()?).await?;
     assert_eq!(aapl.symbol(), "AAPL");
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     client.disconnect().await?;

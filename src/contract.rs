@@ -378,7 +378,7 @@ pub enum ParseQueryError {
     /// AN invalid [`Query::Figi`]
     Figi(InvalidFigi),
     #[error("Cannot construct query from empty string.")]
-    /// Invalid in a way such that it's impossible to tell whether it was intended to be an [`Query::IbContractId`] or a [`'Query::Figi`].
+    /// Invalid in a way such that it's impossible to tell whether it was intended to be an [`Query::IbContractId`] or a [`Query::Figi`].
     Empty,
 }
 

@@ -357,7 +357,7 @@ pub mod historical_ticks {
         ///
         /// # Arguments
         /// * `number_of_ticks` - The number of ticks to return from a
-        /// [`crate::client::Client::req_historical_ticks`] query.
+        ///   [`crate::client::Client::req_historical_ticks`] query.
         ///
         /// # Returns
         /// A new, valid [`NumberOfTicks`] struct.

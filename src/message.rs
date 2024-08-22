@@ -203,7 +203,7 @@ impl FromStr for In {
     }
 }
 
-// Ok, we haven't implemented all of the outgoing client messages
+// Ok, we haven't implemented all the outgoing client messages
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub enum Out {

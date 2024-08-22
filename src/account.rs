@@ -357,7 +357,7 @@ impl std::fmt::Display for ParseDayTradesError {
 
 impl std::error::Error for ParseDayTradesError {}
 
-impl std::str::FromStr for RemainingDayTrades {
+impl FromStr for RemainingDayTrades {
     type Err = ParseDayTradesError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -457,7 +457,7 @@ pub enum Tag {
 /// An error returned when attempting to parse a [`Tag`]
 pub struct ParseTagError;
 
-impl std::str::FromStr for Tag {
+impl FromStr for Tag {
     type Err = ParseTagError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {

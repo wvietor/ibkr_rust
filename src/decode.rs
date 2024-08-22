@@ -418,64 +418,6 @@ pub trait Local: wrapper::LocalWrapper {
             wrapper
                 .open_order(order_id, proxy, client_id, parent_id, permanent_id)
                 .await;
-            // outside: 1,
-            // hidden: 1
-            // discretion: 1
-            // good_after: 1
-            // skip_shares: 1
-            // fa_params: 4
-            // model_code: 1
-            // good_til: 1
-            // rule_80a: 1
-            // percent_offset: 1
-            // settling_firm: 1
-            // short_sale_params: 3
-            // auction_strategy: 1
-            // box_order_params: 3
-            // peg_to_stk_or_vol: 2
-            // display_size: 1
-            // block: 1
-            // sweep: 1
-            // all_or_none: 1
-            // min_qty: 1
-            // oca_type: 1
-            // skip_etrade_only: 1
-            // skip_firm_quote_only: 1
-            // skip_nbbo_price_cap: 1
-
-            /* !!!parent_id!!! */
-
-            // trigger_method: 1
-            // vol_order_params: 6 OR 14
-            // trail_params: 2
-            // basis_points: 2
-            // combo_legs: 1 OR arbitrarily many
-            // smart_combo_routing_params: 1 OR arbitrarily many
-            // scale_order_params: 3 OR 10
-            // hedge_params: 1 OR 2
-            // opt_out_smart_routing: 1
-            // clearing_params: 2
-            // not_held: 1
-            // delta_neutral: 1 OR 5
-            // algo_params: 1 OR arbitrarily many
-            // solicited: 1
-
-            /* !!!whatifinfo!!! */
-
-            // vol_randomize: 2
-            // peg_to_bench: 0 OR 5
-            // conditions: 1 OR arbitrarily many
-            // adjusted_order_params: 8
-            // soft_dollar: 3
-            // cash_qty: 1
-            // dont_use_auto: 1
-            // is_oms: 1
-            // discretionary_up_to_limit: 1
-            // use_price_mgmt: 1
-            // duration: 1
-            // post_to_ats: 1
-            // auto_cancel_parent: 1
-            // peg_best_peg_mid: 5
 
             Ok(())
         }
@@ -2825,7 +2767,7 @@ pub(crate) enum DecodeError {
     /// Failed to parse any value in the [`crate::payload`] module
     ParsePayloadError {
         field_name: &'static str,
-        payload_error: crate::payload::ParsePayloadError,
+        payload_error: ParsePayloadError,
     },
     #[error("Failed to parse attribute: {0}")]
     /// Failed to parse an [`account::Attribute`] value
@@ -2947,8 +2889,8 @@ impl From<(&'static str, crate::contract::ParseContractTypeError)> for DecodeErr
     }
 }
 
-impl From<(&'static str, crate::payload::ParsePayloadError)> for DecodeError {
-    fn from(value: (&'static str, crate::payload::ParsePayloadError)) -> Self {
+impl From<(&'static str, ParsePayloadError)> for DecodeError {
+    fn from(value: (&'static str, ParsePayloadError)) -> Self {
         Self::ParsePayloadError {
             field_name: value.0,
             payload_error: value.1,
@@ -2956,8 +2898,8 @@ impl From<(&'static str, crate::payload::ParsePayloadError)> for DecodeError {
     }
 }
 
-impl From<(&'static str, crate::execution::ParseOrderSideError)> for DecodeError {
-    fn from(value: (&'static str, crate::execution::ParseOrderSideError)) -> Self {
+impl From<(&'static str, ParseOrderSideError)> for DecodeError {
+    fn from(value: (&'static str, ParseOrderSideError)) -> Self {
         Self::ParseOrderSideError {
             field_name: value.0,
             order_side_error: value.1,
@@ -2985,12 +2927,6 @@ impl From<(&'static str, std::convert::Infallible)> for DecodeError {
         unreachable!()
     }
 }
-
-// impl<E: std::error::Error> From<E> for DecodeError {
-//     fn from(value: E) -> Self {
-//         Self::Other(value.to_string())
-//     }
-// }
 
 #[derive(Debug, Clone, Error)]
 /// An error returned when parsing a datetime fails.

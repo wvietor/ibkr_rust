@@ -328,7 +328,7 @@ impl Figi {
     /// A new, valid [`Figi`]
     ///
     /// # Errors
-    /// Will error if the provided charaters are not a valid FIGI code.
+    /// Will error if the provided characters are not a valid FIGI code.
     pub fn from_chars(s: &[char; 12]) -> Result<Self, InvalidFigi> {
         let (pos_1, pos_2) = match (s[0], s[1]) {
             ('B', 'S' | 'M') | ('G', 'G' | 'B' | 'H') | ('K', 'Y') | ('V', 'G') => {

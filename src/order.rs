@@ -74,7 +74,7 @@ impl FromStr for TimeInForce {
 /// A generic order to buy or sell a security `S`: `Security` according to the parameters specified by the generic
 /// parameter `E`: `Executable`.
 pub enum Order<'o, S: Security, E: Executable<S>> {
-    /// An order to Buy `S`: `Security`] according to the method described by `E`: `Executable`.
+    /// An order to Buy `S`: [`Security`] according to the method described by `E`: `Executable`.
     Buy {
         /// The security to buy.
         security: &'o S,
@@ -288,7 +288,7 @@ pub trait Executable<S: Security>: Send + Sync {
     #[inline]
     /// Return the date and time after which the order will be active.
     ///
-    /// Format: yyyymmdd hh:mm:ss {optional Timezone}.
+    /// Format: `yyyymmdd hh:mm:ss {optional Timezone}`.
     fn get_good_after_time(&self) -> Option<&str> {
         None
     }
@@ -327,13 +327,13 @@ pub trait Executable<S: Security>: Send + Sync {
     }
 
     #[inline]
-    /// Returns whether or not all the order has to be filled on a single execution.
+    /// Returns whether the order has to be filled on a single execution.
     fn get_is_all_or_none(&self) -> bool {
         false
     }
 
     #[inline]
-    /// Returns the minimum quantity for an order (ie. a minimum quantity order type).
+    /// Returns the minimum quantity for an order (i.e. a minimum quantity order type).
     fn get_minimum_quantity(&self) -> Option<u64> {
         None
     }
@@ -364,7 +364,7 @@ pub trait Executable<S: Security>: Send + Sync {
     #[inline]
     /// Return the stock's reference price.
     /// The reference price is used for VOL orders to compute the limit price sent to an exchange
-    /// (whether or not Continuous Update is selected), and for price range monitoring.
+    /// (whether Continuous Update is selected), and for price range monitoring.
     fn get_box_stock_reference_price(&self) -> Option<f64> {
         None
     }
@@ -594,7 +594,7 @@ pub trait Executable<S: Security>: Send + Sync {
     }
 
     #[inline]
-    /// Return the algorithm strategy content (ie. The list of parameters for the IB algorithm),
+    /// Return the algorithm strategy content (i.e. The list of parameters for the IB algorithm),
     /// if it exists.
     ///
     /// For more information about IB's API algorithms, refer to IBKR's
@@ -610,10 +610,10 @@ pub trait Executable<S: Security>: Send + Sync {
     }
 
     #[inline]
-    /// Return the what if information for an order.
+    /// Return the "what if" information for an order.
     ///
     /// Allows to retrieve the commissions and margin information.
-    /// When placing an order with this attribute set to true, the order will not be placed as such. Instead it will used to request the commissions and margin information that would result from this order.
+    /// When placing an order with this attribute set to true, the order will not be placed as such. Instead, it will be used to request the commissions and margin information that would result from this order.
     fn get_what_if(&self) -> bool {
         false
     }
@@ -954,7 +954,7 @@ where
 pub enum TriggerMethod {
     #[default]
     #[serde(rename(serialize = "0"))]
-    /// The default value. The "double bid/ask" function will be used for orders for OTC stocks and US options. All other orders will used the "last" function.
+    /// The default value. The "double bid/ask" function will be used for orders for OTC stocks and US options. All other orders will use the "last" function.
     Default,
     #[serde(rename(serialize = "1"))]
     /// Use "double bid/ask" function, where stop orders are triggered based on two consecutive bid or ask prices.
@@ -1026,7 +1026,7 @@ pub enum Rule80A {
     /// Agent other member
     AgentOtherMember,
     #[serde(rename(serialize = "J"))]
-    /// Inidividual PTIA
+    /// Individual PTIA
     IndividualPtia,
     #[serde(rename(serialize = "U"))]
     /// Agency PTIA
