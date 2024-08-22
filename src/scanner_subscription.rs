@@ -42,10 +42,7 @@ pub struct ScannerContract {
 
 
 const NO_ROW_NUMBER_SPECIFIED: i32 = -1;
-fn asd(){
-	let scanner_wo_filters = ScannerSubscription::us_stocks().us_major().top_perc_gain();
-	let scanner_w_filters = scanner_wo_filters.clone().number_of_result_rows(100).market_cap_above1e6(1000.0).price_below(100.0);
-}
+
 /// Defines a market scanner request, including its filters.
 /// Using the builder, set the instrument, location, sorting and filters.
 ///
