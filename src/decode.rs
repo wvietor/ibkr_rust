@@ -2,6 +2,7 @@ use super::*;
 use core::future::Future;
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
+use limits::decrement_scanner_subscription_counter;
 use scanner_subscription::ScannerContract;
 use thiserror::Error;
 
@@ -1040,7 +1041,7 @@ pub trait Local: wrapper::LocalWrapper {
                 };
                 results.push(sc)
             }
-
+            decrement_scanner_subscription_counter();
             wrapper.scanner_data(req_id, results).await;
             wrapper.scanner_data_end(req_id).await;
             Ok(())

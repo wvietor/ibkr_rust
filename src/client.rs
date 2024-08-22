@@ -11,6 +11,7 @@ use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
 use crate::contract::{ContractId, Query, Security};
 use crate::decode::DecodeError;
 use crate::exchange::Routing;
+use crate::limits::increment_scanner_subscription_counter;
 use crate::market_data::{
     histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks,
     updating_historical_bar,
@@ -1809,8 +1810,8 @@ impl Client<indicators::Active> {
                 }),
             "",
         ))?;
-
         self.writer.send().await;
+        increment_scanner_subscription_counter().await;
         Ok(req_id)
     }
 
