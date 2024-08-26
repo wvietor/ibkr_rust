@@ -67,7 +67,6 @@ const NO_ROW_NUMBER_SPECIFIED: i32 = -1;
 
 #[derive(Debug, Clone)]
 pub struct ScannerSubscription {
-    // (!!!) Not found in FIlters (!!!):
     // // For example, a pairing "Annual, true" used on the "top Option Implied Vol % Gainers" scan would return annualized volatilities.
     // scanner_setting_pairs: String,
     // number_of_rows: i32, // implemented!

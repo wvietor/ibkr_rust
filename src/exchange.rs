@@ -171,6 +171,10 @@ pub enum Primary {
     IceEndexFutures,
     #[serde(rename = "ENEXT.BE")]
     EuronextBelgium,
+
+    #[serde(rename = "FWB2")]
+    FrankfurtStockExchange,
+
     #[serde(rename = "EUIBFRSH")]
     InternalFractionalShareVenueForEuStocksAndEtfs,
     #[serde(rename = "EUIBSI")]
@@ -373,6 +377,8 @@ pub enum Primary {
     RoyalBankOfScotlandCurrencyDealing,
     #[serde(rename = "RUSSELL")]
     ExchangeForRussellIndices,
+    #[serde(rename = "TWSE")]
+    TaiwanStockExchange,
     #[serde(rename = "SEHK")]
     StockExchangeOfHongKong,
     #[serde(rename = "SEHKNTL")]
@@ -530,6 +536,7 @@ impl FromStr for Primary {
             "EDGX" => Self::BatsTradingEdgx,
             "EMERALD" => Self::MiaxEmeraldExchange,
             "ENDEX" => Self::IceEndexFutures,
+            "FWB2" => Self::FrankfurtStockExchange,
             "ENEXT.BE" => Self::EuronextBelgium,
             "EUIBFRSH" => Self::InternalFractionalShareVenueForEuStocksAndEtfs,
             "EUIBSI" => Self::IbEuropeanSystematicInternaliser,
@@ -632,6 +639,7 @@ impl FromStr for Primary {
             "RBCFX" => Self::RoyalBankOfCanadaCurrencyDealing,
             "RBSFX" => Self::RoyalBankOfScotlandCurrencyDealing,
             "RUSSELL" => Self::ExchangeForRussellIndices,
+            "TWSE" => Self::TaiwanStockExchange,
             "SEHK" => Self::StockExchangeOfHongKong,
             "SEHKNTL" => Self::StockExchangeHongKongNorthboundTradingLink,
             "SEHKSZSE" => Self::HongKongShenzhenStockExchangeNorthboundTradingLink,
