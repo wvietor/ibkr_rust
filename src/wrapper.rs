@@ -193,49 +193,38 @@ pub trait LocalRecurring {
     fn cycle(&mut self) -> impl Future<Output = ()>;
 }
 
-impl Recurring for () {
-    async fn cycle(&mut self) {
-        tokio::task::yield_now().await;
-    }
-}
-
 /// An initializer for a new [`LocalWrapper`].
 pub trait LocalInitializer {
     /// The wrapper
-    type Wrap<'c>: LocalWrapper;
-    /// The recurring struct, which mediates repeated calls in the main client loop.
-    type Recur<'c>: LocalRecurring;
+    type Wrap<'c>: LocalWrapper + LocalRecurring;
     /// The method to build the wrapper
     fn build(
         self,
         client: &mut ActiveClient,
         cancel_loop: CancelToken,
-    ) -> impl Future<Output = (Self::Wrap<'_>, Self::Recur<'_>)>;
+    ) -> impl Future<Output = Self::Wrap<'_>>;
 }
 
 /// An initializer for a new [`Wrapper`].
 pub trait Initializer: Send {
     /// The wrapper
-    type Wrap<'c>: Wrapper;
-    /// The recurring struct, which mediates repeated calls in the main client loop.
-    type Recur<'c>: Recurring;
+    type Wrap<'c>: Wrapper + Recurring;
     /// The method to build the wrapper
     fn build(
         self,
         client: &mut ActiveClient,
         cancel_loop: CancelToken,
-    ) -> impl Future<Output = (Self::Wrap<'_>, Self::Recur<'_>)> + Send;
+    ) -> impl Future<Output = Self::Wrap<'_>> + Send;
 }
 
 impl<I: Initializer> LocalInitializer for I {
     type Wrap<'c> = <I as Initializer>::Wrap<'c>;
-    type Recur<'c> = <I as Initializer>::Recur<'c>;
 
     fn build(
         self,
         client: &mut ActiveClient,
         cancel_loop: CancelToken,
-    ) -> impl Future<Output = (Self::Wrap<'_>, Self::Recur<'_>)> {
+    ) -> impl Future<Output = Self::Wrap<'_>> {
         <I as Initializer>::build(self, client, cancel_loop)
     }
 }

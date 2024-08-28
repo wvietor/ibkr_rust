@@ -4,23 +4,30 @@ use tokio;
 
 use ibapi::account::Tag;
 use ibapi::client::{ActiveClient, Builder, Host, Mode};
-use ibapi::wrapper::{CancelToken, Initializer, Wrapper};
+use ibapi::wrapper::{CancelToken, Initializer, Wrapper, Recurring};
 
 struct AccountDataWrapper;
 
 impl Wrapper for AccountDataWrapper {}
 
+impl Recurring for AccountDataWrapper {
+    fn cycle(&mut self) -> impl Future<Output=()> + Send {
+        async {
+            ()
+        }
+    }
+}
+
 struct AccountSummaryInitializer;
 
 impl Initializer for AccountSummaryInitializer {
     type Wrap<'c> = AccountDataWrapper;
-    type Recur<'c> = ();
 
     fn build(
         self,
         client: &mut ActiveClient,
         _cancel_loop: CancelToken,
-    ) -> impl Future<Output = (Self::Wrap<'_>, ())> + Send {
+    ) -> impl Future<Output = Self::Wrap<'_>> + Send {
         async {
             let id = client
                 .req_account_summary(&vec![
@@ -58,19 +65,18 @@ impl Initializer for AccountSummaryInitializer {
                 .unwrap();
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             client.cancel_account_summary(id).await.unwrap();
-            (AccountDataWrapper, ())
+            AccountDataWrapper
         }
     }
 }
 
 #[tokio::test]
 async fn account_summary() -> Result<(), Box<dyn std::error::Error>> {
-    let discon =
-        Builder::from_config_file(Mode::Paper, Host::Gateway, Some("config.toml".as_ref()))?
-            .connect(1)
-            .await?
-            .remote(AccountSummaryInitializer)
-            .await;
+    let discon = Builder::from_config_file(Mode::Paper, Host::Gateway, &None::<&'static str>)?
+        .connect(1)
+        .await?
+        .remote(AccountSummaryInitializer)
+        .await;
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     discon.cancel();
     Ok(())
@@ -80,30 +86,28 @@ struct AccountUpdateInitializer;
 
 impl Initializer for AccountUpdateInitializer {
     type Wrap<'c> = AccountDataWrapper;
-    type Recur<'c> = ();
 
     fn build(
         self,
         client: &mut ActiveClient,
         _cancel_loop: CancelToken,
-    ) -> impl Future<Output = (Self::Wrap<'_>, ())> + Send {
+    ) -> impl Future<Output = Self::Wrap<'_>> + Send {
         async {
             client.req_account_updates(None).await.unwrap();
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             client.cancel_account_updates(None).await.unwrap();
-            (AccountDataWrapper, ())
+            AccountDataWrapper
         }
     }
 }
 
 #[tokio::test]
 async fn account_update() -> Result<(), Box<dyn std::error::Error>> {
-    let discon =
-        Builder::from_config_file(Mode::Paper, Host::Gateway, Some("config.toml".as_ref()))?
-            .connect(2)
-            .await?
-            .remote(AccountUpdateInitializer)
-            .await;
+    let discon = Builder::from_config_file(Mode::Paper, Host::Gateway, &None::<&'static str>)?
+        .connect(2)
+        .await?
+        .remote(AccountUpdateInitializer)
+        .await;
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     discon.cancel();
     Ok(())
@@ -113,17 +117,16 @@ struct PositionInitializer;
 
 impl Initializer for PositionInitializer {
     type Wrap<'c> = AccountDataWrapper;
-    type Recur<'c> = ();
     fn build(
         self,
         client: &mut ActiveClient,
         _cancel_loop: CancelToken,
-    ) -> impl Future<Output = (Self::Wrap<'_>, ())> + Send {
+    ) -> impl Future<Output = Self::Wrap<'_>> + Send {
         async {
             client.req_positions().await.unwrap();
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             client.cancel_positions().await.unwrap();
-            (AccountDataWrapper, ())
+            AccountDataWrapper
         }
     }
 }
@@ -131,7 +134,7 @@ impl Initializer for PositionInitializer {
 #[tokio::test]
 async fn positions() -> Result<(), Box<dyn std::error::Error>> {
     let discon =
-        Builder::from_config_file(Mode::Paper, Host::Gateway, Some("config.toml".as_ref()))?
+        Builder::from_config_file(Mode::Paper, Host::Gateway, &None::<&'static str>)?
             .connect(3)
             .await?
             .remote(PositionInitializer)
@@ -145,12 +148,11 @@ struct PnlInitializer;
 
 impl Initializer for PnlInitializer {
     type Wrap<'c> = AccountDataWrapper;
-    type Recur<'c> = ();
     fn build(
         self,
         client: &mut ActiveClient,
         _cancel_loop: CancelToken,
-    ) -> impl Future<Output = (Self::Wrap<'_>, ())> + Send {
+    ) -> impl Future<Output = Self::Wrap<'_>> + Send {
         async {
             let id = client
                 .req_pnl(&client.get_managed_accounts().iter().next().unwrap().clone())
@@ -158,7 +160,7 @@ impl Initializer for PnlInitializer {
                 .unwrap();
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             client.cancel_pnl(id).await.unwrap();
-            (AccountDataWrapper, ())
+            AccountDataWrapper
         }
     }
 }
@@ -166,7 +168,7 @@ impl Initializer for PnlInitializer {
 #[tokio::test]
 async fn pnl() -> Result<(), Box<dyn std::error::Error>> {
     let discon =
-        Builder::from_config_file(Mode::Paper, Host::Gateway, Some("config.toml".as_ref()))?
+        Builder::from_config_file(Mode::Paper, Host::Gateway, &None::<&'static str>)?
             .connect(4)
             .await
             .unwrap()
