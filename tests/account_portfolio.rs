@@ -4,17 +4,15 @@ use tokio;
 
 use ibapi::account::Tag;
 use ibapi::client::{ActiveClient, Builder, Host, Mode};
-use ibapi::wrapper::{CancelToken, Initializer, Wrapper, Recurring};
+use ibapi::wrapper::{CancelToken, Initializer, Recurring, Wrapper};
 
 struct AccountDataWrapper;
 
 impl Wrapper for AccountDataWrapper {}
 
 impl Recurring for AccountDataWrapper {
-    fn cycle(&mut self) -> impl Future<Output=()> + Send {
-        async {
-            ()
-        }
+    fn cycle(&mut self) -> impl Future<Output = ()> + Send {
+        async { () }
     }
 }
 
@@ -133,12 +131,11 @@ impl Initializer for PositionInitializer {
 
 #[tokio::test]
 async fn positions() -> Result<(), Box<dyn std::error::Error>> {
-    let discon =
-        Builder::from_config_file(Mode::Paper, Host::Gateway, &None::<&'static str>)?
-            .connect(3)
-            .await?
-            .remote(PositionInitializer)
-            .await;
+    let discon = Builder::from_config_file(Mode::Paper, Host::Gateway, &None::<&'static str>)?
+        .connect(3)
+        .await?
+        .remote(PositionInitializer)
+        .await;
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     discon.cancel();
     Ok(())
@@ -167,13 +164,12 @@ impl Initializer for PnlInitializer {
 
 #[tokio::test]
 async fn pnl() -> Result<(), Box<dyn std::error::Error>> {
-    let discon =
-        Builder::from_config_file(Mode::Paper, Host::Gateway, &None::<&'static str>)?
-            .connect(4)
-            .await
-            .unwrap()
-            .remote(PnlInitializer)
-            .await;
+    let discon = Builder::from_config_file(Mode::Paper, Host::Gateway, &None::<&'static str>)?
+        .connect(4)
+        .await
+        .unwrap()
+        .remote(PnlInitializer)
+        .await;
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     discon.cancel();
     Ok(())

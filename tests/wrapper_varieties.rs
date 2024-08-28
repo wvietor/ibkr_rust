@@ -1,7 +1,9 @@
 use std::future::Future;
 
 use ibapi::client::{ActiveClient, Builder, Host, Mode};
-use ibapi::wrapper::{CancelToken, Initializer, LocalInitializer, Wrapper, LocalWrapper, Recurring, LocalRecurring};
+use ibapi::wrapper::{
+    CancelToken, Initializer, LocalInitializer, LocalRecurring, LocalWrapper, Recurring, Wrapper,
+};
 
 #[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 struct SendWrapper;
@@ -9,10 +11,8 @@ struct SendWrapper;
 impl Wrapper for SendWrapper {}
 
 impl Recurring for SendWrapper {
-    fn cycle(&mut self) -> impl Future<Output=()> + Send {
-        async {
-            ()
-        }
+    fn cycle(&mut self) -> impl Future<Output = ()> + Send {
+        async { () }
     }
 }
 
@@ -43,7 +43,7 @@ struct NonSendWrapper {
 impl LocalWrapper for NonSendWrapper {}
 
 impl LocalRecurring for NonSendWrapper {
-    fn cycle(&mut self) -> impl Future<Output=()> {
+    fn cycle(&mut self) -> impl Future<Output = ()> {
         async {
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
             self.cancel_loop.cancel();
@@ -65,7 +65,10 @@ impl LocalInitializer for NonSendWrapper {
                     .await
                     .unwrap();
             assert_eq!(aapl.symbol(), "AAPL");
-            NonSendWrapper { cancel_loop, ..Self::default() }
+            NonSendWrapper {
+                cancel_loop,
+                ..Self::default()
+            }
         }
     }
 }
@@ -88,11 +91,12 @@ async fn disaggregated_remote() -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::test]
 async fn remote() -> Result<(), Box<dyn std::error::Error>> {
-    let cancel_token = Builder::from_config_file(Mode::Paper, Host::Gateway, &None::<&'static str>)?
-        .connect(6)
-        .await?
-        .remote(SendWrapper)
-        .await;
+    let cancel_token =
+        Builder::from_config_file(Mode::Paper, Host::Gateway, &None::<&'static str>)?
+            .connect(6)
+            .await?
+            .remote(SendWrapper)
+            .await;
 
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     cancel_token.cancel();
