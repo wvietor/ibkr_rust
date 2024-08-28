@@ -181,9 +181,12 @@ impl Builder {
     pub fn from_config_file(
         mode: Mode,
         host: Host,
-        path: Option<&std::path::Path>,
+        path: &Option<impl AsRef<std::path::Path>>,
     ) -> Result<Self, ParseConfigFileError> {
-        let config = Config::new(path.unwrap_or(std::path::Path::new("./config.toml")))?;
+        let path = path.as_ref()
+            .map_or(std::path::Path::new("./config.toml"), AsRef::<std::path::Path>::as_ref);
+        let config = Config::new(path)?;
+
         Ok(Self(Inner::ConfigFile { mode, host, config }))
     }
 
