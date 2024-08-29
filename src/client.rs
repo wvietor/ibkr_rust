@@ -11,7 +11,10 @@ use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
 use crate::contract::{ContractId, Query, Security};
 use crate::decode::DecodeError;
 use crate::exchange::Routing;
-use crate::limits::increment_scanner_subscription_counter;
+use crate::limits::{
+    decrement_scanner_subscription_counter, increment_message_per_second_count,
+    increment_scanner_subscription_counter, ScannerTracker, SCANNER_SUBSCRIPTION_MAP,
+};
 use crate::market_data::{
     histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks,
     updating_historical_bar,
@@ -1435,11 +1438,14 @@ impl Client<indicators::Inactive> {
             temp.cancel();
             drop(temp);
             let (queue, mut tx, mut rx, mut backlog) = con_fut.await?;
+
             while let Some(fields) = backlog.pop_front() {
                 decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
+                println!("Work1");
             }
             drop(backlog);
             loop {
+                println!("Work2");
                 tokio::select! {
                     () = break_loop_inner.cancelled() => {
                         println!("Client loop: disconnecting");
@@ -1790,9 +1796,10 @@ impl Client<indicators::Active> {
         &mut self,
         subsctiption: &T,
     ) -> IdResult {
-        // - scannerSubscriptionOptions ?
+        increment_scanner_subscription_counter().await;
         let req_id = self.get_next_req_id();
 
+        // - scannerSubscriptionOptions ?
         self.writer.add_body((
             Out::ReqScannerSubscription,
             req_id,
@@ -1810,17 +1817,35 @@ impl Client<indicators::Active> {
                 }),
             "",
         ))?;
+
         self.writer.send().await;
-        increment_scanner_subscription_counter().await;
+        SCANNER_SUBSCRIPTION_MAP
+            .write()
+            .await
+            .insert(req_id, ScannerTracker { received: false });
         Ok(req_id)
     }
+    ///
+    // pub async fn req_scanner_subscription_once<T: ScannerSubscriptionIsComplete>(
+    //     &mut self,
+    //     subsctiption: &T,
+    // ) -> IdResult {
+    //     let req_id = self.req_scanner_subscription(subsctiption).await?;
+    //     tokio::spawn(async move {
+    //         self.cancel_scanner_subscription(req_id);
+    //     });
+    //     Ok(req_id)
+    // }
 
     ///
     pub async fn cancel_scanner_subscription(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
         self.writer
             .add_body((Out::CancelScannerSubscription, VERSION, req_id))?;
-        self.writer.send().await
+        let r = self.writer.send().await;
+        // decrement_scanner_subscription_counter();
+        SCANNER_SUBSCRIPTION_MAP.write().await.remove(&req_id);
+        r
     }
 
     // === Historical Market Data ===

@@ -1,4 +1,5 @@
 use std::{
+    collections::{HashMap, HashSet},
     sync::{
         atomic::{AtomicU32, Ordering},
         Arc, LazyLock,
@@ -7,7 +8,19 @@ use std::{
     time::Duration,
 };
 
-use tokio::time::{sleep, Instant};
+use tokio::{
+    sync::RwLock,
+    time::{sleep, Instant},
+};
+
+#[derive(Debug)]
+pub struct ScannerTracker {
+    pub received: bool,
+    // callback ?
+}
+
+pub static SCANNER_SUBSCRIPTION_MAP: LazyLock<Arc<RwLock<HashMap<i64, ScannerTracker>>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(HashMap::with_capacity(10))));
 
 static SCANNER_SUBSCRIPTION_COUNTER: LazyLock<Arc<AtomicU32>> =
     LazyLock::new(|| Arc::new(AtomicU32::new(0)));
@@ -18,13 +31,32 @@ static SLEEP_FOR_LIMIT: u64 = 20;
 // write macro for impl increment/decrement ?
 
 pub async fn increment_scanner_subscription_counter() {
-    while SCANNER_SUBSCRIPTION_COUNTER.load(Ordering::SeqCst) >= SCANNER_SUBSCRIPTION_LIMIT {
-        sleep(Duration::from_millis(SLEEP_FOR_LIMIT));
+    loop {
+        let counter = SCANNER_SUBSCRIPTION_COUNTER.load(Ordering::SeqCst);
+        // println!("try inc! {}", counter);
+
+        // counter >= SCANNER_SUBSCRIPTION_LIMIT => Doesn't work
+        if counter >= SCANNER_SUBSCRIPTION_LIMIT - 1 {
+            sleep(Duration::from_millis(SLEEP_FOR_LIMIT)).await;
+        } else {
+            break;
+        }
     }
+
+    increment_message_per_second_count().await;
     SCANNER_SUBSCRIPTION_COUNTER.fetch_add(1, Ordering::SeqCst);
+
+    // println!(
+    //     "inc! {:?}",
+    //     SCANNER_SUBSCRIPTION_COUNTER.load(Ordering::SeqCst)
+    // );
 }
 pub fn decrement_scanner_subscription_counter() {
     SCANNER_SUBSCRIPTION_COUNTER.fetch_sub(1, Ordering::SeqCst);
+    // println!(
+    //     "decrement! {}",
+    //     SCANNER_SUBSCRIPTION_COUNTER.load(Ordering::SeqCst)
+    // );
 }
 
 static SLEEPS_FOR_50_RPS: [f64; 101] = [
@@ -91,17 +123,24 @@ pub fn start_limiter_thread() {
 }
 
 pub async fn increment_message_per_second_count() {
-    let index = RATE.load(Ordering::SeqCst);
+    let mut rate;
 
-    let sleep_time = if index >= SLEEPS_FOR_50_RPS.len() as u32 {
-        SLEEPS_FOR_50_RPS.last().unwrap()
-    } else {
-        &SLEEPS_FOR_50_RPS[index as usize]
-    };
+    loop {
+        rate = RATE.load(Ordering::SeqCst);
+        let sleep_time = if rate >= SLEEPS_FOR_50_RPS.len() as u32 {
+            SLEEPS_FOR_50_RPS.last().unwrap()
+        } else {
+            &SLEEPS_FOR_50_RPS[rate as usize]
+        };
 
-    println!("Rate: {:?}, Sleep: {}", RATE, sleep_time);
+        // println!("Rate: {:?}, Sleep: {}", RATE, sleep_time);
 
-    sleep(Duration::from_secs_f64(sleep_time / 1000.0)).await;
+        sleep(Duration::from_secs_f64(sleep_time / 1000.0)).await;
+        rate = RATE.load(Ordering::SeqCst);
+        if rate <= 50 {
+            break;
+        }
+    }
 
     COUNTER.fetch_add(1, Ordering::SeqCst);
 }
