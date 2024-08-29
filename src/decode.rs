@@ -53,7 +53,7 @@ macro_rules! decode_fields {
     };
     ($fields: expr => $($f_name: ident @ $ind: literal: $f_type: ty ),* $(,)?) => {
         $(
-            decode_fields!($fields => $f_name @ $ind: $f_type);
+       decode_fields!($fields => $f_name @ $ind: $f_type);
         )*
     };
 }
@@ -1001,6 +1001,11 @@ pub trait Local: wrapper::LocalWrapper {
 
             let mut results = Vec::with_capacity(number_of_elements as usize);
 
+            SCANNER_SUBSCRIPTION_MAP
+                .write()
+                .await
+                .insert(req_id, ScannerTracker { received: true });
+
             for index in 0..number_of_elements {
                 decode_fields!(
                     fields =>
@@ -1044,11 +1049,6 @@ pub trait Local: wrapper::LocalWrapper {
                 };
                 results.push(sc)
             }
-
-            SCANNER_SUBSCRIPTION_MAP
-                .write()
-                .await
-                .insert(req_id, ScannerTracker { received: true });
 
             wrapper.scanner_data(req_id, results).await;
             wrapper.scanner_data_end(req_id).await;

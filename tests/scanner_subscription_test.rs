@@ -3,7 +3,7 @@ use ibapi::limits::SCANNER_SUBSCRIPTION_MAP;
 use ibapi::scanner_subscription::{
     ScannerContract, ScannerSubscription, ScannerSubscriptionIsComplete,
 };
-use ibapi::wrapper::{CancelToken, Initializer, Wrapper};
+use ibapi::wrapper::{CancelToken, Initializer, Recurring, Wrapper};
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::sync::atomic::AtomicI32;
@@ -23,9 +23,12 @@ static REQ_IDS: LazyLock<RwLock<HashMap<i64, bool>>> =
 
 #[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 struct ScannerWrapper;
-// {
-// responces: i32,
-// }
+
+impl Recurring for ScannerWrapper {
+    fn cycle(&mut self) -> impl Future<Output = ()> + Send {
+        async { () }
+    }
+}
 
 impl Wrapper for ScannerWrapper {
     fn error(
@@ -74,14 +77,13 @@ impl Wrapper for ScannerWrapper {
 
 impl Initializer for ScannerWrapper {
     type Wrap<'c> = ScannerWrapper;
-    type Recur<'c> = ();
 
     #[allow(clippy::manual_async_fn)]
     fn build(
         self,
         client: &mut ActiveClient,
         _cancel_loop: CancelToken,
-    ) -> impl Future<Output = (Self::Wrap<'_>, Self::Recur<'_>)> + Send {
+    ) -> impl Future<Output = Self::Wrap<'_>> + Send {
         async move {
             // for _i in 0..REQUESTS_COUNT {
             //     let subscription = ScannerSubscription::us_stocks()
@@ -99,7 +101,7 @@ impl Initializer for ScannerWrapper {
             //     }
             // }
             println!("DONE");
-            (self, ())
+            ScannerWrapper
         }
     }
 }
@@ -111,10 +113,9 @@ impl Initializer for ScannerWrapper {
 #[traced_test]
 #[tokio::test]
 async fn req_scanner_subscription_test() -> Result<(), Box<dyn std::error::Error>> {
-    let mut client =
-        Builder::from_config_file(Mode::Paper, Host::Gateway, Some("config.toml".as_ref()))?
-            .connect(5)
-            .await?;
+    let mut client = Builder::from_config_file(Mode::Paper, Host::Gateway, &None::<&'static str>)?
+        .connect(5)
+        .await?;
     println!("Connected");
 
     let mut client = client

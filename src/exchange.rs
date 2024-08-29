@@ -382,9 +382,11 @@ pub enum Primary {
     #[serde(rename = "SEHK")]
     StockExchangeOfHongKong,
     #[serde(rename = "SEHKNTL")]
-    StockExchangeHongKongNorthboundTradingLink,
+    StockExchangeHongKongNorthboundTradingLink, // Shanghai Stock Exchange? / Shanghai-Hong Kong Stock Exchange?
+    #[serde(rename = "SEHKNTL")]
+    ShanghaiStockExchangeSTARMarket, //
     #[serde(rename = "SEHKSZSE")]
-    HongKongShenzhenStockExchangeNorthboundTradingLink,
+    HongKongShenzhenStockExchangeNorthboundTradingLink, // Shenzhen Stock Exchange?
     #[serde(rename = "SFB")]
     StockholmFondbors,
     #[serde(rename = "SGX")]
@@ -642,6 +644,7 @@ impl FromStr for Primary {
             "TWSE" => Self::TaiwanStockExchange,
             "SEHK" => Self::StockExchangeOfHongKong,
             "SEHKNTL" => Self::StockExchangeHongKongNorthboundTradingLink,
+            "SEHKSTAR" => Self::ShanghaiStockExchangeSTARMarket,
             "SEHKSZSE" => Self::HongKongShenzhenStockExchangeNorthboundTradingLink,
             "SFB" => Self::StockholmFondbors,
             "SGX" => Self::SingaporeExchange,
