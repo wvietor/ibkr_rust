@@ -1,66 +1,48 @@
 use std::future::Future;
 
 use ibapi::client::{ActiveClient, Builder, Host, Mode};
-use ibapi::wrapper::CancelToken;
+use ibapi::wrapper::{
+    CancelToken, Initializer, LocalInitializer, LocalRecurring, LocalWrapper, Recurring, Wrapper,
+};
 
 #[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 struct SendWrapper;
 
-impl ibapi::wrapper::Wrapper for SendWrapper {}
+impl Wrapper for SendWrapper {}
 
-impl ibapi::wrapper::Initializer for SendWrapper {
+impl Recurring for SendWrapper {
+    fn cycle(&mut self) -> impl Future<Output = ()> + Send {
+        async { () }
+    }
+}
+
+impl Initializer for SendWrapper {
     type Wrap<'c> = SendWrapper;
-    type Recur<'c> = ();
-
     fn build(
         self,
         client: &mut ActiveClient,
         _cancel_loop: CancelToken,
-    ) -> impl Future<Output = (Self::Wrap<'_>, Self::Recur<'_>)> + Send {
+    ) -> impl Future<Output = Self::Wrap<'_>> + Send {
         async move {
             let aapl: ibapi::contract::Stock =
                 ibapi::contract::new(client, "BBG000B9XRY4".parse().unwrap())
                     .await
                     .unwrap();
             assert_eq!(aapl.symbol(), "AAPL");
-            (self, ())
+            self
         }
     }
 }
 
-#[derive(Debug, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Debug, Default, Clone)]
 struct NonSendWrapper {
-    non_send: std::rc::Rc<i64>,
-}
-
-impl ibapi::wrapper::LocalWrapper for NonSendWrapper {}
-
-impl ibapi::wrapper::LocalInitializer for NonSendWrapper {
-    type Wrap<'c> = NonSendWrapper;
-    type Recur<'c> = Recur;
-
-    fn build(
-        self,
-        client: &mut ActiveClient,
-        cancel_loop: CancelToken,
-    ) -> impl Future<Output = (Self::Wrap<'_>, Self::Recur<'_>)> {
-        async {
-            let aapl: ibapi::contract::Stock =
-                ibapi::contract::new(client, "BBG000B9XRY4".parse().unwrap())
-                    .await
-                    .unwrap();
-            assert_eq!(aapl.symbol(), "AAPL");
-            (self, Recur { cancel_loop })
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct Recur {
     cancel_loop: CancelToken,
+    _non_send: std::rc::Rc<i64>,
 }
 
-impl ibapi::wrapper::LocalRecurring for Recur {
+impl LocalWrapper for NonSendWrapper {}
+
+impl LocalRecurring for NonSendWrapper {
     fn cycle(&mut self) -> impl Future<Output = ()> {
         async {
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
@@ -69,9 +51,31 @@ impl ibapi::wrapper::LocalRecurring for Recur {
     }
 }
 
+impl LocalInitializer for NonSendWrapper {
+    type Wrap<'c> = NonSendWrapper;
+
+    fn build(
+        self,
+        client: &mut ActiveClient,
+        cancel_loop: CancelToken,
+    ) -> impl Future<Output = Self::Wrap<'_>> {
+        async {
+            let aapl: ibapi::contract::Stock =
+                ibapi::contract::new(client, "BBG000B9XRY4".parse().unwrap())
+                    .await
+                    .unwrap();
+            assert_eq!(aapl.symbol(), "AAPL");
+            NonSendWrapper {
+                cancel_loop,
+                ..Self::default()
+            }
+        }
+    }
+}
+
 #[tokio::test]
 async fn disaggregated_remote() -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = Builder::from_config_file(Mode::Paper, Host::Gateway, None)?
+    let mut client = Builder::from_config_file(Mode::Paper, Host::Gateway, &None::<&'static str>)?
         .connect(5)
         .await?
         .disaggregated(SendWrapper)
@@ -87,11 +91,12 @@ async fn disaggregated_remote() -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::test]
 async fn remote() -> Result<(), Box<dyn std::error::Error>> {
-    let cancel_token = Builder::from_config_file(Mode::Paper, Host::Gateway, None)?
-        .connect(6)
-        .await?
-        .remote(SendWrapper)
-        .await;
+    let cancel_token =
+        Builder::from_config_file(Mode::Paper, Host::Gateway, &None::<&'static str>)?
+            .connect(6)
+            .await?
+            .remote(SendWrapper)
+            .await;
 
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     cancel_token.cancel();
@@ -100,7 +105,7 @@ async fn remote() -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::test]
 async fn local() -> Result<(), Box<dyn std::error::Error>> {
-    Builder::from_config_file(Mode::Paper, Host::Gateway, None)?
+    Builder::from_config_file(Mode::Paper, Host::Gateway, &None::<&'static str>)?
         .connect(7)
         .await?
         .local(NonSendWrapper::default(), None)

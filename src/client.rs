@@ -186,9 +186,14 @@ impl Builder {
     pub fn from_config_file(
         mode: Mode,
         host: Host,
-        path: Option<&std::path::Path>,
+        path: &Option<impl AsRef<std::path::Path>>,
     ) -> Result<Self, ParseConfigFileError> {
-        let config = Config::new(path.unwrap_or(std::path::Path::new("./config.toml")))?;
+        let path = path.as_ref().map_or(
+            std::path::Path::new("./config.toml"),
+            AsRef::<std::path::Path>::as_ref,
+        );
+        let config = Config::new(path)?;
+
         Ok(Self(Inner::ConfigFile { mode, host, config }))
     }
 
@@ -1385,7 +1390,7 @@ impl Client<indicators::Inactive> {
         let con_fut = spawn_temp_contract_thread(temp.clone(), queue, backlog, tx, rx);
 
         let disconnect_token = disconnect_token.unwrap_or_default();
-        let (mut wrapper, mut recur) =
+        let mut wrapper =
             LocalInitializer::build(init, &mut client, disconnect_token.clone()).await;
         temp.cancel();
         drop(temp);
@@ -1406,11 +1411,10 @@ impl Client<indicators::Inactive> {
                     } else {
                         tokio::task::yield_now().await;
                     }
-                    crate::wrapper::LocalRecurring::cycle(&mut recur).await;
+                    crate::wrapper::LocalRecurring::cycle(&mut wrapper).await;
                 } => (),
             }
         }
-        drop(recur);
         drop(wrapper);
         client.disconnect().await
     }
@@ -1433,8 +1437,7 @@ impl Client<indicators::Inactive> {
         let break_loop_inner = break_loop.clone();
 
         tokio::spawn(async move {
-            let (mut wrapper, mut recur) =
-                Initializer::build(init, &mut client, break_loop_inner.clone()).await;
+            let mut wrapper = Initializer::build(init, &mut client, break_loop_inner.clone()).await;
             temp.cancel();
             drop(temp);
             let (queue, mut tx, mut rx, mut backlog) = con_fut.await?;
@@ -1457,11 +1460,10 @@ impl Client<indicators::Inactive> {
                         } else {
                             tokio::task::yield_now().await;
                         }
-                        crate::wrapper::Recurring::cycle(&mut recur).await;
+                        crate::wrapper::Recurring::cycle(&mut wrapper).await;
                     } => (),
                 }
             }
-            drop(recur);
             drop(wrapper);
             client.disconnect().await
         });
