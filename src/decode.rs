@@ -2,7 +2,7 @@ use super::*;
 use core::future::Future;
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
-use limits::{decrement_scanner_subscription_counter, ScannerTracker, SCANNER_SUBSCRIPTION_MAP};
+use limits::{decrement_req_scanner_subscription, ScannerTracker, ACTIVE_SCANNER_SUBSCRIPTION};
 use scanner_subscription::ScannerContract;
 use thiserror::Error;
 
@@ -987,7 +987,7 @@ pub trait Local: wrapper::LocalWrapper {
     ) -> impl Future<Output = DecodeResult> {
         async move {
             // println!("scanner_data_msg: {:?}", &fields);
-            decrement_scanner_subscription_counter();
+            decrement_req_scanner_subscription();
 
             decode_fields!(
                 fields =>
@@ -1001,7 +1001,7 @@ pub trait Local: wrapper::LocalWrapper {
 
             let mut results = Vec::with_capacity(number_of_elements as usize);
 
-            SCANNER_SUBSCRIPTION_MAP
+            ACTIVE_SCANNER_SUBSCRIPTION
                 .write()
                 .await
                 .insert(req_id, ScannerTracker { received: true });

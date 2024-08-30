@@ -5,13 +5,12 @@ use std::{
 
 use ibapi::limits::*;
 use tokio::time::{sleep, Instant};
-
 #[tokio::test]
 async fn test_limiter_50_rps() {
     let iter_variants = vec![50, 100, 150, 200];
     let delays_between = vec![0];
 
-    start_limiter_thread();
+    start_rate_calculation_thread();
 
     let start_total = Instant::now();
 
@@ -60,7 +59,7 @@ async fn test_async(iter_variants: &Vec<i32>, delays_between: &Vec<i32>) {
 async fn iterate(iter_count: i32, delay: i32) {
     let start = Instant::now();
     for _ in 0..=iter_count {
-        increment_message_per_second_count().await;
+        increment_message_per_second().await;
         sleep(Duration::from_millis(delay as u64)).await;
     }
     let elapsed = start.elapsed().as_millis() as f64 / 1000.0;

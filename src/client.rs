@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
@@ -12,8 +13,9 @@ use crate::contract::{ContractId, Query, Security};
 use crate::decode::DecodeError;
 use crate::exchange::Routing;
 use crate::limits::{
-    decrement_scanner_subscription_counter, increment_message_per_second_count,
-    increment_scanner_subscription_counter, ScannerTracker, SCANNER_SUBSCRIPTION_MAP,
+    decrement_req_scanner_subscription, increment_message_per_second,
+    increment_req_scanner_subscription, start_rate_calculation_thread, ScannerTracker,
+    ACTIVE_SCANNER_SUBSCRIPTION,
 };
 use crate::market_data::{
     histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks,
@@ -297,6 +299,7 @@ impl Builder {
         };
         client.start_api().await?;
 
+        start_rate_calculation_thread();
         Ok(client)
     }
 }
@@ -1444,11 +1447,9 @@ impl Client<indicators::Inactive> {
 
             while let Some(fields) = backlog.pop_front() {
                 decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
-                println!("Work1");
             }
             drop(backlog);
             loop {
-                println!("Work2");
                 tokio::select! {
                     () = break_loop_inner.cancelled() => {
                         println!("Client loop: disconnecting");
@@ -1784,7 +1785,10 @@ impl Client<indicators::Active> {
     }
 
     // === Scanner Parameters ===
+    ///	Requests scanner parameters.
     ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
     pub async fn req_scanner_parameters(&mut self) -> ReqResult {
         const VERSION: u8 = 1;
 
@@ -1793,12 +1797,18 @@ impl Client<indicators::Active> {
     }
 
     // === Scanner Subscription ===
+    /// Subscribes to a scanner subscription.
     ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
+    ///
+    /// # Returns
+    /// The unique ID associated with the request.
     pub async fn req_scanner_subscription<T: ScannerSubscriptionIsComplete>(
         &mut self,
         subsctiption: &T,
     ) -> IdResult {
-        increment_scanner_subscription_counter().await;
+        increment_req_scanner_subscription().await;
         let req_id = self.get_next_req_id();
 
         // - scannerSubscriptionOptions ?
@@ -1820,34 +1830,114 @@ impl Client<indicators::Active> {
             "",
         ))?;
 
-        self.writer.send().await;
-        SCANNER_SUBSCRIPTION_MAP
+        let _ = self.writer.send().await;
+        ACTIVE_SCANNER_SUBSCRIPTION
             .write()
             .await
             .insert(req_id, ScannerTracker { received: false });
         Ok(req_id)
     }
-    ///
-    // pub async fn req_scanner_subscription_once<T: ScannerSubscriptionIsComplete>(
-    //     &mut self,
-    //     subsctiption: &T,
-    // ) -> IdResult {
-    //     let req_id = self.req_scanner_subscription(subsctiption).await?;
-    //     tokio::spawn(async move {
-    //         self.cancel_scanner_subscription(req_id);
-    //     });
-    //     Ok(req_id)
+
+    // async fn cancel_complited_subscription(&mut self) -> usize {
+    //     let map_lock = ACTIVE_SCANNER_SUBSCRIPTION.read().await;
+    //     let map_len = map_lock.len();
+
+    //     let to_remove: Vec<i64> = map_lock
+    //         .iter()
+    //         .filter(|(_, v)| v.received)
+    //         .map(|(&k, _)| k)
+    //         .collect();
+
+    //     println!("cancel: {:?}", to_remove);
+    //     drop(map_lock);
+    //     for req_id in to_remove {
+    //         let _ = self.cancel_scanner_subscription(req_id).await;
+    //     }
+    //     map_len
     // }
 
     ///
+    pub async fn req_scanner_subscription_once<T: ScannerSubscriptionIsComplete>(
+        &mut self,
+        subsctiptions: Vec<T>,
+    ) -> ReqResult {
+        let mut req_ids_to_cancel = HashSet::with_capacity(subsctiptions.len());
+
+        for sub in subsctiptions {
+            if let Ok(req_id) = self.req_scanner_subscription(&sub).await {
+                req_ids_to_cancel.insert(req_id);
+            }
+
+            for req_id in req_ids_to_cancel.clone() {
+                let map_lock = ACTIVE_SCANNER_SUBSCRIPTION.read().await;
+                if let Some(value) = map_lock.get(&req_id) {
+                    if value.received {
+                        drop(map_lock);
+                        let _ = self.cancel_scanner_subscription(req_id.clone()).await;
+                        req_ids_to_cancel.remove(&req_id);
+                    }
+                }
+            }
+
+            // let to_remove: Vec<i64> = map_lock
+            //     .iter()
+            //     .filter(|(_, v)| v.received)
+            //     .map(|(&k, _)| k)
+            //     .collect();
+
+            // map_lock.contains_key(req_id);
+            // self.cancel_complited_subscription();
+        }
+
+        loop {
+            // println!("req_ids_to_cancel: {:?}", req_ids_to_cancel);
+            if req_ids_to_cancel.is_empty() {
+                break;
+            }
+
+            for req_id in req_ids_to_cancel.clone() {
+                let map_lock = ACTIVE_SCANNER_SUBSCRIPTION.read().await;
+                if let Some(value) = map_lock.get(&req_id) {
+                    if value.received {
+                        drop(map_lock);
+                        let _ = self.cancel_scanner_subscription(req_id.clone()).await;
+                        req_ids_to_cancel.remove(&req_id);
+                    }
+                }
+            }
+
+            // self.cancel_complited_subscription();
+        }
+
+        Ok(())
+    }
+
+    /// Cancel a scanner subscription previously established with `Client::req_scanner_subscription`.
+    ///
+    /// # Arguments
+    /// * `req_id` - The ID associated with the scanner subscription request to cancel.
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
     pub async fn cancel_scanner_subscription(&mut self, req_id: i64) -> ReqResult {
         const VERSION: u8 = 1;
         self.writer
             .add_body((Out::CancelScannerSubscription, VERSION, req_id))?;
         let r = self.writer.send().await;
         // decrement_scanner_subscription_counter();
-        SCANNER_SUBSCRIPTION_MAP.write().await.remove(&req_id);
+        ACTIVE_SCANNER_SUBSCRIPTION.write().await.remove(&req_id);
         r
+    }
+
+    pub async fn cancel_all_active_scanner_subscription(&mut self) -> ReqResult {
+        let map_lock = ACTIVE_SCANNER_SUBSCRIPTION.read().await;
+        let to_remove: Vec<i64> = map_lock.iter().map(|(&k, _)| k).collect();
+        drop(map_lock);
+
+        for req_id in to_remove {
+            self.cancel_scanner_subscription(req_id);
+        }
+        Ok(())
     }
 
     // === Historical Market Data ===

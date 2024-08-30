@@ -1,17 +1,22 @@
+// #![feature(concat_idents)]
+use super::*;
+// use paste;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::{
         atomic::{AtomicU32, Ordering},
         Arc, LazyLock,
     },
-    thread,
+    thread::{self, JoinHandle},
     time::Duration,
 };
 
-use tokio::{
-    sync::RwLock,
-    time::{sleep, Instant},
-};
+use tokio::{sync::RwLock, time::sleep};
+
+// ?
+pub enum LimitError {
+    LimitReached(u8),
+}
 
 #[derive(Debug)]
 pub struct ScannerTracker {
@@ -19,44 +24,52 @@ pub struct ScannerTracker {
     // callback ?
 }
 
-pub static SCANNER_SUBSCRIPTION_MAP: LazyLock<Arc<RwLock<HashMap<i64, ScannerTracker>>>> =
+/// Active scanner subscriptions
+pub static ACTIVE_SCANNER_SUBSCRIPTION: LazyLock<Arc<RwLock<HashMap<i64, ScannerTracker>>>> =
     LazyLock::new(|| Arc::new(RwLock::new(HashMap::with_capacity(10))));
+
+// pub async fn
 
 static SCANNER_SUBSCRIPTION_COUNTER: LazyLock<Arc<AtomicU32>> =
     LazyLock::new(|| Arc::new(AtomicU32::new(0)));
 static SCANNER_SUBSCRIPTION_LIMIT: u32 = 10;
-static SLEEP_FOR_LIMIT: u64 = 20;
+
+static SLEEP_FOR_INCREMENT: u64 = 20;
 
 // === TODO: ===
 // write macro for impl increment/decrement ?
 
-pub async fn increment_scanner_subscription_counter() {
+// macro_rules! create_limiting_fn {
+// 	[ $name:ident ] => {
+// 		paste! {
+//         static [<$name _COUNTER2>]: String = String::new();
+//     	}
+//         // $(
+//         // )+
+//     };
+// }
+// create_limiting_fn![SCANNER_SUBSCRIPTION];
+
+pub async fn increment_req_scanner_subscription() {
     loop {
+        println!("increment_req_scanner_subscription");
+
         let counter = SCANNER_SUBSCRIPTION_COUNTER.load(Ordering::SeqCst);
         // println!("try inc! {}", counter);
 
-        // counter >= SCANNER_SUBSCRIPTION_LIMIT => Doesn't work
         if counter >= SCANNER_SUBSCRIPTION_LIMIT - 1 {
-            sleep(Duration::from_millis(SLEEP_FOR_LIMIT)).await;
+            sleep(Duration::from_millis(SLEEP_FOR_INCREMENT)).await;
         } else {
             break;
         }
     }
 
-    increment_message_per_second_count().await;
+    increment_message_per_second().await;
     SCANNER_SUBSCRIPTION_COUNTER.fetch_add(1, Ordering::SeqCst);
-
-    // println!(
-    //     "inc! {:?}",
-    //     SCANNER_SUBSCRIPTION_COUNTER.load(Ordering::SeqCst)
-    // );
 }
-pub fn decrement_scanner_subscription_counter() {
+
+pub fn decrement_req_scanner_subscription() {
     SCANNER_SUBSCRIPTION_COUNTER.fetch_sub(1, Ordering::SeqCst);
-    // println!(
-    //     "decrement! {}",
-    //     SCANNER_SUBSCRIPTION_COUNTER.load(Ordering::SeqCst)
-    // );
 }
 
 static SLEEPS_FOR_50_RPS: [f64; 101] = [
@@ -71,58 +84,10 @@ static SLEEPS_FOR_50_RPS: [f64; 101] = [
 
 static COUNTER: LazyLock<Arc<AtomicU32>> = LazyLock::new(|| Arc::new(AtomicU32::new(0)));
 static RATE: LazyLock<Arc<AtomicU32>> = LazyLock::new(|| Arc::new(AtomicU32::new(0)));
+static RATE_CALCULATION_HANDLE: LazyLock<Arc<RwLock<Option<JoinHandle<()>>>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(None)));
 
-pub fn start_limiter_thread() {
-    let counter_clone = COUNTER.clone();
-    let rate_clone = RATE.clone();
-
-    thread::spawn(move || {
-        const SLEEP_TIME: u64 = 10; // ms between measures; 10ms - best
-        const MAX_SIZE: usize = 1000 / SLEEP_TIME as usize;
-
-        let mut new;
-        let mut prev = 0;
-        let mut dif;
-
-        let mut vec = [0; MAX_SIZE];
-
-        for i in 0..vec.len() {
-            if i % 2 == 0 {
-                vec[i] = 1;
-            }
-        }
-
-        let mut vec_index = 0;
-        let mut sum;
-
-        loop {
-            sum = 0;
-            new = counter_clone.load(Ordering::SeqCst);
-            dif = new - prev;
-            prev = new;
-            vec_index += 1;
-
-            if vec_index == MAX_SIZE - 1 {
-                vec_index = 0;
-            }
-
-            if new == u32::MAX - 1 {
-                counter_clone.store(0, Ordering::SeqCst);
-            }
-
-            vec[vec_index] = dif;
-
-            sum += vec.iter().sum::<u32>();
-            rate_clone.store(sum, Ordering::SeqCst);
-
-            // println!("{},{} - {},{} - {}", new, prev, dif, sum, vec_index);
-
-            thread::sleep(Duration::from_millis(SLEEP_TIME));
-        }
-    });
-}
-
-pub async fn increment_message_per_second_count() {
+pub async fn increment_message_per_second() {
     let mut rate;
 
     loop {
@@ -143,4 +108,60 @@ pub async fn increment_message_per_second_count() {
     }
 
     COUNTER.fetch_add(1, Ordering::SeqCst);
+}
+
+pub async fn start_rate_calculation_thread() {
+    let counter_clone = COUNTER.clone();
+    let rate_clone = RATE.clone();
+
+    let mut write_lock = RATE_CALCULATION_HANDLE.write().await;
+
+    if write_lock.is_none() || write_lock.is_some() && write_lock.as_ref().unwrap().is_finished() {
+        let handle = thread::spawn(move || {
+            const SLEEP_TIME: u64 = 10; // ms between measures; 10ms - best
+            const MAX_SIZE: usize = 1000 / SLEEP_TIME as usize;
+
+            let mut new;
+            let mut prev = 0;
+            let mut dif;
+
+            let mut vec = [0; MAX_SIZE];
+
+            for i in 0..vec.len() {
+                if i % 2 == 0 {
+                    vec[i] = 1;
+                }
+            }
+
+            let mut vec_index = 0;
+            let mut sum;
+
+            loop {
+                sum = 0;
+                new = counter_clone.load(Ordering::SeqCst);
+                dif = new - prev;
+                prev = new;
+                vec_index += 1;
+
+                if vec_index == MAX_SIZE - 1 {
+                    vec_index = 0;
+                }
+
+                if new == u32::MAX - 1 {
+                    counter_clone.store(0, Ordering::SeqCst);
+                }
+
+                vec[vec_index] = dif;
+
+                sum += vec.iter().sum::<u32>();
+                rate_clone.store(sum, Ordering::SeqCst);
+
+                // println!("{},{} - {},{} - {}", new, prev, dif, sum, vec_index);
+
+                thread::sleep(Duration::from_millis(SLEEP_TIME));
+            }
+        });
+
+        *write_lock = Some(handle);
+    }
 }
