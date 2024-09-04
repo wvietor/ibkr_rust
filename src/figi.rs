@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -240,8 +240,9 @@ impl From<G> for u8 {
     }
 }
 
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[allow(clippy::struct_field_names)]
+#[serde(into = "String", try_from = "String")]
 /// A valid FIGI code. See the module level documentation for a link to the official standard.
 pub struct Figi {
     pos_1: Consonant,
@@ -250,12 +251,24 @@ pub struct Figi {
     pos_4_12: [ConsonantOrNumeric; 9],
 }
 
-impl Serialize for Figi {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(<&Figi as Into<String>>::into(self).as_str())
+impl std::fmt::Display for Figi {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = String::from(self);
+        write!(f, "{s}")
+    }
+}
+
+impl From<Figi> for String {
+    fn from(value: Figi) -> Self {
+        value.to_string()
+    }
+}
+
+impl TryFrom<String> for Figi {
+    type Error = InvalidFigi;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
     }
 }
 
