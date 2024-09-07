@@ -1,8 +1,11 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Ident, Generics, ItemTrait, parenthesized, parse_macro_input, Token, TypeParamBound, TraitItem, TraitItemFn, ReturnType, TypeImplTrait, Type, parse_quote, Signature};
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
+use syn::{
+    parenthesized, parse_macro_input, parse_quote, Generics, Ident, ItemTrait, ReturnType,
+    Signature, Token, TraitItem, TraitItemFn, Type, TypeImplTrait, TypeParamBound,
+};
 
 #[allow(dead_code)]
 #[derive(Clone)]
@@ -22,7 +25,8 @@ impl Parse for Attr {
             name: input.parse()?,
             generics: input.parse()?,
             paren: parenthesized!(make_trait in input),
-            make_traits: make_trait.parse_terminated(syn::TypeParamBound::parse, syn::token::Plus)?,
+            make_traits: make_trait
+                .parse_terminated(syn::TypeParamBound::parse, syn::token::Plus)?,
             colon: input.parse()?,
             super_traits: input.parse_terminated(syn::TypeParamBound::parse, syn::token::Plus)?,
         })
@@ -30,7 +34,10 @@ impl Parse for Attr {
 }
 
 #[allow(clippy::module_name_repetitions)]
-pub fn impl_make_send(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream  {
+pub fn impl_make_send(
+    attr: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     let attrs = parse_macro_input!(attr as Attr);
     let item = parse_macro_input!(item as ItemTrait);
 
@@ -41,17 +48,26 @@ pub fn impl_make_send(attr: proc_macro::TokenStream, item: proc_macro::TokenStre
         #new_item
 
         #variant
-    }.into()
+    }
+    .into()
 }
 
 fn impl_make_variant(attrs: &Attr, item: &ItemTrait) -> TokenStream {
-    let make_traits= attrs.make_traits.clone().into_iter().collect::<Vec<TypeParamBound>>();
+    let make_traits = attrs
+        .make_traits
+        .clone()
+        .into_iter()
+        .collect::<Vec<TypeParamBound>>();
     let var = ItemTrait {
         ident: attrs.name.clone(),
         generics: attrs.generics.clone(),
         colon_token: attrs.colon,
         supertraits: attrs.super_traits.clone(),
-        items: item.items.iter().map(|t| insert_trait_bounds(t, &make_traits)).collect(),
+        items: item
+            .items
+            .iter()
+            .map(|t| insert_trait_bounds(t, &make_traits))
+            .collect(),
         ..item.clone()
     };
 
@@ -70,23 +86,30 @@ fn insert_trait_bounds(item: &TraitItem, make_traits: &Vec<TypeParamBound>) -> T
         };
 
         Type::ImplTrait(TypeImplTrait {
-            impl_token: parse_quote!{ impl },
-            bounds: std::iter::once(TypeParamBound::Trait(parse_quote! { core::future::Future<Output=#fut_output> })).chain(make_traits.iter().cloned()).collect(),
+            impl_token: parse_quote! { impl },
+            bounds: std::iter::once(TypeParamBound::Trait(
+                parse_quote! { core::future::Future<Output=#fut_output> },
+            ))
+            .chain(make_traits.iter().cloned())
+            .collect(),
         })
     } else {
         match sig.output {
-            ReturnType::Type(_, ref t) => {
-                match *t.to_owned() {
-                    Type::ImplTrait(TypeImplTrait { bounds, ..}) => {
-                        Type::ImplTrait(TypeImplTrait {
-                            impl_token: parse_quote! { impl },
-                            bounds: bounds.into_iter().chain(make_traits.iter().cloned()).collect(),
-                        })
-                    }
-                    _ => { return item.clone(); }
+            ReturnType::Type(_, ref t) => match *t.to_owned() {
+                Type::ImplTrait(TypeImplTrait { bounds, .. }) => Type::ImplTrait(TypeImplTrait {
+                    impl_token: parse_quote! { impl },
+                    bounds: bounds
+                        .into_iter()
+                        .chain(make_traits.iter().cloned())
+                        .collect(),
+                }),
+                _ => {
+                    return item.clone();
                 }
             },
-            ReturnType::Default => { return item.clone(); },
+            ReturnType::Default => {
+                return item.clone();
+            }
         }
     };
 
@@ -112,8 +135,11 @@ fn remove_async_add_impl(item: &TraitItem) -> TraitItem {
         };
 
         Type::ImplTrait(TypeImplTrait {
-            impl_token: parse_quote!{ impl },
-            bounds: std::iter::once(TypeParamBound::Trait(parse_quote! { core::future::Future<Output=#fut_output> })).collect(),
+            impl_token: parse_quote! { impl },
+            bounds: std::iter::once(TypeParamBound::Trait(
+                parse_quote! { core::future::Future<Output=#fut_output> },
+            ))
+            .collect(),
         })
     } else {
         return item.clone();
@@ -131,7 +157,11 @@ fn remove_async_add_impl(item: &TraitItem) -> TraitItem {
 
 fn impl_remove_async(item: ItemTrait) -> TokenStream {
     let new = ItemTrait {
-        items: item.items.iter().map(|t| remove_async_add_impl(t)).collect(),
+        items: item
+            .items
+            .iter()
+            .map(|t| remove_async_add_impl(t))
+            .collect(),
         ..item.clone()
     };
 

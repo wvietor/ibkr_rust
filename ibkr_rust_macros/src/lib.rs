@@ -1,8 +1,8 @@
-mod security;
 mod debug_trait;
+mod getters;
+mod security;
 mod send_trait;
 mod variant_value;
-mod getters;
 
 use proc_macro::TokenStream;
 use quote::ToTokens;
@@ -16,7 +16,7 @@ pub fn security_derive(input: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn debug_trait(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let mut ast  = syn::parse(item).unwrap();
+    let mut ast = syn::parse(item).unwrap();
 
     debug_trait::impl_debug_trait(&mut ast);
     ast.into_token_stream().into()
