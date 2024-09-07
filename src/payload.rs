@@ -207,9 +207,9 @@ pub enum Bar {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[serde(from = "TradeSerDeHelper", into = "TradeSerDeHelper")]
 /// A trade bar with volume, WAP, and count data.
 pub struct Trade {
-    #[serde(flatten)]
     /// The core bar with open, high, low, close, etc.
     pub bar: BarCore,
     /// The bar's traded volume.
@@ -218,6 +218,60 @@ pub struct Trade {
     pub wap: f64,
     /// The number of trades during the bar's timespan.
     pub trade_count: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
+/// Helper struct for serializing / deserializing [`Trade`]
+struct TradeSerDeHelper {
+    /// The ending datetime for the bar.
+    #[serde(with = "ts_seconds")]
+    datetime: DateTime<Utc>,
+    /// The bar's open price.
+    open: f64,
+    /// The bar's high price.
+    high: f64,
+    /// The bar's low price.
+    low: f64,
+    ///The bar's close price.
+    close: f64,
+    /// The bar's traded volume.
+    volume: f64,
+    /// The bar's Weighted Average Price.
+    wap: f64,
+    /// The number of trades during the bar's timespan.
+    trade_count: u64,
+}
+
+impl From<TradeSerDeHelper> for Trade {
+    fn from(value: TradeSerDeHelper) -> Self {
+        Trade {
+            bar: BarCore {
+                datetime: value.datetime,
+                open: value.open,
+                high: value.high,
+                low: value.low,
+                close: value.close,
+            },
+            volume: value.volume,
+            wap: value.wap,
+            trade_count: value.trade_count,
+        }
+    }
+}
+
+impl From<Trade> for TradeSerDeHelper {
+    fn from(value: Trade) -> Self {
+        Self {
+            datetime: value.bar.datetime,
+            open: value.bar.open,
+            high: value.bar.high,
+            low: value.bar.low,
+            close: value.bar.close,
+            volume: value.volume,
+            wap: value.wap,
+            trade_count: value.trade_count,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
