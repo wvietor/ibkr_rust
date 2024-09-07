@@ -33,13 +33,7 @@ pub fn impl_typed_variants(ast: &mut ItemEnum) -> proc_macro2::TokenStream {
             .clone()
             .into_iter()
             .filter(|a| match a.meta {
-                syn::Meta::NameValue(syn::MetaNameValue { ref path, .. }) => {
-                    if path.is_ident("doc") {
-                        false
-                    } else {
-                        true
-                    }
-                }
+                syn::Meta::NameValue(syn::MetaNameValue { ref path, .. }) => !path.is_ident("doc"),
                 _ => true,
             })
             .collect::<Vec<Attribute>>();
@@ -54,10 +48,10 @@ pub fn impl_typed_variants(ast: &mut ItemEnum) -> proc_macro2::TokenStream {
         new_struct.to_tokens(&mut out_stream);
     }
 
-    for var in ast.variants.iter_mut() {
+    for var in &mut ast.variants {
         let name = &var.ident;
         let mut new: syn::Variant = parse_quote! { #name(#name) };
-        new.attrs = var.attrs.clone();
+        new.attrs.clone_from(&var.attrs);
         *var = new;
     }
     ast.to_tokens(&mut out_stream);

@@ -439,14 +439,55 @@ pub enum SecurityId {
 // =================================
 
 mod indicators {
-    use std::convert::Infallible;
-
-    use serde::Serialize;
-
     use super::{
-        Commodity, Contract, Crypto, Forex, Index, SecFuture, SecOption, Stock,
+        Commodity, Contract, ContractId, Crypto, Forex, Index, SecFuture, SecOption, Stock,
         UnexpectedSecurityType,
     };
+    use crate::currency::Currency;
+    use crate::exchange::{Primary, Routing};
+    use crate::match_poly;
+    use chrono::NaiveDate;
+    use serde::{Serialize, Serializer};
+    use std::convert::Infallible;
+
+    #[derive(Debug, Clone, PartialOrd, PartialEq)]
+    pub struct SecurityOutMsg<'s> {
+        pub contract_id: ContractId,
+        pub symbol: &'s str,
+        pub security_type: &'static str,
+        pub expiration_date: Option<NaiveDate>,
+        pub strike: Option<f64>,
+        pub right: Option<&'static str>,
+        pub multiplier: Option<u32>,
+        pub exchange: Routing,
+        pub primary_exchange: Option<Primary>,
+        pub currency: Currency,
+        pub local_symbol: &'s str,
+        pub trading_class: Option<&'s str>,
+    }
+
+    impl Serialize for SecurityOutMsg<'_> {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            (
+                self.contract_id,
+                self.symbol,
+                self.security_type,
+                self.expiration_date.map(|d| d.format("%Y%m%d").to_string()),
+                self.strike,
+                self.right,
+                self.multiplier,
+                self.exchange,
+                self.primary_exchange,
+                self.currency,
+                self.local_symbol,
+                self.trading_class,
+            )
+                .serialize(serializer)
+        }
+    }
 
     pub trait Valid:
         Serialize
@@ -462,9 +503,22 @@ mod indicators {
         + TryFrom<Contract, Error: Into<UnexpectedSecurityType>>
         + Into<Contract>
     {
+        fn as_out_msg(&self) -> SecurityOutMsg<'_>;
     }
 
-    impl Valid for Contract {}
+    impl Valid for Contract {
+        fn as_out_msg(&self) -> SecurityOutMsg<'_> {
+            match_poly!(self;
+                Self::Forex(t)
+                | Self::Crypto(t)
+                | Self::Stock(t)
+                | Self::Index(t)
+                | Self::SecFuture(t)
+                | Self::SecOption(t)
+                | Self::Commodity(t) => t.as_out_msg()
+            )
+        }
+    }
 
     impl From<Infallible> for UnexpectedSecurityType {
         fn from(_: Infallible) -> Self {

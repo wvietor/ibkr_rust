@@ -9,10 +9,7 @@ fn impl_method(
     vis: &syn::Visibility,
     can_move: bool,
 ) -> TokenStream {
-    let d = format!(
-        "Get the {}'s {}.\n\n # Returns\n The {}",
-        struct_name, meth_name, meth_name
-    );
+    let d = format!("Get the {struct_name}'s {meth_name}.\n\n # Returns\n The {meth_name}");
     let doc: syn::Attribute = parse_quote!(#[doc = #d]);
 
     let body = if can_move {
@@ -37,6 +34,7 @@ fn impl_method(
     }
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub fn impl_make_getters(ast: &mut ItemStruct) -> TokenStream {
     let mut out_stream = TokenStream::new();
 

@@ -7,6 +7,7 @@ mod variant_value;
 use proc_macro::TokenStream;
 use quote::ToTokens;
 
+#[allow(clippy::missing_panics_doc)]
 #[proc_macro_derive(Security)]
 pub fn security_derive(input: TokenStream) -> TokenStream {
     let ast = syn::parse(input).unwrap();
@@ -14,6 +15,7 @@ pub fn security_derive(input: TokenStream) -> TokenStream {
     security::impl_security(&ast).into()
 }
 
+#[allow(clippy::missing_panics_doc)]
 #[proc_macro_attribute]
 pub fn debug_trait(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut ast = syn::parse(item).unwrap();
@@ -22,11 +24,13 @@ pub fn debug_trait(_attr: TokenStream, item: TokenStream) -> TokenStream {
     ast.into_token_stream().into()
 }
 
+#[allow(clippy::missing_panics_doc)]
 #[proc_macro_attribute]
 pub fn make_send(attr: TokenStream, item: TokenStream) -> TokenStream {
-    send_trait::impl_make_send(attr, item.clone()).into()
+    send_trait::impl_make_send(attr, item.clone())
 }
 
+#[allow(clippy::missing_panics_doc)]
 #[proc_macro_attribute]
 pub fn typed_variants(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut ast = syn::parse(item).unwrap();
@@ -34,6 +38,7 @@ pub fn typed_variants(_attr: TokenStream, item: TokenStream) -> TokenStream {
     variant_value::impl_typed_variants(&mut ast).into()
 }
 
+#[allow(clippy::missing_panics_doc)]
 #[proc_macro_attribute]
 pub fn make_getters(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut ast = syn::parse(item).unwrap();

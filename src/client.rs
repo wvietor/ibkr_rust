@@ -1812,7 +1812,7 @@ impl Client<indicators::Active> {
         self.writer.add_body((
             Out::ReqHistoricalData,
             id,
-            security,
+            security.as_out_msg(),
             false,
             end_date_time,
             bar_size,
@@ -1860,7 +1860,7 @@ impl Client<indicators::Active> {
         self.writer.add_body((
             Out::ReqHistoricalData,
             id,
-            security,
+            security.as_out_msg(),
             false,
             None::<()>,
             bar_size,
@@ -1918,7 +1918,7 @@ impl Client<indicators::Active> {
         self.writer.add_body((
             Out::ReqHeadTimestamp,
             id,
-            security,
+            security.as_out_msg(),
             None::<()>,
             regular_trading_hours_only,
             data,
@@ -1966,7 +1966,7 @@ impl Client<indicators::Active> {
         self.writer.add_body((
             Out::ReqHistogramData,
             id,
-            security,
+            security.as_out_msg(),
             None::<()>,
             regular_trading_hours_only,
             duration,
@@ -2019,7 +2019,7 @@ impl Client<indicators::Active> {
         self.writer.add_body((
             Out::ReqHistoricalTicks,
             id,
-            security,
+            security.as_out_msg(),
             None::<()>,
             timestamp,
             number_of_ticks,
@@ -2068,7 +2068,7 @@ impl Client<indicators::Active> {
             Out::ReqMktData,
             VERSION,
             id,
-            security,
+            security.as_out_msg(),
             false,
             additional_data,
             refresh_type,
@@ -2139,7 +2139,7 @@ impl Client<indicators::Active> {
             Out::ReqRealTimeBars,
             VERSION,
             id,
-            security,
+            security.as_out_msg(),
             5_u32,
             data,
             regular_trading_hours_only,
@@ -2196,7 +2196,7 @@ impl Client<indicators::Active> {
         self.writer.add_body((
             Out::ReqTickByTickData,
             id,
-            security,
+            security.as_out_msg(),
             tick_data,
             number_of_historical_ticks,
             ignore_size,
@@ -2241,7 +2241,7 @@ impl Client<indicators::Active> {
             Out::ReqMktDepth,
             VERSION,
             id,
-            security,
+            security.as_out_msg(),
             number_of_rows,
             true,
             None::<()>,
@@ -2317,7 +2317,7 @@ impl Client<indicators::Active> {
         self.writer.add_body((
             Out::PlaceOrder,
             id,
-            order.get_security(),
+            order.get_security().as_out_msg(),
             None::<()>,
             None::<()>,
             order,
@@ -2346,7 +2346,7 @@ impl Client<indicators::Active> {
         self.writer.add_body((
             Out::PlaceOrder,
             id,
-            order.get_security(),
+            order.get_security().as_out_msg(),
             None::<()>,
             None::<()>,
             order,

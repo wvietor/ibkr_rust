@@ -35,10 +35,10 @@ pub fn impl_debug_trait(ast: &mut ItemTrait) {
         default_func.stmts.push(syn::Stmt::Expr(
             syn::Expr::Async(syn::ExprAsync {
                 attrs: vec![],
-                async_token: std::default::Default::default(),
+                async_token: syn::token::Async::default(),
                 capture: Some(syn::parse(quote! { move }.into()).unwrap()),
                 block: syn::Block {
-                    brace_token: std::default::Default::default(),
+                    brace_token: syn::token::Brace::default(),
                     stmts: vec![
                         syn::parse(quote! { eprint!("{}", #prefix); }.into()).unwrap(),
                         syn::parse(quote! { dbg!((#args)); }.into()).unwrap(),

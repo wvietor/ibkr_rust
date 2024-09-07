@@ -42,7 +42,7 @@ pub fn impl_make_send(
     let item = parse_macro_input!(item as ItemTrait);
 
     let variant = impl_make_variant(&attrs, &item);
-    let new_item = impl_remove_async(item);
+    let new_item = impl_remove_async(&item);
 
     quote! {
         #new_item
@@ -74,7 +74,7 @@ fn impl_make_variant(attrs: &Attr, item: &ItemTrait) -> TokenStream {
     quote! { #var }
 }
 
-fn insert_trait_bounds(item: &TraitItem, make_traits: &Vec<TypeParamBound>) -> TraitItem {
+fn insert_trait_bounds(item: &TraitItem, make_traits: &[TypeParamBound]) -> TraitItem {
     let TraitItem::Fn(func @ TraitItemFn { sig, .. }) = item else {
         return item.clone();
     };
@@ -116,7 +116,7 @@ fn insert_trait_bounds(item: &TraitItem, make_traits: &Vec<TypeParamBound>) -> T
     TraitItem::Fn(TraitItemFn {
         sig: Signature {
             asyncness: None,
-            output: ReturnType::Type(Default::default(), Box::new(output_type)),
+            output: ReturnType::Type(syn::token::RArrow::default(), Box::new(output_type)),
             ..sig.clone()
         },
         ..func.clone()
@@ -148,20 +148,16 @@ fn remove_async_add_impl(item: &TraitItem) -> TraitItem {
     TraitItem::Fn(TraitItemFn {
         sig: Signature {
             asyncness: None,
-            output: ReturnType::Type(Default::default(), Box::new(output_type)),
+            output: ReturnType::Type(syn::token::RArrow::default(), Box::new(output_type)),
             ..sig.clone()
         },
         ..func.clone()
     })
 }
 
-fn impl_remove_async(item: ItemTrait) -> TokenStream {
+fn impl_remove_async(item: &ItemTrait) -> TokenStream {
     let new = ItemTrait {
-        items: item
-            .items
-            .iter()
-            .map(|t| remove_async_add_impl(t))
-            .collect(),
+        items: item.items.iter().map(remove_async_add_impl).collect(),
         ..item.clone()
     };
 

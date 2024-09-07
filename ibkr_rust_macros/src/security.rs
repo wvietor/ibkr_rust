@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{parse_str, Ident};
+#[allow(clippy::enum_glob_use)]
 use SecType::*;
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -18,7 +19,7 @@ enum SecType {
 
 impl SecType {
     #[inline]
-    const fn as_str(&self) -> &'static str {
+    const fn as_str(self) -> &'static str {
         match self {
             Forex => "Forex",
             Crypto => "Crypto",
