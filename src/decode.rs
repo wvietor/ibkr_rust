@@ -3,12 +3,6 @@ use core::future::Future;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 use thiserror::Error;
 
-use crate::{
-    currency::Currency,
-    exchange::Routing,
-    message::{ToClient, ToWrapper},
-    wrapper,
-};
 use crate::account::{self, ParseAttributeError, Tag, TagValue};
 use crate::contract::{
     Commodity, Contract, ContractId, ContractType, Crypto, Forex, Index, Proxy, SecFuture,
@@ -17,15 +11,21 @@ use crate::contract::{
 use crate::exchange::Primary;
 use crate::execution::{Exec, Execution, OrderSide, ParseOrderSideError};
 use crate::payload::{
-    Bar,
-    BarCore, BidAsk, ExchangeId, Fill, HistogramEntry, Last, market_depth::{CompleteEntry, Entry, Operation}, MarketDataClass, Midpoint,
+    market_depth::{CompleteEntry, Entry, Operation},
+    Bar, BarCore, BidAsk, ExchangeId, Fill, HistogramEntry, Last, MarketDataClass, Midpoint,
     ParsePayloadError, Pnl, PnlSingle, Position, PositionSummary, TickData, Trade,
 };
 use crate::tick::{
     Accessibility, AuctionData, CalculationResult, Class, Dividends, EtfNav, ExtremeValue, Ipo,
     MarkPrice, OpenInterest, Period, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
-    RealTimeVolumeBase, SecOptionCalculationResults, SecOptionCalculations,
-    SecOptionCalculationSource, SecOptionVolume, Size, SummaryVolume, TimeStamp, Volatility, Yield,
+    RealTimeVolumeBase, SecOptionCalculationResults, SecOptionCalculationSource,
+    SecOptionCalculations, SecOptionVolume, Size, SummaryVolume, TimeStamp, Volatility, Yield,
+};
+use crate::{
+    currency::Currency,
+    exchange::Routing,
+    message::{ToClient, ToWrapper},
+    wrapper,
 };
 
 type Tx = tokio::sync::mpsc::Sender<ToClient>;
@@ -906,15 +906,25 @@ pub trait Local: wrapper::LocalWrapper {
                 if let [datetime_str, open, high, low, close, volume, wap, trade_count] = chunk {
                     let (date, rem) = NaiveDate::parse_and_remainder(datetime_str, "%Y%m%d")
                         .map_err(|_| ("date", ParseDateTimeError::Timestamp))?;
-                    let time = if rem.is_empty() {
-                        NaiveTime::default()
+                    let (time, rem) = if rem.is_empty() {
+                        (NaiveTime::default(), "")
                     } else {
                         NaiveTime::parse_and_remainder(rem, " %T")
                             .map_err(|_| ("time", ParseDateTimeError::Timestamp))?
-                            .0
+                    };
+                    let tz = if rem.is_empty() {
+                        chrono_tz::UTC
+                    } else {
+                        rem.trim()
+                            .parse::<chrono_tz::Tz>()
+                            .map_err(|e| ("timezone", ParseDateTimeError::Timezone(e)))?
                     };
                     let core = BarCore {
-                        datetime: NaiveDateTime::new(date, time).and_utc(),
+                        datetime: NaiveDateTime::new(date, time)
+                            .and_local_timezone(tz)
+                            .single()
+                            .ok_or(("datetime", ParseDateTimeError::Single))?
+                            .to_utc(),
                         open: open.parse().map_err(|e| ("open", e))?,
                         high: high.parse().map_err(|e| ("high", e))?,
                         low: low.parse().map_err(|e| ("low", e))?,

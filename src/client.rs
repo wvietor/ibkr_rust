@@ -5,19 +5,10 @@ use chrono_tz::Tz;
 use crossbeam::queue::SegQueue;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
 use tokio::net::tcp::OwnedReadHalf;
 use tokio::task::JoinHandle;
+use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
 
-use crate::{
-    account::Tag,
-    comm::Writer,
-    constants, decode,
-    execution::Filter,
-    order::{Executable, Order},
-    payload::ExchangeId,
-    reader::Reader,
-};
 use crate::contract::{ContractId, Query, Security};
 use crate::decode::DecodeError;
 use crate::exchange::Routing;
@@ -27,6 +18,15 @@ use crate::market_data::{
 };
 use crate::message::{In, Out, ToClient, ToWrapper};
 use crate::wrapper::{CancelToken, Initializer, LocalInitializer, LocalWrapper, Wrapper};
+use crate::{
+    account::Tag,
+    comm::Writer,
+    constants, decode,
+    execution::Filter,
+    order::{Executable, Order},
+    payload::ExchangeId,
+    reader::Reader,
+};
 
 // ======================================
 // === Types for Handling Config File ===
@@ -274,7 +274,7 @@ impl Builder {
         let conn_time = conn_time
             .and_local_timezone(
                 tz.trim()
-                    .parse::<chrono_tz::Tz>()
+                    .parse::<Tz>()
                     .map_err(|_| ConnectionError::TimeZone)?,
             )
             .single()

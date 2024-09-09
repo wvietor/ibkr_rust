@@ -31,7 +31,7 @@ async fn spy_bars() -> Result<(), Box<dyn std::error::Error>> {
             &spy,
             historical_bar::EndDateTime::Present,
             historical_bar::Duration::Week(1),
-            historical_bar::Size::Day,
+            historical_bar::Size::Minutes(historical_bar::MinuteSize::Fifteen),
             historical_bar::Trades,
             false,
         )
