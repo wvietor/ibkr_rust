@@ -1,6 +1,6 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::{quote, ToTokens};
-use syn::{parse_quote, ItemStruct, Type};
+use syn::{ItemStruct, parse_quote, Type};
 
 fn impl_method(
     struct_name: &Ident,

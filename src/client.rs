@@ -4,19 +4,10 @@ use std::sync::Arc;
 use crossbeam::queue::SegQueue;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
 use tokio::net::tcp::OwnedReadHalf;
 use tokio::task::JoinHandle;
-use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
 
-use crate::contract::{ContractId, Query, Security};
-use crate::decode::DecodeError;
-use crate::exchange::Routing;
-use crate::market_data::{
-    histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks,
-    updating_historical_bar,
-};
-use crate::message::{In, Out, ToClient, ToWrapper};
-use crate::wrapper::{CancelToken, Initializer, LocalInitializer, LocalWrapper, Wrapper};
 use crate::{
     account::Tag,
     comm::Writer,
@@ -27,6 +18,16 @@ use crate::{
     reader::Reader,
     timezone,
 };
+use crate::contract::{ContractId, Query, Security};
+use crate::decode::DecodeError;
+use crate::exchange::Routing;
+use crate::market_data::{
+    histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks,
+    updating_historical_bar,
+};
+use crate::message::{In, Out, ToClient, ToWrapper};
+use crate::wrapper::{CancelToken, Initializer, LocalInitializer, LocalWrapper, Wrapper};
+
 // ======================================
 // === Types for Handling Config File ===
 // ======================================

@@ -1,11 +1,11 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::parse::{Parse, ParseStream};
-use syn::punctuated::Punctuated;
 use syn::{
-    parenthesized, parse_macro_input, parse_quote, Generics, Ident, ItemTrait, ReturnType,
+    Generics, Ident, ItemTrait, parenthesized, parse_macro_input, parse_quote, ReturnType,
     Signature, Token, TraitItem, TraitItemFn, Type, TypeImplTrait, TypeParamBound,
 };
+use syn::parse::{Parse, ParseStream};
+use syn::punctuated::Punctuated;
 
 #[allow(dead_code)]
 #[derive(Clone)]

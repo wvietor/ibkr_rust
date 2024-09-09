@@ -3,6 +3,12 @@ use core::future::Future;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 use thiserror::Error;
 
+use crate::{
+    currency::Currency,
+    exchange::Routing,
+    message::{ToClient, ToWrapper},
+    timezone, wrapper,
+};
 use crate::account::{self, ParseAttributeError, Tag, TagValue};
 use crate::contract::{
     Commodity, Contract, ContractId, ContractType, Crypto, Forex, Index, Proxy, SecFuture,
@@ -11,23 +17,17 @@ use crate::contract::{
 use crate::exchange::Primary;
 use crate::execution::{Exec, Execution, OrderSide, ParseOrderSideError};
 use crate::payload::{
-    market_depth::{CompleteEntry, Entry, Operation},
-    Bar, BarCore, BidAsk, ExchangeId, Fill, HistogramEntry, Last, MarketDataClass, Midpoint,
+    Bar,
+    BarCore, BidAsk, ExchangeId, Fill, HistogramEntry, Last, market_depth::{CompleteEntry, Entry, Operation}, MarketDataClass, Midpoint,
     ParsePayloadError, Pnl, PnlSingle, Position, PositionSummary, TickData, Trade,
 };
 use crate::tick::{
     Accessibility, AuctionData, CalculationResult, Class, Dividends, EtfNav, ExtremeValue, Ipo,
     MarkPrice, OpenInterest, Period, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
-    RealTimeVolumeBase, SecOptionCalculationResults, SecOptionCalculationSource,
-    SecOptionCalculations, SecOptionVolume, Size, SummaryVolume, TimeStamp, Volatility, Yield,
+    RealTimeVolumeBase, SecOptionCalculationResults, SecOptionCalculations,
+    SecOptionCalculationSource, SecOptionVolume, Size, SummaryVolume, TimeStamp, Volatility, Yield,
 };
 use crate::timezone::ParseTimezoneError;
-use crate::{
-    currency::Currency,
-    exchange::Routing,
-    message::{ToClient, ToWrapper},
-    timezone, wrapper,
-};
 
 type Tx = tokio::sync::mpsc::Sender<ToClient>;
 type Rx = tokio::sync::mpsc::Receiver<ToWrapper>;

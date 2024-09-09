@@ -2,9 +2,9 @@ use std::collections::HashSet;
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse_str, Ident};
 #[allow(clippy::enum_glob_use)]
 use SecType::*;
+use syn::{Ident, parse_str};
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 enum SecType {

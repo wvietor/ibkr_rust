@@ -33,9 +33,10 @@ macro_rules! impl_data_type {
 
 /// Contains types and traits used by [`crate::client::Client::req_historical_bar`].
 pub mod historical_bar {
-    use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Stock};
     use ibapi_macros::typed_variants;
     use serde::{Deserialize, Serialize, Serializer};
+
+    use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Stock};
 
     // === Type definitions ===
 
@@ -264,10 +265,12 @@ pub mod historical_bar {
 
 /// Contains types and traits used by [`crate::client::Client::req_updating_historical_bar`].
 pub mod updating_historical_bar {
-    use super::historical_bar;
-    use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Stock};
     use ibapi_macros::typed_variants;
     use serde::{Deserialize, Serialize};
+
+    use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Stock};
+
+    use super::historical_bar;
 
     // === Type definitions ===
 
@@ -328,9 +331,10 @@ pub mod updating_historical_bar {
 /// Contains types and traits used by [`crate::client::Client::req_historical_ticks`] and
 /// [`crate::client::Client::req_head_timestamp`].
 pub mod historical_ticks {
-    use crate::contract::{Commodity, Contract, Crypto, Forex, Index, SecFuture, SecOption, Stock};
     use ibapi_macros::typed_variants;
     use serde::{Deserialize, Serialize, Serializer};
+
+    use crate::contract::{Commodity, Contract, Crypto, Forex, Index, SecFuture, SecOption, Stock};
 
     // === Type definitions ===
 
@@ -455,8 +459,9 @@ pub mod histogram {
 
 /// Contains the types and traits used by [`crate::client::Client::req_real_time_bars`].
 pub mod live_bar {
-    use super::updating_historical_bar;
     use crate::contract::{Commodity, Contract, Crypto, Forex, Index, SecFuture, SecOption, Stock};
+
+    use super::updating_historical_bar;
 
     // === Data types ===
 
@@ -487,10 +492,12 @@ pub mod live_bar {
 /// Contains types and traits used by [`crate::client::Client::req_market_data`] and
 /// [`crate::client::Client::req_market_data_type`].
 pub mod live_data {
-    use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Stock};
+    use std::fmt::Formatter;
+
     use ibapi_macros::typed_variants;
     use serde::{Deserialize, Serialize};
-    use std::fmt::Formatter;
+
+    use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Stock};
 
     // === Type definitions ===
 
@@ -669,9 +676,10 @@ pub mod live_data {
 
 /// Contains types and traits used by [`crate::client::Client::req_tick_by_tick_data`].
 pub mod live_ticks {
-    use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, Stock};
     use ibapi_macros::typed_variants;
     use serde::{Deserialize, Serialize};
+
+    use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, Stock};
 
     // === Data types ===
 

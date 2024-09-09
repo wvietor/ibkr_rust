@@ -1,19 +1,19 @@
+use std::{num::ParseIntError, str::FromStr};
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
-use std::{num::ParseIntError, str::FromStr};
 
 use chrono::NaiveDate;
 use ibapi_macros::{make_getters, Security};
-use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, ser::SerializeStruct, Serialize, Serializer};
 use thiserror::Error;
 
-use crate::contract::proxy_indicators::{HasExchange, NoExchange};
-use crate::figi::{Figi, InvalidFigi};
 use crate::{
     currency::Currency,
     exchange::{Primary, Routing},
     match_poly,
 };
+use crate::contract::proxy_indicators::{HasExchange, NoExchange};
+use crate::figi::{Figi, InvalidFigi};
 
 // =========================================================
 // === Utility Types and Functions for Contract Creation ===
@@ -439,16 +439,19 @@ pub enum SecurityId {
 // =================================
 
 mod indicators {
+    use std::convert::Infallible;
+
+    use chrono::NaiveDate;
+    use serde::{Serialize, Serializer};
+
+    use crate::currency::Currency;
+    use crate::exchange::{Primary, Routing};
+    use crate::match_poly;
+
     use super::{
         Commodity, Contract, ContractId, Crypto, Forex, Index, SecFuture, SecOption, Stock,
         UnexpectedSecurityType,
     };
-    use crate::currency::Currency;
-    use crate::exchange::{Primary, Routing};
-    use crate::match_poly;
-    use chrono::NaiveDate;
-    use serde::{Serialize, Serializer};
-    use std::convert::Infallible;
 
     #[derive(Debug, Clone, PartialOrd, PartialEq)]
     pub struct SecurityOutMsg<'s> {

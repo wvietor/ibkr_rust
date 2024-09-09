@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::ToTokens;
-use syn::{parse_quote, Attribute, Generics, ItemEnum, Token};
+use syn::{Attribute, Generics, ItemEnum, parse_quote, Token};
 
 fn make_struct(
     ident: syn::Ident,

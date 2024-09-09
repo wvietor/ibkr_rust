@@ -1,7 +1,7 @@
 use chrono::serde::ts_seconds;
 use chrono::Utc;
-use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
+use serde::ser::SerializeStruct;
 
 use crate::contract::{Contract, ContractType, ExchangeProxy};
 use crate::exchange::Primary;

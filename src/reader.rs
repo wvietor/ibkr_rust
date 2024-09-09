@@ -1,6 +1,7 @@
+use std::sync::Arc;
+
 use bytes::{Buf, BytesMut};
 use crossbeam::queue::SegQueue;
-use std::sync::Arc;
 use tokio::{io::AsyncReadExt, net::tcp::OwnedReadHalf};
 
 #[derive(Debug)]

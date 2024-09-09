@@ -1,9 +1,11 @@
-use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Security, Stock};
-use serde::ser::SerializeTuple;
-use serde::{Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt::Formatter;
 use std::str::FromStr;
+
+use serde::{Serialize, Serializer};
+use serde::ser::SerializeTuple;
+
+use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Security, Stock};
 
 // ==============================================
 // === Core Order Types (Market, Limit, etc.) ===

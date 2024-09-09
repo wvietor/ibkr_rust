@@ -1,11 +1,12 @@
+use proc_macro::TokenStream;
+
+use quote::ToTokens;
+
 mod debug_trait;
 mod getters;
 mod security;
 mod send_trait;
 mod variant_value;
-
-use proc_macro::TokenStream;
-use quote::ToTokens;
 
 #[allow(clippy::missing_panics_doc)]
 #[proc_macro_derive(Security)]
