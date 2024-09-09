@@ -33,6 +33,7 @@ macro_rules! impl_data_type {
 
 /// Contains types and traits used by [`crate::client::Client::req_historical_bar`].
 pub mod historical_bar {
+    use chrono_tz::Tz;
     use ibapi_macros::typed_variants;
     use serde::{Deserialize, Serialize, Serializer};
 
@@ -46,7 +47,7 @@ pub mod historical_bar {
         /// The present moment.
         Present,
         /// Some date and time in the past.
-        Past(chrono::DateTime<crate::timezone::IbTimeZone>),
+        Past(chrono::DateTime<Tz>),
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -268,26 +269,22 @@ pub mod updating_historical_bar {
     use ibapi_macros::typed_variants;
     use serde::{Deserialize, Serialize};
 
+    /// Re-export of [`historical_bar::Duration`]
+    pub use historical_bar::Duration as Duration;
+    /// Re-export of [`historical_bar::HourSize`]
+    pub use historical_bar::HourSize as HourSize;
+    /// Re-export of [`historical_bar::MinuteSize`]
+    pub use historical_bar::MinuteSize as MinuteSize;
+    /// Re-export of [`historical_bar::SecondSize`]
+    pub use historical_bar::SecondSize as SecondSize;
+    /// Re-export of [`historical_bar::Size`]
+    pub use historical_bar::Size as Size;
+
     use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Stock};
 
     use super::historical_bar;
 
     // === Type definitions ===
-
-    /// Re-export of [`historical_bar::Duration`]
-    pub type Duration = historical_bar::Duration;
-
-    /// Re-export of [`historical_bar::Size`]
-    pub type Size = historical_bar::Size;
-
-    /// Re-export of [`historical_bar::SecondSize`]
-    pub type SecondSize = historical_bar::SecondSize;
-
-    /// Re-export of [`historical_bar::MinuteSize`]
-    pub type MinuteSize = historical_bar::MinuteSize;
-
-    /// Re-export of [`historical_bar::HourSize`]
-    pub type HourSize = historical_bar::HourSize;
 
     // === Data types ===
 
@@ -459,26 +456,22 @@ pub mod histogram {
 
 /// Contains the types and traits used by [`crate::client::Client::req_real_time_bars`].
 pub mod live_bar {
+    /// Re-export of [`updating_historical_bar::Ask`]
+    pub use updating_historical_bar::Ask as Ask;
+    /// Re-export of [`updating_historical_bar::Bid`]
+    pub use updating_historical_bar::Bid as Bid;
+    /// Re-export of [`updating_historical_bar::Data`]
+    pub use updating_historical_bar::Data as Data;
+    /// Re-export of [`updating_historical_bar::Midpoint`]
+    pub use updating_historical_bar::Midpoint as Midpoint;
+    /// Re-export of [`updating_historical_bar::Trades`]
+    pub use updating_historical_bar::Trades as Trades;
+
     use crate::contract::{Commodity, Contract, Crypto, Forex, Index, SecFuture, SecOption, Stock};
 
     use super::updating_historical_bar;
 
     // === Data types ===
-
-    /// Re-export of [`updating_historical_bar::Data`]
-    pub type Data = updating_historical_bar::Data;
-
-    /// Re-export of [`updating_historical_bar::Trades`]
-    pub type Trades = updating_historical_bar::Trades;
-
-    /// Re-export of [`updating_historical_bar::Midpoint`]
-    pub type Midpoint = updating_historical_bar::Midpoint;
-
-    /// Re-export of [`updating_historical_bar::Bid`]
-    pub type Bid = updating_historical_bar::Bid;
-
-    /// Re-export of [`updating_historical_bar::Ask`]
-    pub type Ask = updating_historical_bar::Ask;
 
     make_valid!(Trades, Midpoint, Bid, Ask, Data);
 
@@ -681,10 +674,10 @@ pub mod live_ticks {
 
     use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, Stock};
 
-    // === Data types ===
-
     /// Re-export of [`super::historical_ticks::NumberOfTicks`] for convenience.
-    pub type NumberOfTicks = super::historical_ticks::NumberOfTicks;
+    pub use super::historical_ticks::NumberOfTicks as NumberOfTicks;
+
+    // === Data types ===
 
     #[typed_variants]
     #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]

@@ -1,6 +1,7 @@
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use chrono_tz::Tz;
 use crossbeam::queue::SegQueue;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -16,7 +17,6 @@ use crate::{
     order::{Executable, Order},
     payload::ExchangeId,
     reader::Reader,
-    timezone,
 };
 use crate::contract::{ContractId, Query, Security};
 use crate::decode::DecodeError;
@@ -274,7 +274,7 @@ impl Builder {
         let conn_time = conn_time
             .and_local_timezone(
                 tz.trim()
-                    .parse::<timezone::IbTimeZone>()
+                    .parse::<chrono_tz::Tz>()
                     .map_err(|_| ConnectionError::TimeZone)?,
             )
             .single()
@@ -1186,7 +1186,7 @@ pub struct Client<C: indicators::Status> {
     address: std::net::Ipv4Addr,
     client_id: i64,
     server_version: u32,
-    conn_time: chrono::DateTime<timezone::IbTimeZone>,
+    conn_time: chrono::DateTime<Tz>,
     writer: Writer,
     status: C,
 }
@@ -1235,7 +1235,7 @@ impl<S: indicators::Status> Client<S> {
 
     #[inline]
     /// Return the time at which the client successfully connected.
-    pub const fn get_conn_time(&self) -> chrono::DateTime<timezone::IbTimeZone> {
+    pub const fn get_conn_time(&self) -> chrono::DateTime<Tz> {
         self.conn_time
     }
 

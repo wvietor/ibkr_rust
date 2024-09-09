@@ -7,7 +7,7 @@ use crate::{
     currency::Currency,
     exchange::Routing,
     message::{ToClient, ToWrapper},
-    timezone, wrapper,
+    wrapper,
 };
 use crate::account::{self, ParseAttributeError, Tag, TagValue};
 use crate::contract::{
@@ -27,7 +27,6 @@ use crate::tick::{
     RealTimeVolumeBase, SecOptionCalculationResults, SecOptionCalculations,
     SecOptionCalculationSource, SecOptionVolume, Size, SummaryVolume, TimeStamp, Volatility, Yield,
 };
-use crate::timezone::ParseTimezoneError;
 
 type Tx = tokio::sync::mpsc::Sender<ToClient>;
 type Rx = tokio::sync::mpsc::Receiver<ToWrapper>;
@@ -759,7 +758,7 @@ pub trait Local: wrapper::LocalWrapper {
                 .map_err(|_| ("datetime", ParseDateTimeError::Timestamp))?;
             let datetime = dt
                 .and_local_timezone(
-                    tz.parse::<timezone::IbTimeZone>()
+                    tz.parse::<chrono_tz::Tz>()
                         .map_err(|e| ("datetime", ParseDateTimeError::Timezone(e)))?,
                 )
                 .single()
@@ -2867,7 +2866,7 @@ impl From<(&'static str, std::convert::Infallible)> for DecodeError {
 pub enum ParseDateTimeError {
     /// Failed to parse an [`IbTimeZone`]
     #[error("Failed to parse timezone")]
-    Timezone(#[from] ParseTimezoneError),
+    Timezone(#[from] chrono_tz::ParseError),
     /// Invalid timestamp
     #[error("Invalid timestamp: out-of-range number of seconds and/or invalid nanosecond")]
     Timestamp,
