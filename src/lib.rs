@@ -72,8 +72,6 @@ mod reader;
 ///this module, each of our groups gets its own submodule and corresponds one-to-one with a
 /// [`wrapper::LocalWrapper`] or [`wrapper::Wrapper`] method.
 pub mod tick;
-/// Contains a [`chrono::TimeZone`] enum to represent all the possible timezones available in the API.
-pub mod timezone;
 /// Contains the definition of the [`wrapper::LocalWrapper`] and [`wrapper::Wrapper`] traits. Implementing these traits for a
 /// type allows users to customize callback behavior.
 pub mod wrapper;

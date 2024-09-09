@@ -16,6 +16,7 @@ tokio-util = { version = "0.7.11", features = ["full"] }
 toml = "0.8.19"
 serde = { version = "1.0.209", features = ["derive"] }
 chrono = { version = "0.4.38", features = ["serde"] }
+chrono-tz = { version = "0.10.0" }
 crossbeam = "0.8.4"
 bytes = "1.7.1"
 itoa = "1.0.11"
