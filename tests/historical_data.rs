@@ -1,6 +1,8 @@
-use ibapi::prelude::*;
 use std::future::Future;
+
 use tokio_util::time::FutureExt;
+
+use ibapi::prelude::*;
 
 struct ChannelWrapper {
     tx: tokio::sync::mpsc::Sender<(i64, Vec<Bar>)>,
