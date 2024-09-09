@@ -70,7 +70,7 @@ impl Config {
 // =======================================
 
 //noinspection SpellCheckingInspection
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 /// Represents the two types of connections to IBKR's trading systems.
 pub enum Mode {
     /// A live trading connection with real money.
@@ -103,7 +103,7 @@ impl std::fmt::Display for Mode {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 /// Represents the two platforms that facilitate trading with IBKR's systems. The two hosts are
 /// indistinguishable from the perspective of an API application.
 pub enum Host {
