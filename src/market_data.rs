@@ -18,11 +18,35 @@ use super::{$($name,)*};
     };
 }
 
+macro_rules! impl_data_type_docs {
+    (($first: ident $(, $rest: ident)+)) => {
+        concat!("[`", stringify!($first), "`], ", impl_data_type_docs!(($($rest),*)) )
+    };
+    (($only: ident)) => { concat!("[`", stringify!($only), "`]") }
+}
+
 macro_rules! impl_data_type {
     (($($d_name: ident),*); $s_names: tt) => {
         $(
             impl_data_type!($d_name; $s_names);
         )*
+    };
+    (($($d_name: ident),*); $s_names: tt; $enum_name: ident) => {
+        #[doc = concat!(
+            "A helper enum to hold data types valid for particular securities: ",
+            impl_data_type_docs!($s_names)
+        )]
+        #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+        pub enum $enum_name {
+            $(
+            #[doc = concat!(stringify!($d_name), " data")]
+            $d_name($d_name),
+            )*
+        }
+
+        impl indicators::Valid for $enum_name {}
+
+        impl_data_type!(($enum_name, $($d_name),*); $s_names);
     };
     ($d_name: ident; ($($s_name: ident),*)) => {
         $(
@@ -250,17 +274,20 @@ pub mod historical_bar {
 
     impl_data_type!(
         (Trades, HistoricalVolatility, SecOptionImpliedVolatility);
-        (Index)
+        (Index);
+        TradesVolData
     );
 
     impl_data_type!(
         (Trades, Midpoint, Bid, Ask, BidAsk);
-        (SecOption, SecFuture, Crypto)
+        (SecOption, SecFuture, Crypto);
+        TradesMidBidAskData
     );
 
     impl_data_type!(
         (Midpoint, Bid, Ask, BidAsk);
-        (Forex, Commodity)
+        (Forex, Commodity);
+        MidBidAskData
     );
 }
 
@@ -321,7 +348,8 @@ pub mod updating_historical_bar {
 
     impl_data_type!(
         (Midpoint, Bid, Ask);
-        (Forex, Commodity)
+        (Forex, Commodity);
+        MidBidAskData
     );
 }
 
@@ -663,7 +691,8 @@ pub mod live_data {
             IBDividends,
             Empty
         );
-        (Forex, SecOption, SecFuture, Crypto, Index, Commodity)
+        (Forex, SecOption, SecFuture, Crypto, Index, Commodity);
+        NonStockData
     );
 }
 
