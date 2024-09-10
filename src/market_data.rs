@@ -31,7 +31,7 @@ macro_rules! impl_data_type {
             impl_data_type!($d_name; $s_names);
         )*
     };
-    (($($d_name: ident),*); $s_names: tt; $enum_name: ident) => {
+    (($($d_name: ident),*); $s_names: tt; $enum_name: ident; $err_name: ident) => {
         #[doc = concat!(
             "A helper enum to hold data types valid for particular securities: ",
             impl_data_type_docs!($s_names)
@@ -42,6 +42,37 @@ macro_rules! impl_data_type {
             #[doc = concat!(stringify!($d_name), " data")]
             $d_name($d_name),
             )*
+        }
+
+        #[derive(Debug, Clone, thiserror::Error)]
+        #[doc = concat!("An error type that is thrown if [`Data`] cannot be converted into [`", stringify!($enum_name), "`]")]
+        #[error("Cannot coerce {from_type:?} to {}", stringify!($enum_name))]
+        pub struct $err_name {
+            /// The type from which a converison was attempted
+            from_type: Data,
+        }
+
+        impl TryFrom<Data> for $enum_name {
+            type Error = $err_name;
+
+            fn try_from(value: Data) -> Result<Self, Self::Error> {
+                match value {
+                    $(
+                        Data::$d_name(d) => Ok(Self::$d_name(d)),
+                    )*
+                    _ => Err($err_name { from_type: value })
+                }
+            }
+        }
+
+        impl From<$enum_name> for Data {
+            fn from(value: $enum_name) -> Self {
+                match value {
+                    $(
+                        $enum_name::$d_name(d) => Self::$d_name(d),
+                    )*
+                }
+            }
         }
 
         impl indicators::Valid for $enum_name {}
@@ -275,19 +306,22 @@ pub mod historical_bar {
     impl_data_type!(
         (Trades, HistoricalVolatility, SecOptionImpliedVolatility);
         (Index);
-        TradesVolData
+        TradesVolData;
+        NotTradesVolError
     );
 
     impl_data_type!(
         (Trades, Midpoint, Bid, Ask, BidAsk);
         (SecOption, SecFuture, Crypto);
-        TradesMidBidAskData
+        TradesMidBidAskData;
+        NotTradesBidAskMidError
     );
 
     impl_data_type!(
         (Midpoint, Bid, Ask, BidAsk);
         (Forex, Commodity);
-        MidBidAskData
+        MidBidAskData;
+        NotMidBidAskError
     );
 }
 
@@ -349,7 +383,8 @@ pub mod updating_historical_bar {
     impl_data_type!(
         (Midpoint, Bid, Ask);
         (Forex, Commodity);
-        MidBidAskData
+        MidBidAskData;
+        NotMidBidAskError
     );
 }
 
@@ -692,7 +727,8 @@ pub mod live_data {
             Empty
         );
         (Forex, SecOption, SecFuture, Crypto, Index, Commodity);
-        NonStockData
+        GeneralData;
+        NotGeneralDataError
     );
 }
 
