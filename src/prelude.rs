@@ -13,11 +13,10 @@ pub use crate::market_data::{
     updating_historical_bar,
 };
 pub use crate::order::{Limit, Market, Order, TimeInForce};
+pub use crate::payload::market_depth::{CompleteEntry, Entry, Mpid, Operation, Row};
 pub use crate::payload::{
     Bar, BarCore, BidAsk, ExchangeId, Fill, HistogramEntry, Last, Midpoint, OrderStatus,
     OrderStatusCore, Pnl, PnlSingle, Position, PositionSummary, TickData, Trade,
 };
-pub use crate::payload::market_depth::{CompleteEntry, Entry, Mpid, Operation, Row};
 pub use crate::tick;
 pub use crate::wrapper::{CancelToken, Initializer, Recurring, Wrapper};
-

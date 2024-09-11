@@ -331,15 +331,15 @@ pub mod updating_historical_bar {
     use serde::{Deserialize, Serialize};
 
     /// Re-export of [`historical_bar::Duration`]
-    pub use historical_bar::Duration as Duration;
+    pub use historical_bar::Duration;
     /// Re-export of [`historical_bar::HourSize`]
-    pub use historical_bar::HourSize as HourSize;
+    pub use historical_bar::HourSize;
     /// Re-export of [`historical_bar::MinuteSize`]
-    pub use historical_bar::MinuteSize as MinuteSize;
+    pub use historical_bar::MinuteSize;
     /// Re-export of [`historical_bar::SecondSize`]
-    pub use historical_bar::SecondSize as SecondSize;
+    pub use historical_bar::SecondSize;
     /// Re-export of [`historical_bar::Size`]
-    pub use historical_bar::Size as Size;
+    pub use historical_bar::Size;
 
     use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Stock};
 
@@ -520,15 +520,15 @@ pub mod histogram {
 /// Contains the types and traits used by [`crate::client::Client::req_real_time_bars`].
 pub mod live_bar {
     /// Re-export of [`updating_historical_bar::Ask`]
-    pub use updating_historical_bar::Ask as Ask;
+    pub use updating_historical_bar::Ask;
     /// Re-export of [`updating_historical_bar::Bid`]
-    pub use updating_historical_bar::Bid as Bid;
+    pub use updating_historical_bar::Bid;
     /// Re-export of [`updating_historical_bar::Data`]
-    pub use updating_historical_bar::Data as Data;
+    pub use updating_historical_bar::Data;
     /// Re-export of [`updating_historical_bar::Midpoint`]
-    pub use updating_historical_bar::Midpoint as Midpoint;
+    pub use updating_historical_bar::Midpoint;
     /// Re-export of [`updating_historical_bar::Trades`]
-    pub use updating_historical_bar::Trades as Trades;
+    pub use updating_historical_bar::Trades;
 
     use crate::contract::{Commodity, Contract, Crypto, Forex, Index, SecFuture, SecOption, Stock};
 
@@ -740,7 +740,7 @@ pub mod live_ticks {
     use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, Stock};
 
     /// Re-export of [`super::historical_ticks::NumberOfTicks`] for convenience.
-    pub use super::historical_ticks::NumberOfTicks as NumberOfTicks;
+    pub use super::historical_ticks::NumberOfTicks;
 
     // === Data types ===
 

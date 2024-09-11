@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
-use serde::{Serialize, Serializer};
 use serde::ser::SerializeTuple;
+use serde::{Serialize, Serializer};
 
 use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Security, Stock};
 
