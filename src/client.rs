@@ -1820,7 +1820,7 @@ impl Client<indicators::Active> {
             duration,
             regular_trading_hours_only,
             data,
-            2,
+            1,
             false,
             None::<()>,
         ))?;
