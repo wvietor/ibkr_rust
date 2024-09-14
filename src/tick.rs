@@ -2,9 +2,9 @@ use std::fmt::Formatter;
 use std::num::ParseFloatError;
 use std::str::FromStr;
 
-use chrono::serde::{ts_milliseconds, ts_seconds};
 use chrono::{DateTime, NaiveDate, Utc};
-use serde::{ser::SerializeTuple, Deserialize, Deserializer, Serialize, Serializer};
+use chrono::serde::{ts_milliseconds, ts_seconds};
+use serde::{Deserialize, Deserializer, ser::SerializeTuple, Serialize, Serializer};
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "etf_nav")]

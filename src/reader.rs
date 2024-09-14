@@ -3,6 +3,7 @@ use std::sync::Arc;
 use bytes::{Buf, BytesMut};
 use crossbeam::queue::SegQueue;
 use tokio::{io::AsyncReadExt, net::tcp::OwnedReadHalf};
+use tracing::{error, info, warn};
 
 #[derive(Debug)]
 pub struct Reader {
@@ -24,20 +25,27 @@ impl Reader {
         }
     }
 
+    #[tracing::instrument]
     pub async fn run(mut self) -> Self {
         loop {
             tokio::select! {
-                () = self.disconnect.cancelled() => {println!("Reader thread: disconnecting"); break self},
+                () = self.disconnect.cancelled() => { info!("Reader thread: disconnecting"); break self} ,
                 () = async {
                     if let Ok(Ok(len)) = self.inner.read_u32().await.map(usize::try_from) {
                         let mut buf = BytesMut::with_capacity(len);
-                        if len == self.inner.read_buf(&mut buf).await.unwrap_or(0) {
-                            let msg = buf.chunk()
-                                .split(|b| *b == 0)
-                                .map(|s| core::str::from_utf8(s).unwrap_or("").to_owned())
-                                .collect::<Vec<String>>();
-                            self.queue.push(msg);
+                        let mut total_read = 0;
+                        while total_read < len {
+                            match self.inner.read_buf(&mut buf).await {
+                                Ok(0) => { warn!("TCP Reader read 0 bytes (this should never happen and is likely an error in message parsing)") },
+                                Ok(n) => { total_read += n; },
+                                Err(e) => error!("IO Error when receiving message. Error message: {e}")
+                            }
                         }
+                        let msg = buf.chunk()
+                        .split(|b| *b == 0)
+                        .map(|s| core::str::from_utf8(s).unwrap_or("").to_owned())
+                        .collect::<Vec<String>>();
+                        self.queue.push(msg);
                     }
                 } => (),
             }

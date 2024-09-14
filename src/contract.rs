@@ -1,19 +1,19 @@
+use std::{num::ParseIntError, str::FromStr};
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
-use std::{num::ParseIntError, str::FromStr};
 
 use chrono::NaiveDate;
 use ibapi_macros::{make_getters, Security};
-use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, ser::SerializeStruct, Serialize, Serializer};
 use thiserror::Error;
 
-use crate::contract::proxy_indicators::{HasExchange, NoExchange};
-use crate::figi::{Figi, InvalidFigi};
 use crate::{
     currency::Currency,
     exchange::{Primary, Routing},
     match_poly,
 };
+use crate::contract::proxy_indicators::{HasExchange, NoExchange};
+use crate::figi::{Figi, InvalidFigi};
 
 // =========================================================
 // === Utility Types and Functions for Contract Creation ===

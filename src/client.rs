@@ -5,19 +5,11 @@ use chrono_tz::Tz;
 use crossbeam::queue::SegQueue;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
 use tokio::net::tcp::OwnedReadHalf;
 use tokio::task::JoinHandle;
-use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
+use tracing::{error, info};
 
-use crate::contract::{ContractId, Query, Security};
-use crate::decode::DecodeError;
-use crate::exchange::Routing;
-use crate::market_data::{
-    histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks,
-    updating_historical_bar,
-};
-use crate::message::{In, Out, ToClient, ToWrapper};
-use crate::wrapper::{CancelToken, Initializer, LocalInitializer, LocalWrapper, Wrapper};
 use crate::{
     account::Tag,
     comm::Writer,
@@ -27,6 +19,15 @@ use crate::{
     payload::ExchangeId,
     reader::Reader,
 };
+use crate::contract::{ContractId, Query, Security};
+use crate::decode::DecodeError;
+use crate::exchange::Routing;
+use crate::market_data::{
+    histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks,
+    updating_historical_bar,
+};
+use crate::message::{In, Out, ToClient, ToWrapper};
+use crate::wrapper::{CancelToken, Initializer, LocalInitializer, LocalWrapper, Wrapper};
 
 // ======================================
 // === Types for Handling Config File ===
@@ -322,6 +323,7 @@ type LoopParams = (
 
 #[inline]
 #[allow(clippy::too_many_lines)]
+#[tracing::instrument(skip(remote))]
 async fn decode_msg_remote<W>(
     fields: Vec<String>,
     remote: &mut W,
@@ -729,13 +731,14 @@ async fn decode_msg_remote<W>(
         Ok(()) => (),
         Err(e) => {
             tokio::task::yield_now().await;
-            println!("\x1B[31m{e}\x1B[0m");
+            error!("Error in decoding incoming message from API. Error message: {e}");
         }
     }
 }
 
 #[inline]
 #[allow(clippy::too_many_lines)]
+#[tracing::instrument(skip(local))]
 async fn decode_msg_local<W>(
     fields: Vec<String>,
     local: &mut W,
@@ -1125,7 +1128,7 @@ async fn decode_msg_local<W>(
         Ok(()) => (),
         Err(e) => {
             tokio::task::yield_now().await;
-            println!("\x1B[31m{e}\x1B[0m");
+            error!("Error in decoding incoming message from API. Error message: {e}");
         }
     }
 }
@@ -1141,6 +1144,7 @@ pub(crate) mod indicators {
 
     pub trait Status {}
 
+    #[derive(Debug)]
     pub struct Inactive {
         pub(crate) reader: OwnedReadHalf,
     }
@@ -1376,6 +1380,7 @@ impl Client<indicators::Inactive> {
     ///
     /// # Errors
     /// Returns any error that occurs in the loop initialization or in the disconnection process.
+    #[tracing::instrument(skip(init))]
     pub async fn local<I: LocalInitializer>(
         self,
         init: I,
@@ -1398,7 +1403,7 @@ impl Client<indicators::Inactive> {
         loop {
             tokio::select! {
                 () = disconnect_token.cancelled() => {
-                    println!("Client loop: disconnecting");
+                    info!("Client loop disconnecting");
                     break
                 },
                 () = async {
@@ -1423,6 +1428,7 @@ impl Client<indicators::Inactive> {
     ///
     /// # Returns
     /// A [`CancelToken`] that can be used to terminate the main loop and disconnect the client.
+    #[tracing::instrument(skip(init))]
     pub async fn remote<I: Initializer + 'static>(self, init: I) -> CancelToken {
         let (mut client, tx, rx, queue, backlog) = self.into_active().await;
 
@@ -1444,7 +1450,7 @@ impl Client<indicators::Inactive> {
             loop {
                 tokio::select! {
                     () = break_loop_inner.cancelled() => {
-                        println!("Client loop: disconnecting");
+                        info!("Client loop: disconnecting");
                         break
                     },
                     () = async {
@@ -1471,6 +1477,7 @@ impl Client<indicators::Inactive> {
     ///
     /// # Returns
     /// An active [`Client`] that can be used to make API requests.
+    #[tracing::instrument(skip(wrapper))]
     pub async fn disaggregated<W: Wrapper + Send + 'static>(
         self,
         mut wrapper: W,
@@ -1486,7 +1493,7 @@ impl Client<indicators::Inactive> {
             let (mut tx, mut rx, mut wrapper) = (tx, rx, wrapper);
             loop {
                 tokio::select! {
-                    () = c_loop_disconnect.cancelled() => {println!("Client loop: disconnecting"); break},
+                    () = c_loop_disconnect.cancelled() => {info!("Client loop: disconnecting"); break},
                     () = async {
                         if let Some(fields) = queue.pop() {
                             decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;

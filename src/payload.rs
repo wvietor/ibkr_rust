@@ -2,8 +2,8 @@ use std::convert::Infallible;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
-use chrono::serde::ts_seconds;
 use chrono::{DateTime, Utc};
+use chrono::serde::ts_seconds;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
