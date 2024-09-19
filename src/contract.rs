@@ -999,6 +999,15 @@ pub enum SecOptionClass {
     Put,
 }
 
+impl From<SecOptionClass> for char {
+    fn from(value: SecOptionClass) -> Self {
+        match value {
+            SecOptionClass::Call => 'C',
+            SecOptionClass::Put => 'P',
+        }
+    }
+}
+
 impl<S: Security + Clone + Debug, E: ProxyExchange> From<Proxy<S, E>> for SerProxyHelp {
     #[allow(clippy::too_many_lines)]
     fn from(value: Proxy<S, E>) -> Self {
@@ -1525,6 +1534,21 @@ impl FromStr for ContractType {
             "CMDTY" => Self::Commodity,
             v => return Err(ParseContractTypeError(v.to_owned())),
         })
+    }
+}
+
+impl std::fmt::Display for ContractType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::Forex => "CASH",
+            Self::Crypto => "CRYPTO",
+            Self::Stock => "STK",
+            Self::Index => "IND",
+            Self::SecFuture => "FUT",
+            Self::SecOption => "OPT",
+            Self::Commodity => "CMDTY",
+        };
+        write!(f, "{s}")
     }
 }
 
