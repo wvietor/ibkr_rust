@@ -48,7 +48,7 @@ impl Reader {
                         .collect::<Vec<String>>();
                         tracing::trace!(msg, "Message pushed.");
                         self.queue.push(msg);
-                    },
+                    }
                 } => (),
                 () = self.disconnect.cancelled() => { info!("Reader thread: disconnecting"); break self} ,
             }
