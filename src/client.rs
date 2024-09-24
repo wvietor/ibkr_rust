@@ -323,7 +323,7 @@ type LoopParams = (
 
 #[inline]
 #[allow(clippy::too_many_lines)]
-#[tracing::instrument(skip(remote))]
+#[tracing::instrument(skip(remote), level = tracing::Level::DEBUG)]
 async fn decode_msg_remote<W>(
     fields: Vec<String>,
     remote: &mut W,
@@ -738,7 +738,7 @@ async fn decode_msg_remote<W>(
 
 #[inline]
 #[allow(clippy::too_many_lines)]
-#[tracing::instrument(skip(local))]
+#[tracing::instrument(skip(local), level = tracing::Level::DEBUG)]
 async fn decode_msg_local<W>(
     fields: Vec<String>,
     local: &mut W,
@@ -1380,7 +1380,7 @@ impl Client<indicators::Inactive> {
     ///
     /// # Errors
     /// Returns any error that occurs in the loop initialization or in the disconnection process.
-    #[tracing::instrument(skip(init))]
+    #[tracing::instrument(skip(init), level = tracing::Level::DEBUG)]
     pub async fn local<I: LocalInitializer>(
         self,
         init: I,
@@ -1428,7 +1428,7 @@ impl Client<indicators::Inactive> {
     ///
     /// # Returns
     /// A [`CancelToken`] that can be used to terminate the main loop and disconnect the client.
-    #[tracing::instrument(skip(init))]
+    #[tracing::instrument(skip(init), level = tracing::Level::DEBUG)]
     pub async fn remote<I: Initializer + 'static>(self, init: I) -> CancelToken {
         let (mut client, tx, rx, queue, backlog) = self.into_active().await;
 
@@ -1477,7 +1477,7 @@ impl Client<indicators::Inactive> {
     ///
     /// # Returns
     /// An active [`Client`] that can be used to make API requests.
-    #[tracing::instrument(skip(wrapper))]
+    #[tracing::instrument(skip(wrapper), level = tracing::Level::DEBUG)]
     pub async fn disaggregated<W: Wrapper + Send + 'static>(
         self,
         mut wrapper: W,

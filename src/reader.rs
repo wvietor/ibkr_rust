@@ -25,7 +25,7 @@ impl Reader {
         }
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = tracing::Level::DEBUG)]
     pub async fn run(mut self) -> Self {
         loop {
             tokio::select! {
