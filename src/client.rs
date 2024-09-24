@@ -1404,13 +1404,13 @@ impl Client<indicators::Inactive> {
                 biased;
                 Some(fields) = rx_reader.recv() => {
                     decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
-                    crate::wrapper::LocalRecurring::cycle(&mut wrapper).await;
                 },
                 () = disconnect_token.cancelled() => {
                     info!("Client loop disconnecting");
                     break
                 },
             }
+            crate::wrapper::LocalRecurring::cycle(&mut wrapper).await;
         }
         drop(wrapper);
         client.disconnect().await
@@ -1447,13 +1447,13 @@ impl Client<indicators::Inactive> {
                     biased;
                     Some(fields) = rx_reader.recv() => {
                         decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
-                        Recurring::cycle(&mut wrapper).await;
                     },
                     () = break_loop_inner.cancelled() => {
                         info!("Client loop: disconnecting");
                         break
                     },
                 }
+                Recurring::cycle(&mut wrapper).await;
             }
             drop(wrapper);
             client.disconnect().await
