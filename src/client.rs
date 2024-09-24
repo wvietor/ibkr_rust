@@ -27,7 +27,7 @@ use crate::market_data::{
     updating_historical_bar,
 };
 use crate::message::{In, Out, ToClient, ToWrapper};
-use crate::wrapper::{CancelToken, Initializer, LocalInitializer, LocalWrapper, Wrapper};
+use crate::wrapper::{CancelToken, Initializer, LocalInitializer, LocalWrapper, Recurring, Wrapper};
 
 // ======================================
 // === Types for Handling Config File ===
@@ -1390,7 +1390,7 @@ impl Client<indicators::Inactive> {
         let temp = CancelToken::new();
         let con_fut = spawn_temp_contract_thread(temp.clone(), queue, backlog, tx, rx);
 
-        let disconnect_token = disconnect_token.unwrap_or_default();
+        let disconnect_token = disconnect_token.unwrap_or_else(|| client.status.disconnect.clone());
         let mut wrapper =
             LocalInitializer::build(init, &mut client, disconnect_token.clone()).await;
         temp.cancel();
@@ -1435,9 +1435,8 @@ impl Client<indicators::Inactive> {
         let temp = CancelToken::new();
         let con_fut = spawn_temp_contract_thread(temp.clone(), queue, backlog, tx, rx);
 
-        let break_loop = CancelToken::new();
+        let break_loop = client.status.disconnect.clone();
         let break_loop_inner = break_loop.clone();
-
         tokio::spawn(async move {
             let mut wrapper = Initializer::build(init, &mut client, break_loop_inner.clone()).await;
             temp.cancel();
@@ -1459,7 +1458,7 @@ impl Client<indicators::Inactive> {
                         } else {
                             tokio::task::yield_now().await;
                         }
-                        crate::wrapper::Recurring::cycle(&mut wrapper).await;
+                        Recurring::cycle(&mut wrapper).await;
                     } => (),
                 }
             }
@@ -1478,7 +1477,7 @@ impl Client<indicators::Inactive> {
     /// # Returns
     /// An active [`Client`] that can be used to make API requests.
     #[tracing::instrument(skip(wrapper), level = tracing::Level::DEBUG)]
-    pub async fn disaggregated<W: Wrapper + Send + 'static>(
+    pub async fn disaggregated<W: Wrapper + Recurring + Send + 'static>(
         self,
         mut wrapper: W,
     ) -> Client<indicators::Active> {
@@ -1500,6 +1499,7 @@ impl Client<indicators::Inactive> {
                         } else {
                             tokio::task::yield_now().await;
                         }
+                        Recurring::cycle(&mut wrapper).await;
                     } => (),
                 }
             }

@@ -16,6 +16,10 @@ impl Wrapper for ChannelWrapper {
     }
 }
 
+impl Recurring for ChannelWrapper {
+    async fn cycle(&mut self) {}
+}
+
 #[tokio::test]
 async fn spy_bars() -> Result<(), Box<dyn std::error::Error>> {
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
