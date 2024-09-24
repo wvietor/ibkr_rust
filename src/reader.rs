@@ -29,9 +29,10 @@ impl Reader {
     pub async fn run(mut self) -> Self {
         loop {
             tokio::select! {
-                () = self.disconnect.cancelled() => { info!("Reader thread: disconnecting"); break self} ,
+                biased;
                 () = async {
                     if let Ok(Ok(len)) = self.inner.read_u32().await.map(usize::try_from) {
+                        tracing::trace!("Message received.")
                         let mut buf = BytesMut::with_capacity(len);
                         let mut total_read = 0;
                         while total_read < len {
@@ -45,9 +46,11 @@ impl Reader {
                         .split(|b| *b == 0)
                         .map(|s| core::str::from_utf8(s).unwrap_or("").to_owned())
                         .collect::<Vec<String>>();
+                        tracing::trace!(msg, "Message pushed.")
                         self.queue.push(msg);
-                    }
+                    },
                 } => (),
+                () = self.disconnect.cancelled() => { info!("Reader thread: disconnecting"); break self} ,
             }
         }
     }
