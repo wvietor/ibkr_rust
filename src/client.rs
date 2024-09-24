@@ -27,7 +27,9 @@ use crate::market_data::{
     updating_historical_bar,
 };
 use crate::message::{In, Out, ToClient, ToWrapper};
-use crate::wrapper::{CancelToken, Initializer, LocalInitializer, LocalWrapper, Recurring, Wrapper};
+use crate::wrapper::{
+    CancelToken, Initializer, LocalInitializer, LocalWrapper, Recurring, Wrapper,
+};
 
 // ======================================
 // === Types for Handling Config File ===
@@ -1402,10 +1404,7 @@ impl Client<indicators::Inactive> {
         drop(backlog);
         loop {
             tokio::select! {
-                () = disconnect_token.cancelled() => {
-                    info!("Client loop disconnecting");
-                    break
-                },
+                biased;
                 () = async {
                     if let Some(fields) = queue.pop() {
                         decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
@@ -1414,6 +1413,10 @@ impl Client<indicators::Inactive> {
                     }
                     crate::wrapper::LocalRecurring::cycle(&mut wrapper).await;
                 } => (),
+                () = disconnect_token.cancelled() => {
+                    info!("Client loop disconnecting");
+                    break
+                },
             }
         }
         drop(wrapper);
@@ -1448,10 +1451,7 @@ impl Client<indicators::Inactive> {
             drop(backlog);
             loop {
                 tokio::select! {
-                    () = break_loop_inner.cancelled() => {
-                        info!("Client loop: disconnecting");
-                        break
-                    },
+                    biased;
                     () = async {
                         if let Some(fields) = queue.pop() {
                             decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
@@ -1460,6 +1460,10 @@ impl Client<indicators::Inactive> {
                         }
                         Recurring::cycle(&mut wrapper).await;
                     } => (),
+                    () = break_loop_inner.cancelled() => {
+                        info!("Client loop: disconnecting");
+                        break
+                    },
                 }
             }
             drop(wrapper);
@@ -1492,7 +1496,7 @@ impl Client<indicators::Inactive> {
             let (mut tx, mut rx, mut wrapper) = (tx, rx, wrapper);
             loop {
                 tokio::select! {
-                    () = c_loop_disconnect.cancelled() => {info!("Client loop: disconnecting"); break},
+                    biased;
                     () = async {
                         if let Some(fields) = queue.pop() {
                             decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
@@ -1501,6 +1505,7 @@ impl Client<indicators::Inactive> {
                         }
                         Recurring::cycle(&mut wrapper).await;
                     } => (),
+                    () = c_loop_disconnect.cancelled() => {info!("Client loop: disconnecting"); break},
                 }
             }
         });
