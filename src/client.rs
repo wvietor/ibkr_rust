@@ -1,8 +1,6 @@
 use std::fmt::Formatter;
-use std::sync::Arc;
 
 use chrono_tz::Tz;
-use crossbeam::queue::SegQueue;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
@@ -312,12 +310,12 @@ type IntoActive = (
     Client<indicators::Active>,
     mpsc::Sender<ToClient>,
     mpsc::Receiver<ToWrapper>,
-    Arc<SegQueue<Vec<String>>>,
+    mpsc::Receiver<Vec<String>>,
     std::collections::VecDeque<Vec<String>>,
 );
 
 type LoopParams = (
-    Arc<SegQueue<Vec<String>>>,
+    mpsc::Receiver<Vec<String>>,
     mpsc::Sender<ToClient>,
     mpsc::Receiver<ToWrapper>,
     std::collections::VecDeque<Vec<String>>,
@@ -403,7 +401,7 @@ async fn decode_msg_remote<W>(
             Ok(In::ManagedAccts) => {
                 decode::Remote::managed_accts_msg(&mut fields.into_iter(), remote, tx, rx)
                     .await
-                    .map_err(|e| e.with_context("managed accounts msg"))
+                    .map_err(|e| e.with_context("managed accoSts msg"))
             }
             Ok(In::ReceiveFa) => decode::Remote::receive_fa_msg(&mut fields.into_iter(), remote)
                 .await
@@ -1255,23 +1253,22 @@ impl<S: indicators::Status> Client<S> {
 #[inline]
 fn spawn_reader_thread(
     rdr: OwnedReadHalf,
-) -> (CancelToken, Arc<SegQueue<Vec<String>>>, JoinHandle<Reader>) {
+) -> (CancelToken, mpsc::Receiver<Vec<String>>, JoinHandle<Reader>) {
     let disconnect = CancelToken::new();
-    let queue = Arc::new(SegQueue::new());
+    let (tx, rx) = mpsc::channel(constants::FROM_READER_CHANNEL_SIZE);
 
-    let r_queue = Arc::clone(&queue);
     let r_disconnect = disconnect.clone();
     let r_thread = tokio::spawn(async move {
-        let reader = Reader::new(rdr, r_queue, r_disconnect);
+        let reader = Reader::new(rdr, tx, r_disconnect);
         reader.run().await
     });
-    (disconnect, queue, r_thread)
+    (disconnect, rx, r_thread)
 }
 
 #[inline]
 fn spawn_temp_contract_thread(
     cancel_token: CancelToken,
-    queue: Arc<SegQueue<Vec<String>>>,
+    mut rx_reader: mpsc::Receiver<Vec<String>>,
     mut backlog: std::collections::VecDeque<Vec<String>>,
     mut tx: mpsc::Sender<ToClient>,
     mut rx: mpsc::Receiver<ToWrapper>,
@@ -1279,19 +1276,19 @@ fn spawn_temp_contract_thread(
     tokio::spawn(async move {
         loop {
             tokio::select! {
-                () = cancel_token.cancelled() => { break (queue, tx, rx, backlog); },
-                () = async {
-                    let _ = if let Some(fields) = queue.pop() {
-                        match fields.first().and_then(|t| t.parse().ok()) {
-                            Some(In::ContractData) => decode::decode_contract_no_wrapper(&mut fields.into_iter(), &mut tx, &mut rx).await.map_err(|e| e.with_context("contract data msg")),
-                            Some(_) => { backlog.push_back(fields); Ok(()) },
-                            None => Ok(()),
-                        }
-                    } else { Ok(()) };
-                } => ()
+                biased;
+                Some(fields) = rx_reader.recv() => {
+                     let _ = match fields.first().and_then(|t| t.parse().ok()) {
+                        Some(In::ContractData) => decode::decode_contract_no_wrapper(&mut fields.into_iter(), &mut tx, &mut rx).await.map_err(|e| e.with_context("contract data msg")),
+                        Some(_) => { backlog.push_back(fields); Ok(()) },
+                        None => Ok(()),
+                    };
+                }
+                () = cancel_token.cancelled() => { break; },
             }
             tokio::task::yield_now().await;
         }
+        (rx_reader, tx, rx, backlog)
     })
 }
 
@@ -1310,12 +1307,12 @@ impl Client<indicators::Inactive> {
     }
 
     async fn into_active(self) -> IntoActive {
-        let (disconnect, queue, r_thread) = spawn_reader_thread(self.status.reader);
+        let (disconnect, mut rx_reader, r_thread) = spawn_reader_thread(self.status.reader);
 
         let mut backlog = std::collections::VecDeque::new();
         let (mut managed_accounts, mut valid_id) = (None, None);
         while managed_accounts.is_none() || valid_id.is_none() {
-            if let Some(fields) = queue.pop() {
+            if let Some(fields) = rx_reader.recv().await {
                 match fields.first().and_then(|t| t.parse().ok()) {
                     Some(In::ManagedAccts) => {
                         managed_accounts = Some(
@@ -1365,7 +1362,7 @@ impl Client<indicators::Inactive> {
                 req_id: 0_i64..,
             },
         };
-        (client, wrapper_tx, wrapper_rx, queue, backlog)
+        (client, wrapper_tx, wrapper_rx, rx_reader, backlog)
     }
 
     /// Initiates the main message loop and spawns all helper threads to manage the application.
@@ -1388,16 +1385,16 @@ impl Client<indicators::Inactive> {
         init: I,
         disconnect_token: Option<CancelToken>,
     ) -> Result<Builder, std::io::Error> {
-        let (mut client, tx, rx, queue, backlog) = self.into_active().await;
+        let (mut client, tx, rx, rx_reader, backlog) = self.into_active().await;
         let temp = CancelToken::new();
-        let con_fut = spawn_temp_contract_thread(temp.clone(), queue, backlog, tx, rx);
+        let con_fut = spawn_temp_contract_thread(temp.clone(), rx_reader, backlog, tx, rx);
 
         let disconnect_token = disconnect_token.unwrap_or_else(|| client.status.disconnect.clone());
         let mut wrapper =
             LocalInitializer::build(init, &mut client, disconnect_token.clone()).await;
         temp.cancel();
         drop(temp);
-        let (queue, mut tx, mut rx, mut backlog) = con_fut.await?;
+        let (mut rx_reader, mut tx, mut rx, mut backlog) = con_fut.await?;
         while let Some(fields) = backlog.pop_front() {
             decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
         }
@@ -1405,14 +1402,10 @@ impl Client<indicators::Inactive> {
         loop {
             tokio::select! {
                 biased;
-                () = async {
-                    if let Some(fields) = queue.pop() {
-                        decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
-                    } else {
-                        tokio::task::yield_now().await;
-                    }
+                Some(fields) = rx_reader.recv() => {
+                    decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
                     crate::wrapper::LocalRecurring::cycle(&mut wrapper).await;
-                } => (),
+                },
                 () = disconnect_token.cancelled() => {
                     info!("Client loop disconnecting");
                     break
@@ -1433,10 +1426,10 @@ impl Client<indicators::Inactive> {
     /// A [`CancelToken`] that can be used to terminate the main loop and disconnect the client.
     #[tracing::instrument(skip(init), level = tracing::Level::DEBUG)]
     pub async fn remote<I: Initializer + 'static>(self, init: I) -> CancelToken {
-        let (mut client, tx, rx, queue, backlog) = self.into_active().await;
+        let (mut client, tx, rx, rx_reader, backlog) = self.into_active().await;
 
         let temp = CancelToken::new();
-        let con_fut = spawn_temp_contract_thread(temp.clone(), queue, backlog, tx, rx);
+        let con_fut = spawn_temp_contract_thread(temp.clone(), rx_reader, backlog, tx, rx);
 
         let break_loop = client.status.disconnect.clone();
         let break_loop_inner = break_loop.clone();
@@ -1444,7 +1437,7 @@ impl Client<indicators::Inactive> {
             let mut wrapper = Initializer::build(init, &mut client, break_loop_inner.clone()).await;
             temp.cancel();
             drop(temp);
-            let (queue, mut tx, mut rx, mut backlog) = con_fut.await?;
+            let (mut rx_reader, mut tx, mut rx, mut backlog) = con_fut.await?;
             while let Some(fields) = backlog.pop_front() {
                 decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
             }
@@ -1452,14 +1445,10 @@ impl Client<indicators::Inactive> {
             loop {
                 tokio::select! {
                     biased;
-                    () = async {
-                        if let Some(fields) = queue.pop() {
-                            decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
-                        } else {
-                            tokio::task::yield_now().await;
-                        }
+                    Some(fields) = rx_reader.recv() => {
+                        decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
                         Recurring::cycle(&mut wrapper).await;
-                    } => (),
+                    },
                     () = break_loop_inner.cancelled() => {
                         info!("Client loop: disconnecting");
                         break
@@ -1485,7 +1474,7 @@ impl Client<indicators::Inactive> {
         self,
         mut wrapper: W,
     ) -> Client<indicators::Active> {
-        let (client, mut tx, mut rx, queue, mut backlog) = self.into_active().await;
+        let (client, mut tx, mut rx, mut rx_reader, mut backlog) = self.into_active().await;
         let c_loop_disconnect = client.status.disconnect.clone();
 
         while let Some(fields) = backlog.pop_front() {
@@ -1497,13 +1486,9 @@ impl Client<indicators::Inactive> {
             loop {
                 tokio::select! {
                     biased;
-                    () = async {
-                        if let Some(fields) = queue.pop() {
-                            decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
-                        } else {
-                            tokio::task::yield_now().await;
-                        }
-                    } => (),
+                    Some(fields) = rx_reader.recv() => {
+                        decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
+                    },
                     () = c_loop_disconnect.cancelled() => {info!("Client loop: disconnecting"); break},
                 }
             }
