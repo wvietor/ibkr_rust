@@ -1559,11 +1559,13 @@ impl Client<indicators::Active> {
     ///
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
-    pub async fn req_current_time(&mut self) -> ReqResult {
+    pub async fn req_current_time(&mut self) -> IdResult {
         const VERSION: u8 = 1;
+        let id = self.get_next_req_id();
 
-        self.writer.add_body((Out::ReqCurrentTime, VERSION))?;
-        self.writer.send().await
+        self.writer.add_body((Out::ReqCurrentTime, id))?;
+        self.writer.send().await?;
+        Ok(id)
     }
 
     /// Requests the accounts to which the logged user has access to.
