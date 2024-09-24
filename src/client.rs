@@ -1481,7 +1481,7 @@ impl Client<indicators::Inactive> {
     /// # Returns
     /// An active [`Client`] that can be used to make API requests.
     #[tracing::instrument(skip(wrapper), level = tracing::Level::DEBUG)]
-    pub async fn disaggregated<W: Wrapper + Recurring + Send + 'static>(
+    pub async fn disaggregated<W: Wrapper + Send + 'static>(
         self,
         mut wrapper: W,
     ) -> Client<indicators::Active> {
@@ -1503,7 +1503,6 @@ impl Client<indicators::Inactive> {
                         } else {
                             tokio::task::yield_now().await;
                         }
-                        Recurring::cycle(&mut wrapper).await;
                     } => (),
                     () = c_loop_disconnect.cancelled() => {info!("Client loop: disconnecting"); break},
                 }
