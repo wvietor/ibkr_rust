@@ -46,7 +46,7 @@ impl Reader {
                         .split(|b| *b == 0)
                         .map(|s| core::str::from_utf8(s).unwrap_or("").to_owned())
                         .collect::<Vec<String>>();
-                        tracing::trace!(msg, "Message pushed.");
+                        tracing::trace!(msg=?&msg, "Message pushed.");
                         self.queue.push(msg);
                     }
                 } => (),
