@@ -1405,6 +1405,7 @@ impl Client<indicators::Inactive> {
                 Some(fields) = rx_reader.recv() => {
                     decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
                 },
+                () = tokio::task::yield_now() => (),
                 () = disconnect_token.cancelled() => {
                     info!("Client loop disconnecting");
                     break
@@ -1448,6 +1449,7 @@ impl Client<indicators::Inactive> {
                     Some(fields) = rx_reader.recv() => {
                         decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
                     },
+                    () = tokio::task::yield_now() => (),
                     () = break_loop_inner.cancelled() => {
                         info!("Client loop: disconnecting");
                         break
@@ -1489,6 +1491,7 @@ impl Client<indicators::Inactive> {
                     Some(fields) = rx_reader.recv() => {
                         decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
                     },
+                    () = tokio::task::yield_now() => (),
                     () = c_loop_disconnect.cancelled() => {info!("Client loop: disconnecting"); break},
                 }
             }
