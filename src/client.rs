@@ -2224,9 +2224,8 @@ impl Client<indicators::Active> {
     /// # Arguments
     /// * `security` - The security for which to return the market depth data.
     /// * `number_of_rows` - The maximum number of rows in the returned limit order book.
-    /// * `smart_depth` - When `true`, return the market-maker
-    /// [`crate::payload::market_depth::Mpid`], otherwise return the [`crate::exchange::Primary`]
-    /// associated with each entry.
+    /// * `smart_depth` - When `true`, return the [`crate::exchange::Primary`] exchange holding the
+    /// order, otherwise return the [`crate::payload::market_depth::Mpid`] associated with each entry.
     ///
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
