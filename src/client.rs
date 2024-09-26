@@ -2224,13 +2224,16 @@ impl Client<indicators::Active> {
     /// # Arguments
     /// * `security` - The security for which to return the market depth data.
     /// * `number_of_rows` - The maximum number of rows in the returned limit order book.
+    /// * `smart_depth` - When `true`, return the market-maker
+    /// [`crate::payload::market_depth::Mpid`], otherwise return the [`crate::exchange::Primary`]
+    /// associated with each entry.
     ///
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
     ///
     /// # Returns
     /// The unique ID associated with the request.
-    pub async fn req_market_depth<S>(&mut self, security: &S, number_of_rows: u32) -> IdResult
+    pub async fn req_market_depth<S>(&mut self, security: &S, number_of_rows: u32, smart_depth: bool) -> IdResult
     where
         S: Security,
     {
@@ -2243,7 +2246,7 @@ impl Client<indicators::Active> {
             id,
             security.as_out_msg(),
             number_of_rows,
-            true,
+            smart_depth,
             None::<()>,
         ))?;
         self.writer.send().await?;
