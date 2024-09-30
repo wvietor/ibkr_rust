@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde::ser::SerializeStruct;
 
 use crate::contract::{Contract, ContractType, ExchangeProxy};
+use crate::currency::Currency;
 use crate::exchange::Primary;
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -168,4 +169,21 @@ impl From<(OrderSide, Exec)> for Execution {
     fn from(value: (OrderSide, Exec)) -> Self {
         Self::from((value.1, value.0))
     }
+}
+
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+/// Details the commissions paid regarding a given [`Execution`]
+pub struct CommissionReport {
+    /// The ID of the [`Execution`] with which the report corresponds
+    pub exec_id: String,
+    /// The commission cost
+    pub commission: f64,
+    /// The reporting currency
+    pub currency: Currency,
+    /// The realized profit and loss
+    pub realized_pnl: f64,
+    /// The income return
+    pub yld: f64,
+    /// The redemption date for the yield
+    pub yld_redemption_date: chrono::NaiveDate,
 }

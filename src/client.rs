@@ -2225,14 +2225,19 @@ impl Client<indicators::Active> {
     /// * `security` - The security for which to return the market depth data.
     /// * `number_of_rows` - The maximum number of rows in the returned limit order book.
     /// * `smart_depth` - When `true`, return the [`crate::exchange::Primary`] exchange holding the
-    /// order, otherwise return the [`crate::payload::market_depth::Mpid`] associated with each entry.
+    ///      order, otherwise return the [`crate::payload::market_depth::Mpid`] associated with each entry.
     ///
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
     ///
     /// # Returns
     /// The unique ID associated with the request.
-    pub async fn req_market_depth<S>(&mut self, security: &S, number_of_rows: u32, smart_depth: bool) -> IdResult
+    pub async fn req_market_depth<S>(
+        &mut self,
+        security: &S,
+        number_of_rows: u32,
+        smart_depth: bool,
+    ) -> IdResult
     where
         S: Security,
     {

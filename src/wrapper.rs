@@ -6,7 +6,7 @@ use ibapi_macros::debug_trait;
 use crate::account::{Attribute, TagValue};
 use crate::client::ActiveClient;
 use crate::contract::{Contract, ExchangeProxy};
-use crate::execution::Execution;
+use crate::execution::{CommissionReport, Execution};
 use crate::payload::{
     self, Bar, ExchangeId, HistogramEntry, OrderStatus, Pnl, PnlSingle, Position, PositionSummary,
     TickData,
@@ -125,7 +125,7 @@ pub trait LocalWrapper {
     ) -> impl Future {
     }
     /// The callback message containing historical bar data from [`crate::client::Client::req_historical_bar`].
-    fn historical_bars(&mut self, req_id: i64, bars: Vec<Bar>) -> impl Future {}
+    fn historical_bars(&mut self, req_id: i64, start_datetime: DateTime<Utc>, end_datetime: DateTime<chrono::Utc>, bars: Vec<Bar>) -> impl Future {}
     /// The callback message containing an updated historical bar from [`crate::client::Client::req_updating_historical_bar`].
     fn updating_historical_bar(&mut self, req_id: i64, bar: Bar) -> impl Future {}
     /// The callback message containing a timestamp for the beginning of data for a contract and specified data type from [`crate::client::Client::req_head_timestamp`].
@@ -180,6 +180,12 @@ pub trait LocalWrapper {
     }
     /// The callback message that contains information about an execution.
     fn execution(&mut self, req_id: i64, execution: Execution) -> impl Future {}
+    ///  The callback message indicating the end of an execution details request
+    fn execution_details_end(&mut self, req_id: i64) -> impl Future {}
+    /// The callback message indicating the end of a market data snapshot message
+    fn tick_snapshot_end(&mut self, req_id: i64) -> impl Future {}
+    /// The callback message associated with the commission report of an execution. Triggered immediately after a trade execution or by calling [`crate::client::Client::req_executions`]
+    fn commission_report(&mut self, commission_report: CommissionReport) -> impl Future {}
 }
 
 #[trait_variant::make(Recurring: Send)]

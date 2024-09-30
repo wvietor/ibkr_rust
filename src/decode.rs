@@ -16,7 +16,7 @@ use crate::contract::{
     SecOption, SecOptionInner, SecurityId, Stock,
 };
 use crate::exchange::Primary;
-use crate::execution::{Exec, Execution, OrderSide, ParseOrderSideError};
+use crate::execution::{CommissionReport, Exec, Execution, OrderSide, ParseOrderSideError};
 use crate::payload::{
     Bar,
     BarCore, BidAsk, ExchangeId, Fill, HistogramEntry, Last, market_depth::{CompleteEntry, Entry, Operation}, MarketDataClass, Midpoint,
@@ -390,6 +390,7 @@ pub trait Local: wrapper::LocalWrapper {
     }
 
     #[inline]
+    // todo! Many useful fields are missing from this decoding
     fn open_order_msg(
         fields: &mut Fields,
         wrapper: &mut Self,
@@ -699,7 +700,7 @@ pub trait Local: wrapper::LocalWrapper {
             wrapper
                 .account_attribute_time(
                     NaiveTime::parse_from_str(timestamp.as_str(), "%H:%M")
-                        .map_err(|e| ("timestamp", ParseDateTimeError::Timestamp))?,
+                        .map_err(|e| ("timestamp", ParseDateTimeError::Parse(e)))?,
                 )
                 .await;
             Ok(())
@@ -756,7 +757,7 @@ pub trait Local: wrapper::LocalWrapper {
             );
 
             let (dt, tz) = NaiveDateTime::parse_and_remainder(datetime.as_str(), "%Y%m%d %T ")
-                .map_err(|_| ("datetime", ParseDateTimeError::Timestamp))?;
+                .map_err(|e| ("datetime", ParseDateTimeError::Parse(e)))?;
             let datetime = dt
                 .and_local_timezone(
                     tz.parse::<chrono_tz::Tz>()
@@ -898,34 +899,20 @@ pub trait Local: wrapper::LocalWrapper {
             decode_fields!(
                 fields =>
                     req_id @ 1: i64,
-                    _start_date_str @ 0: String,
-                    _end_date_str @ 0: String,
+                    start_date_str @ 0: String,
+                    end_date_str @ 0: String,
                     count @ 0: usize
             );
+            let start_datetime = parse_historical_datetime(&start_date_str).map_err(|e| ("start_datetime", ParseDateTimeError::from(e)))?;
+            let end_datetime = parse_historical_datetime(&end_date_str).map_err(|e| ("end_datetime", ParseDateTimeError::from(e)))?;
+
             let mut bars = Vec::with_capacity(count);
             for chunk in fields.collect::<Vec<String>>().chunks(8) {
                 if let [datetime_str, open, high, low, close, volume, wap, trade_count] = chunk {
-                    let (date, rem) = NaiveDate::parse_and_remainder(datetime_str, "%Y%m%d")
-                        .map_err(|_| ("date", ParseDateTimeError::Timestamp))?;
-                    let (time, rem) = if rem.is_empty() {
-                        (NaiveTime::default(), "")
-                    } else {
-                        NaiveTime::parse_and_remainder(rem, " %T")
-                            .map_err(|_| ("time", ParseDateTimeError::Timestamp))?
-                    };
-                    let tz = if rem.is_empty() {
-                        chrono_tz::UTC
-                    } else {
-                        rem.trim()
-                            .parse::<chrono_tz::Tz>()
-                            .map_err(|e| ("timezone", ParseDateTimeError::Timezone(e)))?
-                    };
+                    let datetime = parse_historical_datetime(&datetime_str).map_err(|e| ("datetime", ParseDateTimeError::from(e)))?;
+
                     let core = BarCore {
-                        datetime: NaiveDateTime::new(date, time)
-                            .and_local_timezone(tz)
-                            .single()
-                            .ok_or(("datetime", ParseDateTimeError::Single))?
-                            .to_utc(),
+                        datetime,
                         open: open.parse().map_err(|e| ("open", e))?,
                         high: high.parse().map_err(|e| ("high", e))?,
                         low: low.parse().map_err(|e| ("low", e))?,
@@ -953,7 +940,7 @@ pub trait Local: wrapper::LocalWrapper {
                     bars.push(bar);
                 }
             }
-            wrapper.historical_bars(req_id, bars).await;
+            wrapper.historical_bars(req_id, start_datetime, end_datetime, bars).await;
             Ok(())
         }
     }
@@ -1189,7 +1176,7 @@ pub trait Local: wrapper::LocalWrapper {
                                 })?,
                                 "%Y%m%d",
                             )
-                            .map_err(|_| ("next_dividend", ParseDateTimeError::Timestamp))?
+                            .map_err(|e| ("next_dividend", ParseDateTimeError::Parse(e)))?
                             .0,
                             divs.next()
                                 .ok_or(DecodeError::MissingData {
@@ -1346,7 +1333,10 @@ pub trait Local: wrapper::LocalWrapper {
         wrapper: &mut Self,
     ) -> impl Future<Output = DecodeResult> {
         async move {
-            warn!("Unimplemented incoming message. Fields: {:?}", &fields);
+            decode_fields!(
+                fields => req_id @ 2: i64
+            );
+            wrapper.execution_details_end(req_id).await;
 
             Ok(())
         }
@@ -1369,7 +1359,10 @@ pub trait Local: wrapper::LocalWrapper {
         wrapper: &mut Self,
     ) -> impl Future<Output = DecodeResult> {
         async move {
-            warn!("Unimplemented incoming message. Fields: {:?}", &fields);
+            decode_fields!(
+                fields => req_id @ 2: i64
+            );
+            wrapper.tick_snapshot_end(req_id).await;
             Ok(())
         }
     }
@@ -1397,6 +1390,27 @@ pub trait Local: wrapper::LocalWrapper {
     ) -> impl Future<Output = DecodeResult> {
         async move {
             warn!("Unimplemented incoming message. Fields: {:?}", &fields);
+            decode_fields!(
+                fields =>
+                    exec_id @ 2: String,
+                    commission @ 0: f64,
+                    currency @ 0: Currency,
+                    realized_pnl @ 0: f64,
+                    yld @ 0: f64,
+                    yld_redemption_date @ 0: String
+            );
+            wrapper
+                .commission_report(CommissionReport {
+                    exec_id,
+                    commission,
+                    currency,
+                    realized_pnl,
+                    yld,
+                    yld_redemption_date: NaiveDate::parse_from_str(&yld_redemption_date, "%Y%m%d")
+                        .map_err(|e| ("yld_redemption_date", ParseDateTimeError::Parse(e)))?,
+                })
+                .await;
+
             Ok(())
         }
     }
@@ -1431,7 +1445,7 @@ pub trait Local: wrapper::LocalWrapper {
 
     #[inline]
     fn position_end_msg(
-        fields: &mut Fields,
+        _fields: &mut Fields,
         wrapper: &mut Self,
     ) -> impl Future<Output = DecodeResult> {
         async move {
@@ -1504,6 +1518,7 @@ pub trait Local: wrapper::LocalWrapper {
         wrapper: &mut Self,
     ) -> impl Future<Output = DecodeResult> {
         async move {
+            // This function is deprecated
             warn!("Unimplemented incoming message. Fields: {:?}", &fields);
             Ok(())
         }
@@ -1831,7 +1846,7 @@ pub trait Local: wrapper::LocalWrapper {
             );
             let core = BarCore {
                 datetime: NaiveDateTime::parse_and_remainder(datetime_str.as_str(), "%Y%m%d %T")
-                    .map_err(|_| ("datetime", ParseDateTimeError::Timestamp))?
+                    .map_err(|e| ("datetime", ParseDateTimeError::Parse(e)))?
                     .0
                     .and_utc(),
                 open,
@@ -2418,7 +2433,7 @@ pub(crate) async fn decode_contract_no_wrapper(
                         expiration_date.as_str(),
                         "%Y%m%d",
                     )
-                    .map_err(|_| ("expiration_date", ParseDateTimeError::Timestamp))?
+                    .map_err(|e| ("expiration_date", ParseDateTimeError::Parse(e)))?
                     .0,
                     underlying_contract_id,
                     sector,
@@ -2476,7 +2491,7 @@ pub(crate) async fn decode_contract_no_wrapper(
                 exchange,
                 multiplier: multiplier.parse().map_err(|e| ("multiplier", e))?,
                 expiration_date: NaiveDate::parse_and_remainder(expiration_date.as_str(), "%Y%m%d")
-                    .map_err(|_| ("expiration_date", ParseDateTimeError::Timestamp))?
+                    .map_err(|e| ("expiration_date", ParseDateTimeError::Parse(e)))?
                     .0,
                 trading_class,
                 underlying_contract_id,
@@ -2599,7 +2614,7 @@ fn deserialize_contract_proxy<E: crate::contract::ProxyExchange + Clone>(
             exchange,
             multiplier: multiplier.parse().map_err(|e| ("multiplier", e))?,
             expiration_date: NaiveDate::parse_and_remainder(expiration_date.as_str(), "%Y%m%d")
-                .map_err(|_| ("expiration_date", ParseDateTimeError::Timestamp))?
+                .map_err(|e| ("expiration_date", ParseDateTimeError::Parse(e)))?
                 .0,
             trading_class,
             underlying_contract_id: contract_id,
@@ -2618,7 +2633,7 @@ fn deserialize_contract_proxy<E: crate::contract::ProxyExchange + Clone>(
                 strike: strike.parse().map_err(|e| ("strike", e))?,
                 multiplier: multiplier.parse().map_err(|e| ("multiplier", e))?,
                 expiration_date: NaiveDate::parse_and_remainder(expiration_date.as_str(), "%Y%m%d")
-                    .map_err(|_| ("expiration_date", ParseDateTimeError::Timestamp))?
+                    .map_err(|e| ("expiration_date", ParseDateTimeError::Parse(e)))?
                     .0,
                 underlying_contract_id: contract_id,
                 sector: String::default(),
@@ -2867,7 +2882,7 @@ impl From<(&'static str, ParseDateTimeError)> for DecodeError {
 }
 
 impl From<(&'static str, std::convert::Infallible)> for DecodeError {
-    fn from(value: (&'static str, std::convert::Infallible)) -> Self {
+    fn from(_value: (&'static str, std::convert::Infallible)) -> Self {
         unreachable!()
     }
 }
@@ -2875,13 +2890,34 @@ impl From<(&'static str, std::convert::Infallible)> for DecodeError {
 #[derive(Debug, Clone, Error)]
 /// An error returned when parsing a datetime fails.
 pub enum ParseDateTimeError {
-    /// Failed to parse an [`IbTimeZone`]
-    #[error("Failed to parse timezone")]
+    /// Failed to parse a [`chrono_tz::Tz`]
+    #[error("Failed to parse timezone: {0}")]
     Timezone(#[from] chrono_tz::ParseError),
+    /// Failed to parse a [`chrono`] type
+    #[error("Failed to parse Date, Time, or DateTime: {0}")]
+    Parse(#[from] chrono::ParseError),
     /// Invalid timestamp
     #[error("Invalid timestamp: out-of-range number of seconds and/or invalid nanosecond")]
     Timestamp,
     /// Failed to resolve single timezone
     #[error("Failed to resolve a single timezone from provided information")]
     Single,
+}
+
+fn parse_historical_datetime(s: &str) -> Result<DateTime<chrono::Utc>, ParseDateTimeError> {
+    // Option 1: UTC datetime YYYYmmdd-HH:MM:SS
+    if s.get(8..9).is_some_and(|c| c.eq("-")) {
+        return Ok(NaiveDateTime::parse_from_str(&s, "%Y%m%d-%T").map(|ref dt| dt.and_utc())?);
+    }
+
+    let (date, rem) = NaiveDate::parse_and_remainder(&s, "%Y%m%d")?;
+    let (time, tz) = if rem.is_empty() {
+        // Option 2: Date with no time
+        (NaiveTime::default(), chrono_tz::UTC)
+    } else {
+        // Option 3: Datetime w/ timezone YYYYmmdd HH:MM:SS TZ
+        let (tm, rem) = NaiveTime::parse_and_remainder(rem, " %T")?;
+        (tm, rem.trim().parse::<chrono_tz::Tz>()?)
+    };
+    Ok(NaiveDateTime::new(date, time).and_local_timezone(tz).single().ok_or(ParseDateTimeError::Single)?.to_utc())
 }
