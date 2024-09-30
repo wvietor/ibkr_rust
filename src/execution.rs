@@ -1,7 +1,6 @@
 use chrono::serde::ts_seconds;
 use chrono::Utc;
-use serde::{Deserialize, Serialize, Serializer};
-use serde::ser::SerializeStruct;
+use serde::{Deserialize, Serialize};
 
 use crate::contract::{Contract, ContractType, ExchangeProxy};
 use crate::currency::Currency;
@@ -14,8 +13,9 @@ pub struct Filter {
     pub client_id: i64,
     /// Filter by account number to which the order was allocated
     pub account_number: String,
+    #[serde(with = "serde_filter_datetime")]
     /// Filter by orders placed after this date and time
-    pub datetime: Option<chrono::DateTime<chrono_tz::Tz>>,
+    pub datetime: Option<chrono::NaiveDateTime>,
     /// Filter by contract symbol.
     pub symbol: String,
     /// Filter by contract type.
@@ -24,6 +24,28 @@ pub struct Filter {
     pub exchange: Option<Primary>,
     /// Filter by order side.
     pub side: Option<OrderSide>,
+}
+
+mod serde_filter_datetime {
+    use serde::{Serializer, Deserializer, Deserialize};
+    use serde::de::Error;
+
+    pub fn serialize<S: Serializer>(datetime: &Option<chrono::NaiveDateTime>, ser: S) -> Result<S::Ok, S::Error> {
+        match datetime {
+            Some(dt) => ser.serialize_str(&dt.format("%Y%m%d %T").to_string()),
+            None => ser.serialize_none()
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(de: D) -> Result<Option<chrono::NaiveDateTime>, D::Error> {
+        let s = <&'_ str>::deserialize(de)?;
+        if s.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(chrono::NaiveDateTime::parse_from_str(s, "%Y%m%d %T").map_err(Error::custom)?))
+        }
+    }
+
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq, Hash, Serialize, Deserialize)]
