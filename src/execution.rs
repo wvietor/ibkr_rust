@@ -7,39 +7,23 @@ use crate::contract::{Contract, ContractType, ExchangeProxy};
 use crate::currency::Currency;
 use crate::exchange::Primary;
 
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Debug, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
 /// A filter for requesting executions that meet only these criteria.
 pub struct Filter {
-    /// Filter by client id.
+    /// Filter by API client id that placed the order.
     pub client_id: i64,
-    /// Filter by account number.
+    /// Filter by account number to which the order was allocated
     pub account_number: String,
+    /// Filter by orders placed after this date and time
+    pub datetime: Option<chrono::DateTime<chrono_tz::Tz>>,
     /// Filter by contract symbol.
     pub symbol: String,
     /// Filter by contract type.
-    pub contract_type: ContractType,
-    /// Filter by exchange.
-    pub exchange: Primary,
+    pub contract_type: Option<ContractType>,
+    /// Filter by the exchange at which the execution was produced.
+    pub exchange: Option<Primary>,
     /// Filter by order side.
-    pub side: OrderSide,
-}
-
-// Add dummy time field that is not used
-impl Serialize for Filter {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut s = serializer.serialize_struct("Filter", 7)?;
-        s.serialize_field("client_id", &self.client_id)?;
-        s.serialize_field("account_number", &self.account_number)?;
-        s.serialize_field("time", &"")?;
-        s.serialize_field("symbol", &self.symbol)?;
-        s.serialize_field("contract_type", &self.contract_type)?;
-        s.serialize_field("exchange", &self.exchange)?;
-        s.serialize_field("side", &self.side)?;
-        s.end()
-    }
+    pub side: Option<OrderSide>,
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq, Hash, Serialize, Deserialize)]
