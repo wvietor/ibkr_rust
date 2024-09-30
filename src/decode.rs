@@ -903,13 +903,16 @@ pub trait Local: wrapper::LocalWrapper {
                     end_date_str @ 0: String,
                     count @ 0: usize
             );
-            let start_datetime = parse_historical_datetime(&start_date_str).map_err(|e| ("start_datetime", ParseDateTimeError::from(e)))?;
-            let end_datetime = parse_historical_datetime(&end_date_str).map_err(|e| ("end_datetime", ParseDateTimeError::from(e)))?;
+            let start_datetime = parse_historical_datetime(&start_date_str)
+                .map_err(|e| ("start_datetime", ParseDateTimeError::from(e)))?;
+            let end_datetime = parse_historical_datetime(&end_date_str)
+                .map_err(|e| ("end_datetime", ParseDateTimeError::from(e)))?;
 
             let mut bars = Vec::with_capacity(count);
             for chunk in fields.collect::<Vec<String>>().chunks(8) {
                 if let [datetime_str, open, high, low, close, volume, wap, trade_count] = chunk {
-                    let datetime = parse_historical_datetime(&datetime_str).map_err(|e| ("datetime", ParseDateTimeError::from(e)))?;
+                    let datetime = parse_historical_datetime(&datetime_str)
+                        .map_err(|e| ("datetime", ParseDateTimeError::from(e)))?;
 
                     let core = BarCore {
                         datetime,
@@ -940,7 +943,9 @@ pub trait Local: wrapper::LocalWrapper {
                     bars.push(bar);
                 }
             }
-            wrapper.historical_bars(req_id, start_datetime, end_datetime, bars).await;
+            wrapper
+                .historical_bars(req_id, start_datetime, end_datetime, bars)
+                .await;
             Ok(())
         }
     }
@@ -2919,5 +2924,9 @@ fn parse_historical_datetime(s: &str) -> Result<DateTime<chrono::Utc>, ParseDate
         let (tm, rem) = NaiveTime::parse_and_remainder(rem, " %T")?;
         (tm, rem.trim().parse::<chrono_tz::Tz>()?)
     };
-    Ok(NaiveDateTime::new(date, time).and_local_timezone(tz).single().ok_or(ParseDateTimeError::Single)?.to_utc())
+    Ok(NaiveDateTime::new(date, time)
+        .and_local_timezone(tz)
+        .single()
+        .ok_or(ParseDateTimeError::Single)?
+        .to_utc())
 }

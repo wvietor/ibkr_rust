@@ -125,7 +125,14 @@ pub trait LocalWrapper {
     ) -> impl Future {
     }
     /// The callback message containing historical bar data from [`crate::client::Client::req_historical_bar`].
-    fn historical_bars(&mut self, req_id: i64, start_datetime: DateTime<Utc>, end_datetime: DateTime<chrono::Utc>, bars: Vec<Bar>) -> impl Future {}
+    fn historical_bars(
+        &mut self,
+        req_id: i64,
+        start_datetime: DateTime<Utc>,
+        end_datetime: DateTime<chrono::Utc>,
+        bars: Vec<Bar>,
+    ) -> impl Future {
+    }
     /// The callback message containing an updated historical bar from [`crate::client::Client::req_updating_historical_bar`].
     fn updating_historical_bar(&mut self, req_id: i64, bar: Bar) -> impl Future {}
     /// The callback message containing a timestamp for the beginning of data for a contract and specified data type from [`crate::client::Client::req_head_timestamp`].
