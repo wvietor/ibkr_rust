@@ -9,7 +9,13 @@ struct ChannelWrapper {
 }
 
 impl Wrapper for ChannelWrapper {
-    fn historical_bars(&mut self, req_id: i64, _start_datetime: chrono::DateTime<chrono::Utc>, _end_datetime: chrono::DateTime<chrono::Utc>, bars: Vec<Bar>) -> impl Future + Send {
+    fn historical_bars(
+        &mut self,
+        req_id: i64,
+        _start_datetime: chrono::DateTime<chrono::Utc>,
+        _end_datetime: chrono::DateTime<chrono::Utc>,
+        bars: Vec<Bar>,
+    ) -> impl Future + Send {
         async move {
             let _ = self.tx.send((req_id, bars)).await;
         }
