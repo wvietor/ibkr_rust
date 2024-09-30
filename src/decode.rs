@@ -904,15 +904,15 @@ pub trait Local: wrapper::LocalWrapper {
                     count @ 0: usize
             );
             let start_datetime = parse_historical_datetime(&start_date_str)
-                .map_err(|e| ("start_datetime", ParseDateTimeError::from(e)))?;
+                .map_err(|e| ("start_datetime", e))?;
             let end_datetime = parse_historical_datetime(&end_date_str)
-                .map_err(|e| ("end_datetime", ParseDateTimeError::from(e)))?;
+                .map_err(|e| ("end_datetime", e))?;
 
             let mut bars = Vec::with_capacity(count);
             for chunk in fields.collect::<Vec<String>>().chunks(8) {
                 if let [datetime_str, open, high, low, close, volume, wap, trade_count] = chunk {
-                    let datetime = parse_historical_datetime(&datetime_str)
-                        .map_err(|e| ("datetime", ParseDateTimeError::from(e)))?;
+                    let datetime = parse_historical_datetime(datetime_str)
+                        .map_err(|e| ("datetime", e))?;
 
                     let core = BarCore {
                         datetime,
@@ -2912,10 +2912,10 @@ pub enum ParseDateTimeError {
 fn parse_historical_datetime(s: &str) -> Result<DateTime<chrono::Utc>, ParseDateTimeError> {
     // Option 1: UTC datetime YYYYmmdd-HH:MM:SS
     if s.get(8..9).is_some_and(|c| c.eq("-")) {
-        return Ok(NaiveDateTime::parse_from_str(&s, "%Y%m%d-%T").map(|ref dt| dt.and_utc())?);
+        return Ok(NaiveDateTime::parse_from_str(s, "%Y%m%d-%T").map(|ref dt| dt.and_utc())?);
     }
 
-    let (date, rem) = NaiveDate::parse_and_remainder(&s, "%Y%m%d")?;
+    let (date, rem) = NaiveDate::parse_and_remainder(s, "%Y%m%d")?;
     let (time, tz) = if rem.is_empty() {
         // Option 2: Date with no time
         (NaiveTime::default(), chrono_tz::UTC)
