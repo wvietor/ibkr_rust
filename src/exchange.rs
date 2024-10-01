@@ -373,6 +373,8 @@ pub enum Primary {
     RoyalBankOfScotlandCurrencyDealing,
     #[serde(rename = "RUSSELL")]
     ExchangeForRussellIndices,
+    #[serde(rename = "SAPPHIRE")]
+    Sapphire,
     #[serde(rename = "SEHK")]
     StockExchangeOfHongKong,
     #[serde(rename = "SEHKNTL")]
@@ -632,6 +634,7 @@ impl FromStr for Primary {
             "RBCFX" => Self::RoyalBankOfCanadaCurrencyDealing,
             "RBSFX" => Self::RoyalBankOfScotlandCurrencyDealing,
             "RUSSELL" => Self::ExchangeForRussellIndices,
+            "SAPPHIRE" => Self::Sapphire,
             "SEHK" => Self::StockExchangeOfHongKong,
             "SEHKNTL" => Self::StockExchangeHongKongNorthboundTradingLink,
             "SEHKSZSE" => Self::HongKongShenzhenStockExchangeNorthboundTradingLink,
@@ -841,6 +844,7 @@ impl std::fmt::Display for Primary {
             Self::RoyalBankOfCanadaCurrencyDealing => "RBCFX",
             Self::RoyalBankOfScotlandCurrencyDealing => "RBSFX",
             Self::ExchangeForRussellIndices => "RUSSELL",
+            Self::Sapphire => "SAPPHIRE",
             Self::StockExchangeOfHongKong => "SEHK",
             Self::StockExchangeHongKongNorthboundTradingLink => "SEHKNTL",
             Self::HongKongShenzhenStockExchangeNorthboundTradingLink => "SEHKSZSE",
