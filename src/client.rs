@@ -33,7 +33,7 @@ use crate::wrapper::{
 // === Types for Handling Config File ===
 // ======================================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 struct Ports {
     tws_live: u16,
     tws_paper: u16,
@@ -41,7 +41,7 @@ struct Ports {
     gateway_paper: u16,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 struct Config {
     address: std::net::Ipv4Addr,
     #[serde(alias = "Ports")]
@@ -71,7 +71,7 @@ impl Config {
 // =======================================
 
 //noinspection SpellCheckingInspection
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 /// Represents the two types of connections to IBKR's trading systems.
 pub enum Mode {
     /// A live trading connection with real money.
@@ -104,7 +104,7 @@ impl std::fmt::Display for Mode {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 /// Represents the two platforms that facilitate trading with IBKR's systems. The two hosts are
 /// indistinguishable from the perspective of an API application.
 pub enum Host {
@@ -124,7 +124,7 @@ impl std::fmt::Display for Host {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum Inner {
     ConfigFile {
         mode: Mode,
@@ -159,7 +159,7 @@ pub enum ConnectionError {
     InvalidBufferSize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 /// Facilitates the creation of a new connection to IBKR's trading systems.
 ///
 /// Each connection requires a TCP port and address with which to connect to the appropriate IBKR

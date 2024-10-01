@@ -36,7 +36,7 @@ macro_rules! impl_data_type {
             "A helper enum to hold data types valid for particular securities: ",
             impl_data_type_docs!($s_names)
         )]
-        #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+        #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
         pub enum $enum_name {
             $(
             #[doc = concat!(stringify!($d_name), " data")]
@@ -99,10 +99,10 @@ pub mod historical_bar {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
     /// The last time for which bar data will be returned.
     pub enum EndDateTime {
-        /// The present moment.
-        Present,
         /// Some date and time in the past.
         Past(chrono::DateTime<Tz>),
+        /// The present moment.
+        Present,
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -260,7 +260,7 @@ pub mod historical_bar {
     // === Data types ===
 
     #[typed_variants]
-    #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+    #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "UPPERCASE")]
     /// The data types for a [`crate::client::Client::req_historical_bar`] request.
     pub enum Data {
@@ -350,7 +350,7 @@ pub mod updating_historical_bar {
     // === Data types ===
 
     #[typed_variants]
-    #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "UPPERCASE")]
     /// The data types for a ['crate::client::Client::req_updating_historical_bar'] request or a [`crate::client::Client::req_real_time_bars`] request.
     pub enum Data {
@@ -398,7 +398,7 @@ pub mod historical_ticks {
 
     // === Type definitions ===
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     /// The timestamp that dictates the start or end of the period for which historical ticks will
     /// be returned.
     pub enum TimeStamp {
@@ -453,7 +453,7 @@ pub mod historical_ticks {
     // === Data types ===
 
     #[typed_variants]
-    #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+    #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "UPPERCASE")]
     /// The data types for a [`crate::client::Client::req_historical_ticks`] request or a
     /// [`crate::client::Client::req_head_timestamp`] request.
@@ -557,7 +557,7 @@ pub mod live_data {
 
     // === Type definitions ===
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
     /// The frequency at which data will be updated.
     pub enum RefreshType {
         #[serde(rename(serialize = "1"))]
@@ -616,7 +616,7 @@ pub mod live_data {
     // === Data types ===
 
     #[typed_variants]
-    #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
     /// Contains the data types for a [`crate::client::Client::req_market_data`] request.
     pub enum Data {
         #[serde(rename = "100")]
@@ -745,7 +745,7 @@ pub mod live_ticks {
     // === Data types ===
 
     #[typed_variants]
-    #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
     /// The data types for a [`crate::client::Client::req_tick_by_tick_data`] request.
     pub enum Data {
         #[serde(rename = "AllLast")]

@@ -59,7 +59,7 @@ pub mod market_depth {
     use crate::exchange::Primary;
     use crate::payload::ParsePayloadError;
 
-    #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
     #[serde(tag = "operation")]
     /// Represents a single change to an existing order book
     pub enum Operation {
@@ -84,7 +84,7 @@ pub mod market_depth {
         }
     }
 
-    #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
     #[serde(tag = "type")]
     /// A single entry in a limit order book
     pub enum Entry {
@@ -125,7 +125,7 @@ pub mod market_depth {
         }
     }
 
-    #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
     #[serde(tag = "origin")]
     /// A complete entry in a limit order book that potentially containing additional information about the market-maker / exchange from where
     /// the quote was sourced.
@@ -274,7 +274,7 @@ impl From<Trade> for TradeSerDeHelper {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "tick")]
 /// A historical or live tick.
 pub enum TickData {
@@ -312,7 +312,7 @@ pub struct BidAsk {
     pub ask_size: f64,
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 /// A tick representing the last traded price.
 pub struct Last {
     /// The timestamp of the tick.
@@ -326,7 +326,7 @@ pub struct Last {
     pub exchange: crate::exchange::Primary,
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// A single position, comprising a single security and details about its current value, P&L, etc.
 pub struct Position {
     /// The ID of the underlying contract.
@@ -347,7 +347,7 @@ pub struct Position {
     pub account_number: String,
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// A single position, comprising a single security and a few details about its cost, account, etc.
 pub struct PositionSummary {
     /// The underlying contract
@@ -386,7 +386,7 @@ pub struct PnlSingle {
     pub market_value: f64,
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "order_status")]
 /// The possible statuses for a given order.
 pub enum OrderStatus {
@@ -429,7 +429,7 @@ impl TryFrom<(&str, OrderStatusCore)> for OrderStatus {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 /// The core fields of an Order's Status
 pub struct OrderStatusCore {
     /// The order's ID.
@@ -477,7 +477,7 @@ impl FromStr for Locate {
 }
 
 #[allow(non_snake_case, missing_docs)]
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct OrderDetails {
     pub OcaGroup: Option<String>,
     pub Account: Option<String>,

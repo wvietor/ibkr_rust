@@ -6,7 +6,7 @@ use crate::contract::{Contract, ContractType, ExchangeProxy};
 use crate::currency::Currency;
 use crate::exchange::Primary;
 
-#[derive(Debug, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 /// A filter for requesting executions that meet only these criteria.
 pub struct Filter {
     /// Filter by API client id that placed the order.
@@ -48,7 +48,7 @@ mod serde_filter_datetime {
 
 }
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 /// The possible sides for an order
 pub enum OrderSide {
     #[serde(rename = "BUY")]
@@ -75,7 +75,7 @@ impl std::str::FromStr for OrderSide {
     }
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Contains the core fields relating to an [`Execution`]. which occurs when a trade is made.
 pub struct Exec {
     /// The contract on which the trade was made.
@@ -109,7 +109,7 @@ pub struct Exec {
     pub pending_price_revision: bool,
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "action")]
 /// A confirmed trade.
 pub enum Execution {
@@ -177,7 +177,7 @@ impl From<(OrderSide, Exec)> for Execution {
     }
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Details the commissions paid regarding a given [`Execution`]
 pub struct CommissionReport {
     /// The ID of the [`Execution`] with which the report corresponds
