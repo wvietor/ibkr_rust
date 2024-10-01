@@ -28,7 +28,6 @@ impl Wrapper for ExecutionWrapper {
 #[tokio::test]
 async fn execs() -> Result<(), Box<dyn std::error::Error>> {
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
-
     let mut client = Builder::from_config_file(Mode::Paper, Host::Gateway, &None::<std::path::PathBuf>)?
         .connect(9)
         .await?
@@ -36,8 +35,6 @@ async fn execs() -> Result<(), Box<dyn std::error::Error>> {
         .await;
 
     let id = client.req_executions(Filter { side: Some(OrderSide::Buy), ..Default::default() }).await?;
-
-
     while let Some(msg) = rx.recv().await {
         match msg {
             ExecutionMessage::Response(req_id, execution) => {
