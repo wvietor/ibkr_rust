@@ -1410,9 +1410,9 @@ pub trait Local: wrapper::LocalWrapper {
                     commission,
                     currency,
                     realized_pnl,
-                    yld,
-                    yld_redemption_date: NaiveDate::parse_from_str(&yld_redemption_date, "%Y%m%d")
-                        .map_err(|e| ("yld_redemption_date", ParseDateTimeError::Parse(e)))?,
+                    yld: if yld.eq(&f64::MAX) { None } else { Some(yld) },
+                    yld_redemption_date: if yld_redemption_date.is_empty() { None } else { Some(NaiveDate::parse_from_str(&yld_redemption_date, "%Y%m%d")
+                        .map_err(|e| ("yld_redemption_date", ParseDateTimeError::Parse(e)))?) },
                 })
                 .await;
 

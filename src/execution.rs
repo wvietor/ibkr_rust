@@ -189,7 +189,7 @@ pub struct CommissionReport {
     /// The realized profit and loss
     pub realized_pnl: f64,
     /// The income return
-    pub yld: f64,
+    pub yld: Option<f64>,
     /// The redemption date for the yield
-    pub yld_redemption_date: chrono::NaiveDate,
+    pub yld_redemption_date: Option<chrono::NaiveDate>,
 }
