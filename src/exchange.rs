@@ -442,7 +442,7 @@ pub enum Primary {
     #[serde(rename = "VSE")]
     ViennaStockExchange,
     #[serde(rename = "VALUE")]
-    /// A holding exchange used for clients to close positions ona contract that is no longer listed
+    /// A holding exchange used for clients to close positions on a contract that is no longer listed
     Value,
     #[serde(rename = "WFFX")]
     WellsFargoForex,

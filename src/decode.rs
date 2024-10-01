@@ -2542,12 +2542,12 @@ fn deserialize_contract_proxy<E: crate::contract::ProxyExchange + Clone>(
             strike @ 0: String,
             right @ 0: String,
             multiplier @ 0: String,
-            exch_or_priamry @ 0: String,
+            exch_or_primary @ 0: String,
             currency @ 0: Currency,
             local_symbol @ 0: String,
             trading_class @ 0: String
     );
-    let (exchange, primary_exchange) = E::decode(exch_or_priamry)?;
+    let (exchange, primary_exchange) = E::decode(exch_or_primary)?;
 
     let inner = match sec_type {
         ContractType::Stock => Contract::Stock(Stock {
