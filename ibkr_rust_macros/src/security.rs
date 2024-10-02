@@ -2,8 +2,9 @@ use std::collections::HashSet;
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse_str, Ident};
+#[allow(clippy::enum_glob_use)]
 use SecType::*;
+use syn::{Ident, parse_str};
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 enum SecType {
@@ -18,7 +19,7 @@ enum SecType {
 
 impl SecType {
     #[inline]
-    const fn as_str(&self) -> &'static str {
+    const fn as_str(self) -> &'static str {
         match self {
             Forex => "Forex",
             Crypto => "Crypto",
@@ -277,8 +278,25 @@ pub fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
     let try_from_impl = impl_try_from_other_contracts(name);
     let into_contract_impl = impl_into_contract(name);
 
-    let gen = quote! {
-        impl crate::contract::indicators::Valid for #name {}
+    let gen_tokens = quote! {
+        impl crate::contract::indicators::Valid for #name {
+            fn as_out_msg(&self) -> crate::contract::indicators::SecurityOutMsg<'_> {
+                crate::contract::indicators::SecurityOutMsg {
+                    contract_id: #contract_id,
+                    symbol: #symbol,
+                    security_type: #security_type,
+                    expiration_date: #expiration_date,
+                    strike: #strike,
+                    right: #right,
+                    multiplier: #multiplier,
+                    exchange: #exchange,
+                    primary_exchange: #primary_exchange,
+                    currency: #currency,
+                    local_symbol: #local_symbol,
+                    trading_class: #trading_class,
+                }
+            }
+        }
 
         impl serde::Serialize for #name {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
@@ -344,5 +362,5 @@ pub fn impl_security(ast: &syn::DeriveInput) -> TokenStream {
 
         #into_contract_impl
     };
-    gen
+    gen_tokens
 }

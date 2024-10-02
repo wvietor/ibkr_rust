@@ -1,67 +1,54 @@
-use super::*;
 use bytes::{Buf, BytesMut};
-use crossbeam::queue::SegQueue;
-use std::sync::Arc;
 use tokio::{io::AsyncReadExt, net::tcp::OwnedReadHalf};
+use tracing::{error, info, warn};
 
 #[derive(Debug)]
 pub struct Reader {
     inner: OwnedReadHalf,
-    queue: Arc<SegQueue<Vec<String>>>,
+    tx: tokio::sync::mpsc::Sender<Vec<String>>,
     disconnect: tokio_util::sync::CancellationToken,
 }
 
 impl Reader {
     pub fn new(
         r_reader: OwnedReadHalf,
-        r_queue: Arc<SegQueue<Vec<String>>>,
+        tx: tokio::sync::mpsc::Sender<Vec<String>>,
         r_disconnect: tokio_util::sync::CancellationToken,
     ) -> Self {
         Self {
             inner: r_reader,
-            queue: r_queue,
+            tx,
             disconnect: r_disconnect,
         }
     }
 
+    #[tracing::instrument(level = tracing::Level::DEBUG)]
     pub async fn run(mut self) -> Self {
         loop {
             tokio::select! {
-                () = self.disconnect.cancelled() => {println!("Reader thread: disconnecting"); break self},
+                biased;
                 () = async {
                     if let Ok(Ok(len)) = self.inner.read_u32().await.map(usize::try_from) {
                         let mut buf = BytesMut::with_capacity(len);
-
-                        const MAX_MESSAGE_SIZE: usize = 3_000_000;
-                        if len > MAX_MESSAGE_SIZE {
-                            warn!("Reader:run() -> Received message length ({}) exceeds the maximum allowed size", len);
-                        }
                         let mut total_read = 0;
                         while total_read < len {
                             match self.inner.read_buf(&mut buf).await {
-                                Ok(0) => {
-                                    warn!("Reader:run() -> Socket closed while reading message");
-                                    break;
-                                }
-                                Ok(n) => total_read += n,
-                                Err(e) => {
-                                    error!("Reader:run() -> Error reading from socket: {:?}", e);
-                                    break;
-                                }
+                                Ok(0) => { warn!("TCP Reader read 0 bytes (this should never happen and is likely an error in message parsing)") },
+                                Ok(n) => { total_read += n; },
+                                Err(e) => error!(error=%e, "IO Error when receiving message.")
                             }
                         }
-
-                        if len == total_read {
-                            let msg = buf.chunk()
-                                .split(|b| *b == 0)
-                                .map(|s| core::str::from_utf8(s).unwrap_or("").to_owned())
-                                .collect::<Vec<String>>();
-                            self.queue.push(msg);
-                        } else{
-                            error!("Reader:run() -> len != total_read -> len:{len}, total_read:{total_read} ");
+                        let msg = buf.chunk()
+                        .split(|b| *b == 0)
+                        .map(|s| core::str::from_utf8(s).unwrap_or("").to_owned())
+                        .collect::<Vec<String>>();
+                        match self.tx.send(msg).await {
+                            Ok(()) => (),
+                            Err(e) => error!(%e, "IO Error when sending message. Client receiver may have dropped."),
                         }
                     }
                 } => (),
+                () = self.disconnect.cancelled() => { info!("Reader thread: disconnecting"); break self} ,
             }
         }
     }

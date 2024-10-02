@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::currency::{Currency, ParseCurrencyError};
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "attribute", content = "data")]
 /// Represents a specific account value
 pub enum Attribute {
@@ -273,7 +273,7 @@ impl From<(&'static str, std::convert::Infallible)> for ParseAttributeError {
     }
 }
 
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 /// The particular account groups managed by a given client.
 pub enum Group {
@@ -294,7 +294,7 @@ impl FromStr for Group {
     }
 }
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(tag = "segment")]
 /// The intra-account segments of various values.
 pub enum Segment<T> {
@@ -308,7 +308,7 @@ pub enum Segment<T> {
     Security(T),
 }
 
-#[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 /// The denomination of a given value.
 pub enum Denomination {
@@ -329,7 +329,7 @@ impl FromStr for Denomination {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 /// Represents the possible numbers of day trades before a regulatory breach of pattern day-trading
 /// rules is committed.
@@ -370,7 +370,7 @@ impl FromStr for RemainingDayTrades {
     }
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 /// Represents the different tag and value pairs in an account summary callback.
 pub enum TagValue {
@@ -384,7 +384,7 @@ pub enum TagValue {
     Currency(Tag, f64, Currency),
 }
 
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 /// Represents the different types of account information available for a
 /// [`crate::client::Client::req_account_summary`] request.
 pub enum Tag {

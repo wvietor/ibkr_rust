@@ -109,3 +109,28 @@ impl FromStr for Currency {
         })
     }
 }
+
+impl std::fmt::Display for Currency {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::AustralianDollar => "AUD",
+            Self::BritishPound => "GBP",
+            Self::CanadianDollar => "CAD",
+            Self::ChineseYuan => "CNH",
+            Self::DanishKrone => "DKK",
+            Self::Euro => "EUR",
+            Self::HongKongDollar => "HKD",
+            Self::IndianRupee => "INR",
+            Self::IsraeliNewShekel => "ILS",
+            Self::JapaneseYen => "JPY",
+            Self::KoreanWon => "KRW",
+            Self::MexicanPeso => "MXN",
+            Self::NewZealandDollar => "NZD",
+            Self::NorwegianKrone => "NOK",
+            Self::SwedishKrona => "SEK",
+            Self::SwissFranc => "CHF",
+            Self::UsDollar => "USD",
+        };
+        write!(f, "{s}")
+    }
+}

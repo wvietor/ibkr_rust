@@ -369,7 +369,7 @@ pub enum Out {
     ReqUserInfo,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ToWrapper {
     ContractQuery((Query, i64)),
 }

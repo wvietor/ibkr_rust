@@ -2,8 +2,8 @@ use std::convert::Infallible;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
-use chrono::serde::ts_seconds;
 use chrono::{DateTime, Utc};
+use chrono::serde::ts_seconds;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -59,7 +59,7 @@ pub mod market_depth {
     use crate::exchange::Primary;
     use crate::payload::ParsePayloadError;
 
-    #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
     #[serde(tag = "operation")]
     /// Represents a single change to an existing order book
     pub enum Operation {
@@ -84,7 +84,7 @@ pub mod market_depth {
         }
     }
 
-    #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
     #[serde(tag = "type")]
     /// A single entry in a limit order book
     pub enum Entry {
@@ -125,7 +125,7 @@ pub mod market_depth {
         }
     }
 
-    #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
     #[serde(tag = "origin")]
     /// A complete entry in a limit order book that potentially containing additional information about the market-maker / exchange from where
     /// the quote was sourced.
@@ -207,9 +207,9 @@ pub enum Bar {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[serde(from = "TradeSerDeHelper", into = "TradeSerDeHelper")]
 /// A trade bar with volume, WAP, and count data.
 pub struct Trade {
-    #[serde(flatten)]
     /// The core bar with open, high, low, close, etc.
     pub bar: BarCore,
     /// The bar's traded volume.
@@ -221,6 +221,60 @@ pub struct Trade {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
+/// Helper struct for serializing / deserializing [`Trade`]
+struct TradeSerDeHelper {
+    /// The ending datetime for the bar.
+    #[serde(with = "ts_seconds")]
+    datetime: DateTime<Utc>,
+    /// The bar's open price.
+    open: f64,
+    /// The bar's high price.
+    high: f64,
+    /// The bar's low price.
+    low: f64,
+    ///The bar's close price.
+    close: f64,
+    /// The bar's traded volume.
+    volume: f64,
+    /// The bar's Weighted Average Price.
+    wap: f64,
+    /// The number of trades during the bar's timespan.
+    trade_count: u64,
+}
+
+impl From<TradeSerDeHelper> for Trade {
+    fn from(value: TradeSerDeHelper) -> Self {
+        Trade {
+            bar: BarCore {
+                datetime: value.datetime,
+                open: value.open,
+                high: value.high,
+                low: value.low,
+                close: value.close,
+            },
+            volume: value.volume,
+            wap: value.wap,
+            trade_count: value.trade_count,
+        }
+    }
+}
+
+impl From<Trade> for TradeSerDeHelper {
+    fn from(value: Trade) -> Self {
+        Self {
+            datetime: value.bar.datetime,
+            open: value.bar.open,
+            high: value.bar.high,
+            low: value.bar.low,
+            close: value.bar.close,
+            volume: value.volume,
+            wap: value.wap,
+            trade_count: value.trade_count,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "tick")]
 /// A historical or live tick.
 pub enum TickData {
@@ -258,7 +312,7 @@ pub struct BidAsk {
     pub ask_size: f64,
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 /// A tick representing the last traded price.
 pub struct Last {
     /// The timestamp of the tick.
@@ -272,7 +326,7 @@ pub struct Last {
     pub exchange: crate::exchange::Primary,
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// A single position, comprising a single security and details about its current value, P&L, etc.
 pub struct Position {
     /// The ID of the underlying contract.
@@ -293,7 +347,7 @@ pub struct Position {
     pub account_number: String,
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// A single position, comprising a single security and a few details about its cost, account, etc.
 pub struct PositionSummary {
     /// The underlying contract
@@ -332,7 +386,7 @@ pub struct PnlSingle {
     pub market_value: f64,
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "order_status")]
 /// The possible statuses for a given order.
 pub enum OrderStatus {
@@ -375,7 +429,7 @@ impl TryFrom<(&str, OrderStatusCore)> for OrderStatus {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 /// The core fields of an Order's Status
 pub struct OrderStatusCore {
     /// The order's ID.
@@ -423,7 +477,7 @@ impl FromStr for Locate {
 }
 
 #[allow(non_snake_case, missing_docs)]
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct OrderDetails {
     pub OcaGroup: Option<String>,
     pub Account: Option<String>,

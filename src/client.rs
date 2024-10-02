@@ -1,29 +1,13 @@
-use std::collections::HashSet;
 use std::fmt::Formatter;
-use std::sync::Arc;
 
-use crossbeam::queue::SegQueue;
+use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
 use tokio::net::tcp::OwnedReadHalf;
 use tokio::task::JoinHandle;
-use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
+use tracing::{error, info};
 
-use crate::contract::{ContractId, Query, Security};
-use crate::decode::DecodeError;
-use crate::exchange::Routing;
-use crate::limits::{
-    decrement_req_scanner_subscription, increment_message_per_second,
-    increment_req_scanner_subscription, start_rate_calculation_thread, ScannerTracker,
-    ACTIVE_SCANNER_SUBSCRIPTION,
-};
-use crate::market_data::{
-    histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks,
-    updating_historical_bar,
-};
-use crate::message::{In, Out, ToClient, ToWrapper};
-use crate::scanner_subscription::*;
-use crate::wrapper::{CancelToken, Initializer, LocalInitializer, LocalWrapper, Wrapper};
 use crate::{
     account::Tag,
     comm::Writer,
@@ -32,13 +16,24 @@ use crate::{
     order::{Executable, Order},
     payload::ExchangeId,
     reader::Reader,
-    timezone,
 };
+use crate::contract::{ContractId, Query, Security};
+use crate::decode::DecodeError;
+use crate::exchange::Routing;
+use crate::market_data::{
+    histogram, historical_bar, historical_ticks, live_bar, live_data, live_ticks,
+    updating_historical_bar,
+};
+use crate::message::{In, Out, ToClient, ToWrapper};
+use crate::wrapper::{
+    CancelToken, Initializer, LocalInitializer, LocalWrapper, Recurring, Wrapper,
+};
+
 // ======================================
 // === Types for Handling Config File ===
 // ======================================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 struct Ports {
     tws_live: u16,
     tws_paper: u16,
@@ -46,7 +41,7 @@ struct Ports {
     gateway_paper: u16,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 struct Config {
     address: std::net::Ipv4Addr,
     #[serde(alias = "Ports")]
@@ -76,7 +71,7 @@ impl Config {
 // =======================================
 
 //noinspection SpellCheckingInspection
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 /// Represents the two types of connections to IBKR's trading systems.
 pub enum Mode {
     /// A live trading connection with real money.
@@ -109,7 +104,7 @@ impl std::fmt::Display for Mode {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 /// Represents the two platforms that facilitate trading with IBKR's systems. The two hosts are
 /// indistinguishable from the perspective of an API application.
 pub enum Host {
@@ -129,7 +124,7 @@ impl std::fmt::Display for Host {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum Inner {
     ConfigFile {
         mode: Mode,
@@ -164,7 +159,7 @@ pub enum ConnectionError {
     InvalidBufferSize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 /// Facilitates the creation of a new connection to IBKR's trading systems.
 ///
 /// Each connection requires a TCP port and address with which to connect to the appropriate IBKR
@@ -280,7 +275,7 @@ impl Builder {
         let conn_time = conn_time
             .and_local_timezone(
                 tz.trim()
-                    .parse::<timezone::IbTimeZone>()
+                    .parse::<Tz>()
                     .map_err(|_| ConnectionError::TimeZone)?,
             )
             .single()
@@ -299,7 +294,6 @@ impl Builder {
         };
         client.start_api().await?;
 
-        start_rate_calculation_thread();
         Ok(client)
     }
 }
@@ -316,12 +310,12 @@ type IntoActive = (
     Client<indicators::Active>,
     mpsc::Sender<ToClient>,
     mpsc::Receiver<ToWrapper>,
-    Arc<SegQueue<Vec<String>>>,
+    mpsc::Receiver<Vec<String>>,
     std::collections::VecDeque<Vec<String>>,
 );
 
 type LoopParams = (
-    Arc<SegQueue<Vec<String>>>,
+    mpsc::Receiver<Vec<String>>,
     mpsc::Sender<ToClient>,
     mpsc::Receiver<ToWrapper>,
     std::collections::VecDeque<Vec<String>>,
@@ -329,6 +323,7 @@ type LoopParams = (
 
 #[inline]
 #[allow(clippy::too_many_lines)]
+#[tracing::instrument(skip(remote), level = tracing::Level::DEBUG)]
 async fn decode_msg_remote<W>(
     fields: Vec<String>,
     remote: &mut W,
@@ -406,7 +401,7 @@ async fn decode_msg_remote<W>(
             Ok(In::ManagedAccts) => {
                 decode::Remote::managed_accts_msg(&mut fields.into_iter(), remote, tx, rx)
                     .await
-                    .map_err(|e| e.with_context("managed accounts msg"))
+                    .map_err(|e| e.with_context("managed accoSts msg"))
             }
             Ok(In::ReceiveFa) => decode::Remote::receive_fa_msg(&mut fields.into_iter(), remote)
                 .await
@@ -736,13 +731,14 @@ async fn decode_msg_remote<W>(
         Ok(()) => (),
         Err(e) => {
             tokio::task::yield_now().await;
-            println!("\x1B[31m{e}\x1B[0m");
+            error!("Error in decoding incoming message from API. Error message: {e}");
         }
     }
 }
 
 #[inline]
 #[allow(clippy::too_many_lines)]
+#[tracing::instrument(skip(local), level = tracing::Level::DEBUG)]
 async fn decode_msg_local<W>(
     fields: Vec<String>,
     local: &mut W,
@@ -1132,7 +1128,7 @@ async fn decode_msg_local<W>(
         Ok(()) => (),
         Err(e) => {
             tokio::task::yield_now().await;
-            println!("\x1B[31m{e}\x1B[0m");
+            error!("Error in decoding incoming message from API. Error message: {e}");
         }
     }
 }
@@ -1148,6 +1144,7 @@ pub(crate) mod indicators {
 
     pub trait Status {}
 
+    #[derive(Debug)]
     pub struct Inactive {
         pub(crate) reader: OwnedReadHalf,
     }
@@ -1193,7 +1190,7 @@ pub struct Client<C: indicators::Status> {
     address: std::net::Ipv4Addr,
     client_id: i64,
     server_version: u32,
-    conn_time: chrono::DateTime<timezone::IbTimeZone>,
+    conn_time: chrono::DateTime<Tz>,
     writer: Writer,
     status: C,
 }
@@ -1242,7 +1239,7 @@ impl<S: indicators::Status> Client<S> {
 
     #[inline]
     /// Return the time at which the client successfully connected.
-    pub const fn get_conn_time(&self) -> chrono::DateTime<timezone::IbTimeZone> {
+    pub const fn get_conn_time(&self) -> chrono::DateTime<Tz> {
         self.conn_time
     }
 
@@ -1256,23 +1253,22 @@ impl<S: indicators::Status> Client<S> {
 #[inline]
 fn spawn_reader_thread(
     rdr: OwnedReadHalf,
-) -> (CancelToken, Arc<SegQueue<Vec<String>>>, JoinHandle<Reader>) {
+) -> (CancelToken, mpsc::Receiver<Vec<String>>, JoinHandle<Reader>) {
     let disconnect = CancelToken::new();
-    let queue = Arc::new(SegQueue::new());
+    let (tx, rx) = mpsc::channel(constants::FROM_READER_CHANNEL_SIZE);
 
-    let r_queue = Arc::clone(&queue);
     let r_disconnect = disconnect.clone();
     let r_thread = tokio::spawn(async move {
-        let reader = Reader::new(rdr, r_queue, r_disconnect);
+        let reader = Reader::new(rdr, tx, r_disconnect);
         reader.run().await
     });
-    (disconnect, queue, r_thread)
+    (disconnect, rx, r_thread)
 }
 
 #[inline]
 fn spawn_temp_contract_thread(
     cancel_token: CancelToken,
-    queue: Arc<SegQueue<Vec<String>>>,
+    mut rx_reader: mpsc::Receiver<Vec<String>>,
     mut backlog: std::collections::VecDeque<Vec<String>>,
     mut tx: mpsc::Sender<ToClient>,
     mut rx: mpsc::Receiver<ToWrapper>,
@@ -1280,19 +1276,19 @@ fn spawn_temp_contract_thread(
     tokio::spawn(async move {
         loop {
             tokio::select! {
-                () = cancel_token.cancelled() => { break (queue, tx, rx, backlog); },
-                () = async {
-                    let _ = if let Some(fields) = queue.pop() {
-                        match fields.first().and_then(|t| t.parse().ok()) {
-                            Some(In::ContractData) => decode::decode_contract_no_wrapper(&mut fields.into_iter(), &mut tx, &mut rx).await.map_err(|e| e.with_context("contract data msg")),
-                            Some(_) => { backlog.push_back(fields); Ok(()) },
-                            None => Ok(()),
-                        }
-                    } else { Ok(()) };
-                } => ()
+                biased;
+                Some(fields) = rx_reader.recv() => {
+                     let _ = match fields.first().and_then(|t| t.parse().ok()) {
+                        Some(In::ContractData) => decode::decode_contract_no_wrapper(&mut fields.into_iter(), &mut tx, &mut rx).await.map_err(|e| e.with_context("contract data msg")),
+                        Some(_) => { backlog.push_back(fields); Ok(()) },
+                        None => Ok(()),
+                    };
+                }
+                () = cancel_token.cancelled() => { break; },
             }
             tokio::task::yield_now().await;
         }
+        (rx_reader, tx, rx, backlog)
     })
 }
 
@@ -1311,12 +1307,12 @@ impl Client<indicators::Inactive> {
     }
 
     async fn into_active(self) -> IntoActive {
-        let (disconnect, queue, r_thread) = spawn_reader_thread(self.status.reader);
+        let (disconnect, mut rx_reader, r_thread) = spawn_reader_thread(self.status.reader);
 
         let mut backlog = std::collections::VecDeque::new();
         let (mut managed_accounts, mut valid_id) = (None, None);
         while managed_accounts.is_none() || valid_id.is_none() {
-            if let Some(fields) = queue.pop() {
+            if let Some(fields) = rx_reader.recv().await {
                 match fields.first().and_then(|t| t.parse().ok()) {
                     Some(In::ManagedAccts) => {
                         managed_accounts = Some(
@@ -1366,7 +1362,7 @@ impl Client<indicators::Inactive> {
                 req_id: 0_i64..,
             },
         };
-        (client, wrapper_tx, wrapper_rx, queue, backlog)
+        (client, wrapper_tx, wrapper_rx, rx_reader, backlog)
     }
 
     /// Initiates the main message loop and spawns all helper threads to manage the application.
@@ -1383,40 +1379,39 @@ impl Client<indicators::Inactive> {
     ///
     /// # Errors
     /// Returns any error that occurs in the loop initialization or in the disconnection process.
+    #[tracing::instrument(skip(init), level = tracing::Level::DEBUG)]
     pub async fn local<I: LocalInitializer>(
         self,
         init: I,
         disconnect_token: Option<CancelToken>,
     ) -> Result<Builder, std::io::Error> {
-        let (mut client, tx, rx, queue, backlog) = self.into_active().await;
+        let (mut client, tx, rx, rx_reader, backlog) = self.into_active().await;
         let temp = CancelToken::new();
-        let con_fut = spawn_temp_contract_thread(temp.clone(), queue, backlog, tx, rx);
+        let con_fut = spawn_temp_contract_thread(temp.clone(), rx_reader, backlog, tx, rx);
 
-        let disconnect_token = disconnect_token.unwrap_or_default();
+        let disconnect_token = disconnect_token.unwrap_or_else(|| client.status.disconnect.clone());
         let mut wrapper =
             LocalInitializer::build(init, &mut client, disconnect_token.clone()).await;
         temp.cancel();
         drop(temp);
-        let (queue, mut tx, mut rx, mut backlog) = con_fut.await?;
+        let (mut rx_reader, mut tx, mut rx, mut backlog) = con_fut.await?;
         while let Some(fields) = backlog.pop_front() {
             decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
         }
         drop(backlog);
         loop {
             tokio::select! {
+                biased;
+                Some(fields) = rx_reader.recv() => {
+                    decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
+                },
+                () = tokio::task::yield_now() => (),
                 () = disconnect_token.cancelled() => {
-                    println!("Client loop: disconnecting");
+                    info!("Client loop disconnecting");
                     break
                 },
-                () = async {
-                    if let Some(fields) = queue.pop() {
-                        decode_msg_local(fields, &mut wrapper, &mut tx, &mut rx).await;
-                    } else {
-                        tokio::task::yield_now().await;
-                    }
-                    crate::wrapper::LocalRecurring::cycle(&mut wrapper).await;
-                } => (),
             }
+            crate::wrapper::LocalRecurring::cycle(&mut wrapper).await;
         }
         drop(wrapper);
         client.disconnect().await
@@ -1430,40 +1425,37 @@ impl Client<indicators::Inactive> {
     ///
     /// # Returns
     /// A [`CancelToken`] that can be used to terminate the main loop and disconnect the client.
+    #[tracing::instrument(skip(init), level = tracing::Level::DEBUG)]
     pub async fn remote<I: Initializer + 'static>(self, init: I) -> CancelToken {
-        let (mut client, tx, rx, queue, backlog) = self.into_active().await;
+        let (mut client, tx, rx, rx_reader, backlog) = self.into_active().await;
 
         let temp = CancelToken::new();
-        let con_fut = spawn_temp_contract_thread(temp.clone(), queue, backlog, tx, rx);
+        let con_fut = spawn_temp_contract_thread(temp.clone(), rx_reader, backlog, tx, rx);
 
-        let break_loop = CancelToken::new();
+        let break_loop = client.status.disconnect.clone();
         let break_loop_inner = break_loop.clone();
-
         tokio::spawn(async move {
             let mut wrapper = Initializer::build(init, &mut client, break_loop_inner.clone()).await;
             temp.cancel();
             drop(temp);
-            let (queue, mut tx, mut rx, mut backlog) = con_fut.await?;
-
+            let (mut rx_reader, mut tx, mut rx, mut backlog) = con_fut.await?;
             while let Some(fields) = backlog.pop_front() {
                 decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
             }
             drop(backlog);
             loop {
                 tokio::select! {
+                    biased;
+                    Some(fields) = rx_reader.recv() => {
+                        decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
+                    },
+                    () = tokio::task::yield_now() => (),
                     () = break_loop_inner.cancelled() => {
-                        println!("Client loop: disconnecting");
+                        info!("Client loop: disconnecting");
                         break
                     },
-                    () = async {
-                        if let Some(fields) = queue.pop() {
-                            decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
-                        } else {
-                            tokio::task::yield_now().await;
-                        }
-                        crate::wrapper::Recurring::cycle(&mut wrapper).await;
-                    } => (),
                 }
+                Recurring::cycle(&mut wrapper).await;
             }
             drop(wrapper);
             client.disconnect().await
@@ -1479,11 +1471,12 @@ impl Client<indicators::Inactive> {
     ///
     /// # Returns
     /// An active [`Client`] that can be used to make API requests.
+    #[tracing::instrument(skip(wrapper), level = tracing::Level::DEBUG)]
     pub async fn disaggregated<W: Wrapper + Send + 'static>(
         self,
         mut wrapper: W,
     ) -> Client<indicators::Active> {
-        let (client, mut tx, mut rx, queue, mut backlog) = self.into_active().await;
+        let (client, mut tx, mut rx, mut rx_reader, mut backlog) = self.into_active().await;
         let c_loop_disconnect = client.status.disconnect.clone();
 
         while let Some(fields) = backlog.pop_front() {
@@ -1494,14 +1487,12 @@ impl Client<indicators::Inactive> {
             let (mut tx, mut rx, mut wrapper) = (tx, rx, wrapper);
             loop {
                 tokio::select! {
-                    () = c_loop_disconnect.cancelled() => {println!("Client loop: disconnecting"); break},
-                    () = async {
-                        if let Some(fields) = queue.pop() {
-                            decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
-                        } else {
-                            tokio::task::yield_now().await;
-                        }
-                    } => (),
+                    biased;
+                    Some(fields) = rx_reader.recv() => {
+                        decode_msg_remote(fields, &mut wrapper, &mut tx, &mut rx).await;
+                    },
+                    () = tokio::task::yield_now() => (),
+                    () = c_loop_disconnect.cancelled() => {info!("Client loop: disconnecting"); break},
                 }
             }
         });
@@ -1784,162 +1775,6 @@ impl Client<indicators::Active> {
         Ok(req_id)
     }
 
-    // === Scanner Parameters ===
-    ///	Requests scanner parameters.
-    ///
-    /// # Errors
-    /// Returns any error encountered while writing the outgoing message.
-    pub async fn req_scanner_parameters(&mut self) -> ReqResult {
-        const VERSION: u8 = 1;
-
-        self.writer.add_body((Out::ReqScannerParameters, VERSION))?;
-        self.writer.send().await
-    }
-
-    // === Scanner Subscription ===
-    /// Subscribes to a scanner subscription.
-    ///
-    /// # Errors
-    /// Returns any error encountered while writing the outgoing message.
-    ///
-    /// # Returns
-    /// The unique ID associated with the request.
-    pub async fn req_scanner_subscription<T: ScannerSubscriptionIsComplete>(
-        &mut self,
-        subsctiption: &T,
-    ) -> IdResult {
-        increment_req_scanner_subscription().await;
-        let req_id = self.get_next_req_id();
-
-        // - scannerSubscriptionOptions ?
-        self.writer.add_body((
-            Out::ReqScannerSubscription,
-            req_id,
-            subsctiption.get_number_of_rows(),
-            subsctiption.get_instrument_type(),
-            subsctiption.get_location_code(),
-            subsctiption.get_scan_code(),
-            [""; 18],
-            subsctiption
-                .get_filters()
-                .iter()
-                .fold(String::new(), |mut output, (tag, value)| {
-                    output += &format!("{}={};", tag, value);
-                    output
-                }),
-            "",
-        ))?;
-
-        let _ = self.writer.send().await;
-        ACTIVE_SCANNER_SUBSCRIPTION
-            .write()
-            .await
-            .insert(req_id, ScannerTracker { received: false });
-        Ok(req_id)
-    }
-
-    // async fn cancel_complited_subscription(&mut self) -> usize {
-    //     let map_lock = ACTIVE_SCANNER_SUBSCRIPTION.read().await;
-    //     let map_len = map_lock.len();
-
-    //     let to_remove: Vec<i64> = map_lock
-    //         .iter()
-    //         .filter(|(_, v)| v.received)
-    //         .map(|(&k, _)| k)
-    //         .collect();
-
-    //     println!("cancel: {:?}", to_remove);
-    //     drop(map_lock);
-    //     for req_id in to_remove {
-    //         let _ = self.cancel_scanner_subscription(req_id).await;
-    //     }
-    //     map_len
-    // }
-
-    ///
-    pub async fn req_scanner_subscription_once<T: ScannerSubscriptionIsComplete>(
-        &mut self,
-        subsctiptions: Vec<T>,
-    ) -> ReqResult {
-        let mut req_ids_to_cancel = HashSet::with_capacity(subsctiptions.len());
-
-        for sub in subsctiptions {
-            if let Ok(req_id) = self.req_scanner_subscription(&sub).await {
-                req_ids_to_cancel.insert(req_id);
-            }
-
-            for req_id in req_ids_to_cancel.clone() {
-                let map_lock = ACTIVE_SCANNER_SUBSCRIPTION.read().await;
-                if let Some(value) = map_lock.get(&req_id) {
-                    if value.received {
-                        drop(map_lock);
-                        let _ = self.cancel_scanner_subscription(req_id.clone()).await;
-                        req_ids_to_cancel.remove(&req_id);
-                    }
-                }
-            }
-
-            // let to_remove: Vec<i64> = map_lock
-            //     .iter()
-            //     .filter(|(_, v)| v.received)
-            //     .map(|(&k, _)| k)
-            //     .collect();
-
-            // map_lock.contains_key(req_id);
-            // self.cancel_complited_subscription();
-        }
-
-        loop {
-            // println!("req_ids_to_cancel: {:?}", req_ids_to_cancel);
-            if req_ids_to_cancel.is_empty() {
-                break;
-            }
-
-            for req_id in req_ids_to_cancel.clone() {
-                let map_lock = ACTIVE_SCANNER_SUBSCRIPTION.read().await;
-                if let Some(value) = map_lock.get(&req_id) {
-                    if value.received {
-                        drop(map_lock);
-                        let _ = self.cancel_scanner_subscription(req_id.clone()).await;
-                        req_ids_to_cancel.remove(&req_id);
-                    }
-                }
-            }
-
-            // self.cancel_complited_subscription();
-        }
-
-        Ok(())
-    }
-
-    /// Cancel a scanner subscription previously established with `Client::req_scanner_subscription`.
-    ///
-    /// # Arguments
-    /// * `req_id` - The ID associated with the scanner subscription request to cancel.
-    ///
-    /// # Errors
-    /// Returns any error encountered while writing the outgoing message.
-    pub async fn cancel_scanner_subscription(&mut self, req_id: i64) -> ReqResult {
-        const VERSION: u8 = 1;
-        self.writer
-            .add_body((Out::CancelScannerSubscription, VERSION, req_id))?;
-        let r = self.writer.send().await;
-        // decrement_scanner_subscription_counter();
-        ACTIVE_SCANNER_SUBSCRIPTION.write().await.remove(&req_id);
-        r
-    }
-
-    pub async fn cancel_all_active_scanner_subscription(&mut self) -> ReqResult {
-        let map_lock = ACTIVE_SCANNER_SUBSCRIPTION.read().await;
-        let to_remove: Vec<i64> = map_lock.iter().map(|(&k, _)| k).collect();
-        drop(map_lock);
-
-        for req_id in to_remove {
-            self.cancel_scanner_subscription(req_id);
-        }
-        Ok(())
-    }
-
     // === Historical Market Data ===
 
     /// Request historical bar data for a given security. See [`historical_bar`] for
@@ -1977,7 +1812,7 @@ impl Client<indicators::Active> {
         self.writer.add_body((
             Out::ReqHistoricalData,
             id,
-            security,
+            security.as_out_msg(),
             false,
             end_date_time,
             bar_size,
@@ -2025,7 +1860,7 @@ impl Client<indicators::Active> {
         self.writer.add_body((
             Out::ReqHistoricalData,
             id,
-            security,
+            security.as_out_msg(),
             false,
             None::<()>,
             bar_size,
@@ -2083,7 +1918,7 @@ impl Client<indicators::Active> {
         self.writer.add_body((
             Out::ReqHeadTimestamp,
             id,
-            security,
+            security.as_out_msg(),
             None::<()>,
             regular_trading_hours_only,
             data,
@@ -2131,7 +1966,7 @@ impl Client<indicators::Active> {
         self.writer.add_body((
             Out::ReqHistogramData,
             id,
-            security,
+            security.as_out_msg(),
             None::<()>,
             regular_trading_hours_only,
             duration,
@@ -2184,7 +2019,7 @@ impl Client<indicators::Active> {
         self.writer.add_body((
             Out::ReqHistoricalTicks,
             id,
-            security,
+            security.as_out_msg(),
             None::<()>,
             timestamp,
             number_of_ticks,
@@ -2233,7 +2068,7 @@ impl Client<indicators::Active> {
             Out::ReqMktData,
             VERSION,
             id,
-            security,
+            security.as_out_msg(),
             false,
             additional_data,
             refresh_type,
@@ -2304,7 +2139,7 @@ impl Client<indicators::Active> {
             Out::ReqRealTimeBars,
             VERSION,
             id,
-            security,
+            security.as_out_msg(),
             5_u32,
             data,
             regular_trading_hours_only,
@@ -2361,7 +2196,7 @@ impl Client<indicators::Active> {
         self.writer.add_body((
             Out::ReqTickByTickData,
             id,
-            security,
+            security.as_out_msg(),
             tick_data,
             number_of_historical_ticks,
             ignore_size,
@@ -2389,13 +2224,20 @@ impl Client<indicators::Active> {
     /// # Arguments
     /// * `security` - The security for which to return the market depth data.
     /// * `number_of_rows` - The maximum number of rows in the returned limit order book.
+    /// * `smart_depth` - When `true`, return the [`crate::exchange::Primary`] exchange holding the
+    ///      order, otherwise return the [`crate::payload::market_depth::Mpid`] associated with each entry.
     ///
     /// # Errors
     /// Returns any error encountered while writing the outgoing message.
     ///
     /// # Returns
     /// The unique ID associated with the request.
-    pub async fn req_market_depth<S>(&mut self, security: &S, number_of_rows: u32) -> IdResult
+    pub async fn req_market_depth<S>(
+        &mut self,
+        security: &S,
+        number_of_rows: u32,
+        smart_depth: bool,
+    ) -> IdResult
     where
         S: Security,
     {
@@ -2406,9 +2248,9 @@ impl Client<indicators::Active> {
             Out::ReqMktDepth,
             VERSION,
             id,
-            security,
+            security.as_out_msg(),
             number_of_rows,
-            true,
+            smart_depth,
             None::<()>,
         ))?;
         self.writer.send().await?;
@@ -2482,7 +2324,7 @@ impl Client<indicators::Active> {
         self.writer.add_body((
             Out::PlaceOrder,
             id,
-            order.get_security(),
+            order.get_security().as_out_msg(),
             None::<()>,
             None::<()>,
             order,
@@ -2511,7 +2353,7 @@ impl Client<indicators::Active> {
         self.writer.add_body((
             Out::PlaceOrder,
             id,
-            order.get_security(),
+            order.get_security().as_out_msg(),
             None::<()>,
             None::<()>,
             order,

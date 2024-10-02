@@ -18,11 +18,66 @@ macro_rules! make_valid {
     };
 }
 
+macro_rules! impl_data_type_docs {
+    (($first: ident $(, $rest: ident)+)) => {
+        concat!("[`", stringify!($first), "`], ", impl_data_type_docs!(($($rest),*)) )
+    };
+    (($only: ident)) => { concat!("[`", stringify!($only), "`]") }
+}
+
 macro_rules! impl_data_type {
     (($($d_name: ident),*); $s_names: tt) => {
         $(
             impl_data_type!($d_name; $s_names);
         )*
+    };
+    (($($d_name: ident),*); $s_names: tt; $enum_name: ident; $err_name: ident) => {
+        #[doc = concat!(
+            "A helper enum to hold data types valid for particular securities: ",
+            impl_data_type_docs!($s_names)
+        )]
+        #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+        pub enum $enum_name {
+            $(
+            #[doc = concat!(stringify!($d_name), " data")]
+            $d_name($d_name),
+            )*
+        }
+
+        #[derive(Debug, Clone, thiserror::Error)]
+        #[doc = concat!("An error type that is thrown if [`Data`] cannot be converted into [`", stringify!($enum_name), "`]")]
+        #[error("Cannot coerce {from_type:?} to {}", stringify!($enum_name))]
+        pub struct $err_name {
+            /// The type from which a converison was attempted
+            from_type: Data,
+        }
+
+        impl TryFrom<Data> for $enum_name {
+            type Error = $err_name;
+
+            fn try_from(value: Data) -> Result<Self, Self::Error> {
+                match value {
+                    $(
+                        Data::$d_name(d) => Ok(Self::$d_name(d)),
+                    )*
+                    _ => Err($err_name { from_type: value })
+                }
+            }
+        }
+
+        impl From<$enum_name> for Data {
+            fn from(value: $enum_name) -> Self {
+                match value {
+                    $(
+                        $enum_name::$d_name(d) => Self::$d_name(d),
+                    )*
+                }
+            }
+        }
+
+        impl indicators::Valid for $enum_name {}
+
+        impl_data_type!(($enum_name, $($d_name),*); $s_names);
     };
     ($d_name: ident; ($($s_name: ident),*)) => {
         $(
@@ -33,19 +88,21 @@ macro_rules! impl_data_type {
 
 /// Contains types and traits used by [`crate::client::Client::req_historical_bar`].
 pub mod historical_bar {
-    use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Stock};
+    use chrono_tz::Tz;
     use ibapi_macros::typed_variants;
     use serde::{Deserialize, Serialize, Serializer};
+
+    use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Stock};
 
     // === Type definitions ===
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
     /// The last time for which bar data will be returned.
     pub enum EndDateTime {
+        /// Some date and time in the past.
+        Past(chrono::DateTime<Tz>),
         /// The present moment.
         Present,
-        /// Some date and time in the past.
-        Past(chrono::DateTime<crate::timezone::IbTimeZone>),
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -203,7 +260,7 @@ pub mod historical_bar {
     // === Data types ===
 
     #[typed_variants]
-    #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+    #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "UPPERCASE")]
     /// The data types for a [`crate::client::Client::req_historical_bar`] request.
     pub enum Data {
@@ -248,48 +305,52 @@ pub mod historical_bar {
 
     impl_data_type!(
         (Trades, HistoricalVolatility, SecOptionImpliedVolatility);
-        (Index)
+        (Index);
+        TradesVolData;
+        NotTradesVolError
     );
 
     impl_data_type!(
         (Trades, Midpoint, Bid, Ask, BidAsk);
-        (SecOption, SecFuture, Crypto)
+        (SecOption, SecFuture, Crypto);
+        TradesMidBidAskData;
+        NotTradesBidAskMidError
     );
 
     impl_data_type!(
         (Midpoint, Bid, Ask, BidAsk);
-        (Forex, Commodity)
+        (Forex, Commodity);
+        MidBidAskData;
+        NotMidBidAskError
     );
 }
 
 /// Contains types and traits used by [`crate::client::Client::req_updating_historical_bar`].
 pub mod updating_historical_bar {
-    use super::historical_bar;
-    use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Stock};
     use ibapi_macros::typed_variants;
     use serde::{Deserialize, Serialize};
 
-    // === Type definitions ===
-
     /// Re-export of [`historical_bar::Duration`]
-    pub type Duration = historical_bar::Duration;
-
-    /// Re-export of [`historical_bar::Size`]
-    pub type Size = historical_bar::Size;
-
-    /// Re-export of [`historical_bar::SecondSize`]
-    pub type SecondSize = historical_bar::SecondSize;
-
-    /// Re-export of [`historical_bar::MinuteSize`]
-    pub type MinuteSize = historical_bar::MinuteSize;
-
+    pub use historical_bar::Duration;
     /// Re-export of [`historical_bar::HourSize`]
-    pub type HourSize = historical_bar::HourSize;
+    pub use historical_bar::HourSize;
+    /// Re-export of [`historical_bar::MinuteSize`]
+    pub use historical_bar::MinuteSize;
+    /// Re-export of [`historical_bar::SecondSize`]
+    pub use historical_bar::SecondSize;
+    /// Re-export of [`historical_bar::Size`]
+    pub use historical_bar::Size;
+
+    use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Stock};
+
+    use super::historical_bar;
+
+    // === Type definitions ===
 
     // === Data types ===
 
     #[typed_variants]
-    #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "UPPERCASE")]
     /// The data types for a ['crate::client::Client::req_updating_historical_bar'] request or a [`crate::client::Client::req_real_time_bars`] request.
     pub enum Data {
@@ -321,20 +382,23 @@ pub mod updating_historical_bar {
 
     impl_data_type!(
         (Midpoint, Bid, Ask);
-        (Forex, Commodity)
+        (Forex, Commodity);
+        MidBidAskData;
+        NotMidBidAskError
     );
 }
 
 /// Contains types and traits used by [`crate::client::Client::req_historical_ticks`] and
 /// [`crate::client::Client::req_head_timestamp`].
 pub mod historical_ticks {
-    use crate::contract::{Commodity, Contract, Crypto, Forex, Index, SecFuture, SecOption, Stock};
     use ibapi_macros::typed_variants;
     use serde::{Deserialize, Serialize, Serializer};
 
+    use crate::contract::{Commodity, Contract, Crypto, Forex, Index, SecFuture, SecOption, Stock};
+
     // === Type definitions ===
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     /// The timestamp that dictates the start or end of the period for which historical ticks will
     /// be returned.
     pub enum TimeStamp {
@@ -389,7 +453,7 @@ pub mod historical_ticks {
     // === Data types ===
 
     #[typed_variants]
-    #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+    #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "UPPERCASE")]
     /// The data types for a [`crate::client::Client::req_historical_ticks`] request or a
     /// [`crate::client::Client::req_head_timestamp`] request.
@@ -455,25 +519,22 @@ pub mod histogram {
 
 /// Contains the types and traits used by [`crate::client::Client::req_real_time_bars`].
 pub mod live_bar {
-    use super::updating_historical_bar;
+    /// Re-export of [`updating_historical_bar::Ask`]
+    pub use updating_historical_bar::Ask;
+    /// Re-export of [`updating_historical_bar::Bid`]
+    pub use updating_historical_bar::Bid;
+    /// Re-export of [`updating_historical_bar::Data`]
+    pub use updating_historical_bar::Data;
+    /// Re-export of [`updating_historical_bar::Midpoint`]
+    pub use updating_historical_bar::Midpoint;
+    /// Re-export of [`updating_historical_bar::Trades`]
+    pub use updating_historical_bar::Trades;
+
     use crate::contract::{Commodity, Contract, Crypto, Forex, Index, SecFuture, SecOption, Stock};
 
+    use super::updating_historical_bar;
+
     // === Data types ===
-
-    /// Re-export of [`updating_historical_bar::Data`]
-    pub type Data = updating_historical_bar::Data;
-
-    /// Re-export of [`updating_historical_bar::Trades`]
-    pub type Trades = updating_historical_bar::Trades;
-
-    /// Re-export of [`updating_historical_bar::Midpoint`]
-    pub type Midpoint = updating_historical_bar::Midpoint;
-
-    /// Re-export of [`updating_historical_bar::Bid`]
-    pub type Bid = updating_historical_bar::Bid;
-
-    /// Re-export of [`updating_historical_bar::Ask`]
-    pub type Ask = updating_historical_bar::Ask;
 
     make_valid!(Trades, Midpoint, Bid, Ask, Data);
 
@@ -487,14 +548,16 @@ pub mod live_bar {
 /// Contains types and traits used by [`crate::client::Client::req_market_data`] and
 /// [`crate::client::Client::req_market_data_type`].
 pub mod live_data {
-    use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Stock};
+    use std::fmt::Formatter;
+
     use ibapi_macros::typed_variants;
     use serde::{Deserialize, Serialize};
-    use std::fmt::Formatter;
+
+    use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Stock};
 
     // === Type definitions ===
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
     /// The frequency at which data will be updated.
     pub enum RefreshType {
         #[serde(rename(serialize = "1"))]
@@ -553,7 +616,7 @@ pub mod live_data {
     // === Data types ===
 
     #[typed_variants]
-    #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
     /// Contains the data types for a [`crate::client::Client::req_market_data`] request.
     pub enum Data {
         #[serde(rename = "100")]
@@ -663,23 +726,26 @@ pub mod live_data {
             IBDividends,
             Empty
         );
-        (Forex, SecOption, SecFuture, Crypto, Index, Commodity)
+        (Forex, SecOption, SecFuture, Crypto, Index, Commodity);
+        GeneralData;
+        NotGeneralDataError
     );
 }
 
 /// Contains types and traits used by [`crate::client::Client::req_tick_by_tick_data`].
 pub mod live_ticks {
-    use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, Stock};
     use ibapi_macros::typed_variants;
     use serde::{Deserialize, Serialize};
 
-    // === Data types ===
+    use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, Stock};
 
     /// Re-export of [`super::historical_ticks::NumberOfTicks`] for convenience.
-    pub type NumberOfTicks = super::historical_ticks::NumberOfTicks;
+    pub use super::historical_ticks::NumberOfTicks;
+
+    // === Data types ===
 
     #[typed_variants]
-    #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Serialize, Deserialize)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
     /// The data types for a [`crate::client::Client::req_tick_by_tick_data`] request.
     pub enum Data {
         #[serde(rename = "AllLast")]

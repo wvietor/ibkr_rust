@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 // === Type definitions ===
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 /// Represents a "routing" exchange where orders and market data requests can be directed.
 pub enum Routing {
     #[serde(rename = "SMART")]
@@ -42,7 +42,7 @@ impl std::error::Error for ParseExchangeError {
 
 // Docs here would be somewhat ridiculous
 #[allow(missing_docs)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 /// Represents all the valid physical trading venues for various contracts.
 pub enum Primary {
     #[serde(rename = "AEB")]
@@ -171,10 +171,6 @@ pub enum Primary {
     IceEndexFutures,
     #[serde(rename = "ENEXT.BE")]
     EuronextBelgium,
-
-    #[serde(rename = "FWB2")]
-    FrankfurtStockExchange,
-
     #[serde(rename = "EUIBFRSH")]
     InternalFractionalShareVenueForEuStocksAndEtfs,
     #[serde(rename = "EUIBSI")]
@@ -377,16 +373,14 @@ pub enum Primary {
     RoyalBankOfScotlandCurrencyDealing,
     #[serde(rename = "RUSSELL")]
     ExchangeForRussellIndices,
-    #[serde(rename = "TWSE")]
-    TaiwanStockExchange,
+    #[serde(rename = "SAPPHIRE")]
+    Sapphire,
     #[serde(rename = "SEHK")]
     StockExchangeOfHongKong,
     #[serde(rename = "SEHKNTL")]
-    StockExchangeHongKongNorthboundTradingLink, // Shanghai Stock Exchange? / Shanghai-Hong Kong Stock Exchange?
-    #[serde(rename = "SEHKNTL")]
-    ShanghaiStockExchangeSTARMarket, //
+    StockExchangeHongKongNorthboundTradingLink,
     #[serde(rename = "SEHKSZSE")]
-    HongKongShenzhenStockExchangeNorthboundTradingLink, // Shenzhen Stock Exchange?
+    HongKongShenzhenStockExchangeNorthboundTradingLink,
     #[serde(rename = "SFB")]
     StockholmFondbors,
     #[serde(rename = "SGX")]
@@ -448,7 +442,7 @@ pub enum Primary {
     #[serde(rename = "VSE")]
     ViennaStockExchange,
     #[serde(rename = "VALUE")]
-    /// A holding exchange used for clients to close positions ona contract that is no longer listed
+    /// A holding exchange used for clients to close positions on a contract that is no longer listed
     Value,
     #[serde(rename = "WFFX")]
     WellsFargoForex,
@@ -538,7 +532,6 @@ impl FromStr for Primary {
             "EDGX" => Self::BatsTradingEdgx,
             "EMERALD" => Self::MiaxEmeraldExchange,
             "ENDEX" => Self::IceEndexFutures,
-            "FWB2" => Self::FrankfurtStockExchange,
             "ENEXT.BE" => Self::EuronextBelgium,
             "EUIBFRSH" => Self::InternalFractionalShareVenueForEuStocksAndEtfs,
             "EUIBSI" => Self::IbEuropeanSystematicInternaliser,
@@ -641,10 +634,9 @@ impl FromStr for Primary {
             "RBCFX" => Self::RoyalBankOfCanadaCurrencyDealing,
             "RBSFX" => Self::RoyalBankOfScotlandCurrencyDealing,
             "RUSSELL" => Self::ExchangeForRussellIndices,
-            "TWSE" => Self::TaiwanStockExchange,
+            "SAPPHIRE" => Self::Sapphire,
             "SEHK" => Self::StockExchangeOfHongKong,
             "SEHKNTL" => Self::StockExchangeHongKongNorthboundTradingLink,
-            "SEHKSTAR" => Self::ShanghaiStockExchangeSTARMarket,
             "SEHKSZSE" => Self::HongKongShenzhenStockExchangeNorthboundTradingLink,
             "SFB" => Self::StockholmFondbors,
             "SGX" => Self::SingaporeExchange,
@@ -681,5 +673,225 @@ impl FromStr for Primary {
             "WSE" => Self::WarsawStockExchange,
             s => return Err(ParseExchangeError(s.to_owned())),
         })
+    }
+}
+
+impl std::fmt::Display for Primary {
+    #[allow(clippy::too_many_lines)]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::AmsterdamseEffectenbeurs => "AEB",
+            Self::AlphaTradingSystems => "ALPHA",
+            Self::AmericanStockExchange => "AMEX",
+            Self::ApexEuronext => "APEXEN",
+            Self::ApexItaly => "APEXIT",
+            Self::AquisExchangeEuropeGermany => "AQEUDE",
+            Self::AquisExchangeEuropeEuronext => "AQEUEN",
+            Self::AquisExchangeEuropeSpain => "AQEUES",
+            Self::AquisExchangeEuropeItaly => "AQEUIT",
+            Self::Quadriserv => "AQS",
+            Self::Archipelago => "ARCA",
+            Self::Arcaedge => "ARCAEDGE",
+            Self::AustralianStockExchange => "ASX",
+            Self::AsxCentrePoint => "ASXCEN",
+            Self::BarclaysGovernmentBonds => "BARCBONDG",
+            Self::BatsTradingInc => "BATS",
+            Self::BelgianFuturesAmpOptionsExchange => "BELFOX",
+            Self::NasdaqOmxBx => "BEX",
+            Self::Bloomberg => "BLOOMBERG",
+            Self::BolsaDeMadrid => "BM",
+            Self::Bond1GovernmentBonds => "BOND1G",
+            Self::BondDesk => "BONDDESK",
+            Self::BonddeskForUsGovernmentSecurities => "BONDDESKG",
+            Self::BondDeskMunicipalBonds => "BONDDESKM",
+            Self::GovernmentBondsLargeOrders => "BONDLARGE",
+            Self::BostonOptionExchange => "BOX",
+            Self::BudapestStockExchange => "BUX",
+            Self::LisbonStockExchange => "BVL",
+            Self::BorsaValoriDiMilano => "BVME",
+            Self::BorsaItalianaEtf => "BVME.ETF",
+            Self::BatsYExchange => "BYX",
+            Self::CommerzbankAgFrankfurtCurrencyDealing2 => "CBK2FX",
+            Self::CommerzbankAgFrankfurtCurrencyDealing => "CBKFX",
+            Self::ChicagoBoardOptionsExchange => "CBOE",
+            Self::CboeJapanLimited => "CBOE.JPN",
+            Self::ChicagoBoardOptionsExchange2 => "CBOE2",
+            Self::ChicagoBoardOfTrade => "CBOT",
+            Self::CanadianDerivativesExchange => "CDE",
+            Self::CboeFuturesExchange => "CFE",
+            Self::ChicagoFuturesExchangeTradingAtSettlement => "CFETAS",
+            Self::ChinextSharesOnShenzhenStockExchange => "CHINEXT",
+            Self::ChiXCanadaAtsLimited => "CHIX_CA",
+            Self::ChiXAustralia => "CHIXAU",
+            Self::ChicagoStockExchange => "CHX",
+            Self::CitibankCurrencyDealing => "CITIFX",
+            Self::ChicagoMercantileExchange => "CME",
+            Self::CommodityExchange => "COMEX",
+            Self::CopenhagenStockExchange => "CPH",
+            Self::CreditSuisseGovernmentBondsSmallOrders => "CSBONDG",
+            Self::CsfbAlgorithmicEngine => "CSFBALGO",
+            Self::CreditSuisseCurrencyDealing => "CSFX",
+            Self::CitadelZeroCommission => "CTDLZERO",
+            Self::DirectEdgeEcnLlc => "DRCTEDGE",
+            Self::CboeGermany => "DXEDE",
+            Self::CboeEuronext => "DXEEN",
+            Self::CboeSpain => "DXEES",
+            Self::CboeEuropeBVDxeOrderBookItaly => "DXEIT",
+            Self::ElektronischeBoerseSchweiz => "EBS",
+            Self::DirectEdgeEcnEdgea => "EDGEA",
+            Self::BatsTradingEdgx => "EDGX",
+            Self::MiaxEmeraldExchange => "EMERALD",
+            Self::IceEndexFutures => "ENDEX",
+            Self::EuronextBelgium => "ENEXT.BE",
+            Self::InternalFractionalShareVenueForEuStocksAndEtfs => "EUIBFRSH",
+            Self::IbEuropeanSystematicInternaliser => "EUIBSI",
+            Self::EurexBritishMarketsForLchCrestClearing => "EUREXUK",
+            Self::FoxRiver => "FOXRIVER",
+            Self::PartnerFractionalShares => "FRACSHARE",
+            Self::FinancieleTermijnmarktAmsterdam => "FTA",
+            Self::Finra => "FINRA",
+            Self::MutualFundHoldingVenue => "FUNDSERV",
+            Self::FrankfurterWertpapierboerse => "FWB",
+            Self::NonStandardSettlementForFx => "FXSETTLE",
+            Self::IseGemini => "GEMINI",
+            Self::BRseMNchenAg => "GETTEX",
+            Self::BRseMNchenAgForCblSettlement => "GETTEX2",
+            Self::GoldmanSachsCurrencyDealing2 => "GS2FX",
+            Self::GoldmanSachsCurrencyDealing => "GSFX",
+            Self::HeadlandsTechnologies => "HEADLAND",
+            Self::HeadlandsTechnologiesMunis => "HEADLANDM",
+            Self::HelsinkiStockExchange => "HEX",
+            Self::HongKongFuturesExchange => "HKFE",
+            Self::HsbcCurrencyDealing2 => "HSBC2FX",
+            Self::HsbcCurrencyDealing => "HSBCFX",
+            Self::HartfieldTitusAndDonnelly => "HTD",
+            Self::IbCfdDealingAsiaPacific => "IBAPCFD",
+            Self::InteractiveBrokersBond => "IBBOND",
+            Self::InteractiveBrokersCommodity => "IBCMDTY",
+            Self::IbDarkPool => "IBDARK",
+            Self::IbkrOvernightExchange => "IBEOS",
+            Self::IbCurrencyDealing => "IBFX",
+            Self::IbFxCfdDealing => "IBFXCFD",
+            Self::IntegriertesBoersenhandelsUndInformationsSystem => "IBIS",
+            Self::InteractiveBrokersAssetManagement => "IBKRAM",
+            Self::IbkrNote => "IBKRNOTE",
+            Self::InternalizedTradingOfMetals => "IBMETAL",
+            Self::IbCfdDealingUs => "IBUSCFD",
+            Self::IbUsOpt => "IBUSOPT",
+            Self::IceCryptocurrency => "ICECRYPTO",
+            Self::IceFuturesUsInc => "ICEUS",
+            Self::InteractiveBrokersDealingSystem => "IDEAL",
+            Self::IbForexPro => "IDEALPRO",
+            Self::IdealCurrencyDealing => "IDEALFX",
+            Self::ItalianDerivativesMarketMilano => "IDEM",
+            Self::InvestorsExchange => "IEX",
+            Self::InternationalPetroleumExchange => "IPE",
+            Self::InterestRateRecordingExchange => "IR",
+            Self::InternationalSecuritiesExchange => "ISE",
+            Self::Island => "ISLAND",
+            Self::JaneStreetExecutionServices => "JANE",
+            Self::JaneStreetZeroCommission => "JANEZERO",
+            Self::JefferiesAlgorithmicEngine => "JEFFALGO",
+            Self::JpmcCorporateBonds => "JPMCBOND",
+            Self::Japannext => "JPNNEXT",
+            Self::KoreaStockExchange => "KSE",
+            Self::LongTermStockExchange => "LTSE",
+            Self::MarcheATermeDInstrumentsFinanciers => "MATIF",
+            Self::MercadoEspanolDeFuturosFinancierosRentaVariableProxy => "MEFFRV",
+            Self::MembersExchange => "MEMX",
+            Self::IseMercury => "MERCURY",
+            Self::MercadoMexicanoDeDerivados => "MEXDER",
+            Self::MexicoStockExchange => "MEXI",
+            Self::MiamiOptionsExchange => "MIAX",
+            Self::MillenniumAdvisorsCorporateBonds => "MILLADV",
+            Self::MarketaxessCorporates => "MKTAXESS",
+            Self::MarcheDesOptsNegDeLaBourseDeParis => "MONEP",
+            Self::MorganStanleyCurrencyDealing => "MSFX",
+            Self::NasdaqRiga => "N.RIGA",
+            Self::NasdaqTallinn => "N.TALLINN",
+            Self::AbNasdaqVilnius => "N.VILNIUS",
+            Self::NationalAssociationOfSecurityDealers => "NASDAQ",
+            Self::NasdaqOmxBxOptionsExchange => "NASDAQBX",
+            Self::NationalAssociationOfSecurityDealersOptionsMarket => "NASDAQOM",
+            Self::NatixisCurrencyDealing => "NATIXISFX",
+            Self::KnightTradingOtcbbAndPinkSheets => "NITE",
+            Self::IbkrRetailZeroCommission => "NITEZERO",
+            Self::NationalStockExchangeOfIndiaLimited => "NSE",
+            Self::NewYorkBoardOfTrade => "NYBOT",
+            Self::NewYorkMercantileExchange => "NYMEX",
+            Self::NewYorkStockExchange => "NYSE",
+            Self::NyseFloor => "NYSEFLOOR",
+            Self::NyseLiffeUs => "NYSELIFFE",
+            Self::NyseNational => "NYSENAT",
+            Self::OmegaAts => "OMEGA",
+            Self::StockholmOptionsMarket => "OMS",
+            Self::NorwegianSharesOnOmx => "OMXNO",
+            Self::OsloStockExchange => "OSE",
+            Self::OsakaStockExchange => "OSE.JPN",
+            Self::OslCryptoExchange => "OSL",
+            Self::OtcBulletinBoard => "OTCBB",
+            Self::OtcLinkEcn => "OTCLNKECN",
+            Self::OvernightTrading => "OVERNIGHT",
+            Self::PaxosCryptoExchange => "PAXOS",
+            Self::MiaxPearlExchange => "PEARL",
+            Self::PhiladelphiaStockExchange => "PHLX",
+            Self::PinkSheets => "PINK",
+            Self::PraqueStockExchange => "PRA",
+            Self::PacificStockExchange => "PSE",
+            Self::NasdaqOmxPsx => "PSX",
+            Self::PureTrading => "PURE",
+            Self::RoyalBankOfCanadaCurrencyDealing2 => "RBC2FX",
+            Self::RoyalBankOfCanadaCurrencyDealing => "RBCFX",
+            Self::RoyalBankOfScotlandCurrencyDealing => "RBSFX",
+            Self::ExchangeForRussellIndices => "RUSSELL",
+            Self::Sapphire => "SAPPHIRE",
+            Self::StockExchangeOfHongKong => "SEHK",
+            Self::StockExchangeHongKongNorthboundTradingLink => "SEHKNTL",
+            Self::HongKongShenzhenStockExchangeNorthboundTradingLink => "SEHKSZSE",
+            Self::StockholmFondbors => "SFB",
+            Self::SingaporeExchange => "SGX",
+            Self::SingaporeExchangeCme => "SGXCME",
+            Self::TheSmallExchange => "SMFE",
+            Self::SydneyFuturesExchange => "SNFE",
+            Self::SumridgePartners => "SUMRIDGE",
+            Self::SumridgePartnersMunicipalBonds => "SUMRIDGEM",
+            Self::StuttgartWertpapierboerse => "SWB",
+            Self::TelAvivStockExchange => "TASE",
+            Self::Tradegate => "TGATE",
+            Self::TurquoiseGlobalHoldingsEuropeBVGermany => "TGHEDE",
+            Self::TurquoiseGlobalHoldingsEuropeBVEuronext => "TGHEEN",
+            Self::TurquoiseGlobalHoldingsEuropeBVSpain => "TGHEES",
+            Self::TurquoiseGlobalHoldingsBVItaly => "TGHEIT",
+            Self::ThFxCfdDealing => "THFXCFD",
+            Self::TplusZero => "TPLUS0",
+            Self::TPlusOne => "TPLUS1",
+            Self::TradewebCorporate => "TRADEWEB",
+            Self::TradewebGovernment => "TRADEWEBG",
+            Self::TorontoStockExchange => "TSE",
+            Self::TokyoStockExchange => "TSEJ",
+            Self::UbsCurrencyDealing2 => "UBS2FX",
+            Self::UbsCorporateBond => "UBSBOND",
+            Self::UbsCurrencyDealing => "UBSFX",
+            Self::KnightValuebondCorporate => "VALUBOND",
+            Self::KnightValuebondGovernment => "VALUBONDG",
+            Self::MunicipalBondsOnValuebond => "VALUBONDM",
+            Self::Value => "VALUE",
+            Self::TsxVentureExchange => "VENTURE",
+            Self::VirtuFinancialGovernmentBonds => "VIRTBONDG",
+            Self::ViennaStockExchange => "VSE",
+            Self::WellsFargoForex => "WFFX",
+            Self::WarsawStockExchange => "WSE",
+        };
+        write!(f, "{s}")
+    }
+}
+
+impl std::fmt::Display for Routing {
+    #[allow(clippy::too_many_lines)]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Routing::Smart => write!(f, "SMART"),
+            Routing::Primary(prim) => write!(f, "{prim}"),
+        }
     }
 }

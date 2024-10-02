@@ -12,14 +12,6 @@
     clippy::single_char_lifetime_names
 )]
 
-pub(crate) use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
-pub(crate) use tracing::{
-    debug, debug_span, error, error_span, event, info, info_span, instrument, span, trace,
-    trace_span, warn, warn_span, Level,
-};
-pub(crate) use tracing_test::traced_test;
-pub(crate) use {tracing, tracing_test};
-
 /// Contains types related to account information.
 pub mod account;
 /// Contains the all-important [`client::Client`] struct and its methods, which facilitate
@@ -80,13 +72,6 @@ mod reader;
 ///this module, each of our groups gets its own submodule and corresponds one-to-one with a
 /// [`wrapper::LocalWrapper`] or [`wrapper::Wrapper`] method.
 pub mod tick;
-/// Contains a [`chrono::TimeZone`] enum to represent all the possible timezones available in the API.
-pub mod timezone;
-
-pub mod limits;
-pub mod scanner_parameters;
-pub mod scanner_subscription;
-
 /// Contains the definition of the [`wrapper::LocalWrapper`] and [`wrapper::Wrapper`] traits. Implementing these traits for a
 /// type allows users to customize callback behavior.
 pub mod wrapper;

@@ -1,19 +1,19 @@
+use std::{num::ParseIntError, str::FromStr};
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
-use std::{num::ParseIntError, str::FromStr};
 
 use chrono::NaiveDate;
 use ibapi_macros::{make_getters, Security};
-use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, ser::SerializeStruct, Serialize, Serializer};
 use thiserror::Error;
 
-use crate::contract::proxy_indicators::{HasExchange, NoExchange};
-use crate::figi::{Figi, InvalidFigi};
 use crate::{
     currency::Currency,
     exchange::{Primary, Routing},
     match_poly,
 };
+use crate::contract::proxy_indicators::{HasExchange, NoExchange};
+use crate::figi::{Figi, InvalidFigi};
 
 // =========================================================
 // === Utility Types and Functions for Contract Creation ===
@@ -21,7 +21,7 @@ use crate::{
 
 // todo!("Ensure that includeExpired is always set to true");
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq)]
 /// Wrapper enum for all possible contracts available in the API
 pub enum Contract {
     /// A [`Forex`] contract.
@@ -334,7 +334,7 @@ pub enum NewSecurityError {
     UnexpectedSecurityType(#[from] UnexpectedSecurityType),
 }
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Error)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Error)]
 #[error("Unexpected security type. Expected {expected:?}. Found {found:?}")]
 /// An error type that's returned when a [`Security`] of type `S` is requested, but a security of
 /// another type is received from the API
@@ -345,7 +345,7 @@ pub struct UnexpectedSecurityType {
     found: ContractType,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 /// A type used to represent a query for a new contract, which can be made by providing either an
 /// IBKR contract ID, or a FIGI.
 pub enum Query {
@@ -399,7 +399,7 @@ impl FromStr for Query {
 }
 
 #[allow(clippy::module_name_repetitions)]
-#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 /// A unique identifier used by both IBKR's trading systems and the API to define a specific
 /// contract.
 pub struct ContractId(pub i64);
@@ -417,7 +417,7 @@ impl FromStr for ContractId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 /// Identifiers used by the broader industry / regulators to define a specific contract / asset.
 pub enum SecurityId {
     /// For details, see:
@@ -441,12 +441,56 @@ pub enum SecurityId {
 mod indicators {
     use std::convert::Infallible;
 
-    use serde::Serialize;
+    use chrono::NaiveDate;
+    use serde::{Serialize, Serializer};
+
+    use crate::currency::Currency;
+    use crate::exchange::{Primary, Routing};
+    use crate::match_poly;
 
     use super::{
-        Commodity, Contract, Crypto, Forex, Index, SecFuture, SecOption, Stock,
+        Commodity, Contract, ContractId, Crypto, Forex, Index, SecFuture, SecOption, Stock,
         UnexpectedSecurityType,
     };
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct SecurityOutMsg<'s> {
+        pub contract_id: ContractId,
+        pub symbol: &'s str,
+        pub security_type: &'static str,
+        pub expiration_date: Option<NaiveDate>,
+        pub strike: Option<f64>,
+        pub right: Option<&'static str>,
+        pub multiplier: Option<u32>,
+        pub exchange: Routing,
+        pub primary_exchange: Option<Primary>,
+        pub currency: Currency,
+        pub local_symbol: &'s str,
+        pub trading_class: Option<&'s str>,
+    }
+
+    impl Serialize for SecurityOutMsg<'_> {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            (
+                self.contract_id,
+                self.symbol,
+                self.security_type,
+                self.expiration_date.map(|d| d.format("%Y%m%d").to_string()),
+                self.strike,
+                self.right,
+                self.multiplier,
+                self.exchange,
+                self.primary_exchange,
+                self.currency,
+                self.local_symbol,
+                self.trading_class,
+            )
+                .serialize(serializer)
+        }
+    }
 
     pub trait Valid:
         Serialize
@@ -462,9 +506,22 @@ mod indicators {
         + TryFrom<Contract, Error: Into<UnexpectedSecurityType>>
         + Into<Contract>
     {
+        fn as_out_msg(&self) -> SecurityOutMsg<'_>;
     }
 
-    impl Valid for Contract {}
+    impl Valid for Contract {
+        fn as_out_msg(&self) -> SecurityOutMsg<'_> {
+            match_poly!(self;
+                Self::Forex(t)
+                | Self::Crypto(t)
+                | Self::Stock(t)
+                | Self::Index(t)
+                | Self::SecFuture(t)
+                | Self::SecOption(t)
+                | Self::Commodity(t) => t.as_out_msg()
+            )
+        }
+    }
 
     impl From<Infallible> for UnexpectedSecurityType {
         fn from(_: Infallible) -> Self {
@@ -531,7 +588,7 @@ macro_rules! make_contract {
     ($( #[doc = $name_doc:expr] )? $name: ident $(,$trt: ident)?; $($field: ident: $f_type: ty),* $(,)?) => {
         $( #[doc = $name_doc] )?
         #[make_getters]
-        #[derive(Debug, Clone, PartialEq, PartialOrd, $($trt)?)]
+        #[derive(Debug, Clone, PartialEq, $($trt)?)]
         pub struct $name {
             pub(crate) contract_id: ContractId,
             pub(crate) min_tick: f64,
@@ -606,7 +663,7 @@ make_contract!(
     trading_class: String
 );
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Security)]
+#[derive(Debug, Clone, PartialEq, Security)]
 /// A [vanilla option contract](https://interactivebrokers.github.io/tws-api/basic_contracts.html#opt), like P BMW  20221216 72 M.
 pub enum SecOption {
     /// A vanilla call option, defined by the following payoff function: max(S<sub>T</sub> - K, 0)
@@ -746,13 +803,13 @@ impl From<(SecOptionInner, SecOptionClass)> for SecOption {
 // make_contract!(MutualFund; exchange: Routing);
 // make_contract!(StructuredProduct; exchange: Routing, multiplier: u32, expiration_date: NaiveDate);
 
-// #[derive(Debug, Clone, PartialEq, PartialOrd)]
+// #[derive(Debug, Clone, PartialEq)]
 // pub enum SecFutureOption {
 //     Call(SecOptionInner),
 //     Put(SecOptionInner),
 // }
 
-// #[derive(Debug, Clone, PartialEq, PartialOrd)]
+// #[derive(Debug, Clone, PartialEq)]
 // pub enum Warrant {
 //     Call(SecOptionInner),
 //     Put(SecOptionInner),
@@ -775,7 +832,7 @@ macro_rules! proxy_impl {
     };
 }
 
-#[derive(Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(into = "SerProxyHelp", try_from = "SerProxyHelp")]
 /// Holds information about a contract but lacks the information of a full [`Contract`].
 pub struct Proxy<S: Security + Clone + Debug, E: ProxyExchange> {
@@ -819,10 +876,10 @@ pub(crate) mod proxy_indicators {
         fn get_exchange(routing: Routing) -> Option<Routing>;
     }
 
-    #[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+    #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
     pub struct HasExchange;
 
-    #[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+    #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
     pub struct NoExchange;
 
     impl Valid for HasExchange {
@@ -917,7 +974,7 @@ fn _dummy_de_2<'de, E: ProxyExchange, Sec: Security + Clone + Debug, De: Deseria
     unreachable!()
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct SerProxyHelp {
     contract_type: ContractType,
     contract_id: ContractId,
@@ -933,13 +990,22 @@ struct SerProxyHelp {
     strike: Option<f64>,
 }
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 /// The possible option classes
 pub enum SecOptionClass {
     /// A call option
     Call,
     /// A put option
     Put,
+}
+
+impl From<SecOptionClass> for char {
+    fn from(value: SecOptionClass) -> Self {
+        match value {
+            SecOptionClass::Call => 'C',
+            SecOptionClass::Put => 'P',
+        }
+    }
 }
 
 impl<S: Security + Clone + Debug, E: ProxyExchange> From<Proxy<S, E>> for SerProxyHelp {
@@ -1415,7 +1481,7 @@ impl Proxy<SecOption, HasExchange> {
 }
 
 #[allow(clippy::module_name_repetitions)]
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 /// The possible contract types
 pub enum ContractType {
     #[serde(rename = "CASH")]
@@ -1473,7 +1539,22 @@ impl FromStr for ContractType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Ord, Eq, Error)]
+impl std::fmt::Display for ContractType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::Forex => "CASH",
+            Self::Crypto => "CRYPTO",
+            Self::Stock => "STK",
+            Self::Index => "IND",
+            Self::SecFuture => "FUT",
+            Self::SecOption => "OPT",
+            Self::Commodity => "CMDTY",
+        };
+        write!(f, "{s}")
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
 /// An error type returned upon failure to serialize a [`Proxy`].
 pub enum SerializeProxyError {
     #[error("Missing data for field {0}")]

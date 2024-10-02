@@ -1,9 +1,11 @@
-use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Security, Stock};
-use serde::ser::SerializeTuple;
-use serde::{Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt::Formatter;
 use std::str::FromStr;
+
+use serde::{Serialize, Serializer};
+use serde::ser::SerializeTuple;
+
+use crate::contract::{Commodity, Crypto, Forex, Index, SecFuture, SecOption, Security, Stock};
 
 // ==============================================
 // === Core Order Types (Market, Limit, etc.) ===
@@ -11,7 +13,7 @@ use std::str::FromStr;
 
 // === Type definitions ===
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 /// The time periods for which an order is active and can be executed against.
 pub enum TimeInForce {
     #[default]
@@ -70,7 +72,7 @@ impl FromStr for TimeInForce {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 /// A generic order to buy or sell a security `S`: `Security` according to the parameters specified by the generic
 /// parameter `E`: `Executable`.
 pub enum Order<'o, S: Security, E: Executable<S>> {
@@ -128,7 +130,7 @@ impl<S: Security, E: Executable<S>> Order<'_, S, E> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 /// A market order: Buy or sell at the best available price for a given quantity. Sensitive to price fluctuations.
 pub struct Market {
     /// The number of shares/units to execute.
@@ -137,7 +139,7 @@ pub struct Market {
     pub time_in_force: TimeInForce,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 /// A market order: Buy or sell at a price as good or better than the limit price. May not be filled.
 pub struct Limit {
     /// The number of shares/units to buy.
@@ -949,7 +951,7 @@ where
     ser.serialize_element(&exec.get_peg_to_mid_content())
 }
 
-#[derive(Debug, Default, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Hash, Eq, Serialize)]
 /// The types of data that can be used for triggering a given order (like a stop or stop limit order).
 pub enum TriggerMethod {
     #[default]
@@ -976,7 +978,7 @@ pub enum TriggerMethod {
     MidPoint,
 }
 
-#[derive(Debug, Default, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Hash, Eq, Serialize)]
 /// Represents the party who created a given order.
 pub enum Origin {
     #[default]
@@ -988,7 +990,7 @@ pub enum Origin {
     Firm,
 }
 
-#[derive(Debug, Default, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 /// Represents the possible ways of handling one-cancels-all behavior for a group of orders.
 ///
 /// Tells how to handle remaining orders in an OCA group when one order or part of an order
@@ -1013,7 +1015,7 @@ pub enum OneCancelsAllType {
     ReduceNonBlock,
 }
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, Serialize)]
 /// Represents the possible codes describing rule 80A parameters.
 pub enum Rule80A {
     #[serde(rename(serialize = "I"))]
@@ -1045,7 +1047,7 @@ pub enum Rule80A {
     AgentOtherMemberPt,
 }
 
-#[derive(Debug, Default, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Hash, Eq, Serialize)]
 /// The list of potential strategies for executing an auction order.
 pub enum AuctionStrategy {
     #[default]
@@ -1074,7 +1076,7 @@ pub enum VolatilityType {
     Annual,
 }
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, Serialize)]
 /// Specifies how you want TWS to calculate the limit price for options,
 /// and for stock range price monitoring.
 pub enum ReferencePriceType {
@@ -1086,7 +1088,7 @@ pub enum ReferencePriceType {
     BidOrAsk,
 }
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, Serialize)]
 /// The potential methods for hedging an order.
 pub enum HedgeType {
     #[serde(rename(serialize = "D"))]
@@ -1103,7 +1105,7 @@ pub enum HedgeType {
     Pair,
 }
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, Serialize)]
 /// For execution-only clients to know where do they want their shares to be cleared at.
 pub enum ClearingIntent {
     #[serde(rename(serialize = "IB"))]
@@ -1117,7 +1119,7 @@ pub enum ClearingIntent {
     PostTradeAllocation,
 }
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, Serialize)]
 /// The potential execution algorithms for algo orders.
 pub enum AlgoStrategy {
     #[serde(rename(serialize = "ArrivalPx"))]
@@ -1134,7 +1136,7 @@ pub enum AlgoStrategy {
     Vwap,
 }
 
-#[derive(Debug, Default, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Hash, Eq, Serialize)]
 /// Adjusted Stop orders: specifies where the trailing unit is an amount (set to 0) or a
 /// percentage (set to 1).
 pub enum AdjustedTrailingUnit {
@@ -1147,7 +1149,7 @@ pub enum AdjustedTrailingUnit {
     Percentage,
 }
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Hash, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, Serialize)]
 /// Represents a field that may or may not exist. If the condition is not met,
 /// [`ConditionalField::Missing`] value is serialized. If  the condition is met, the
 /// [`ConditionalField::Present`] value is serialized.

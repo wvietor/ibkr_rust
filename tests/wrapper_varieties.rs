@@ -5,7 +5,7 @@ use ibapi::wrapper::{
     CancelToken, Initializer, LocalInitializer, LocalRecurring, LocalWrapper, Recurring, Wrapper,
 };
 
-#[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
 struct SendWrapper;
 
 impl Wrapper for SendWrapper {}
