@@ -1394,7 +1394,6 @@ pub trait Local: wrapper::LocalWrapper {
         wrapper: &mut Self,
     ) -> impl Future<Output = DecodeResult> {
         async move {
-            warn!("Unimplemented incoming message. Fields: {:?}", &fields);
             decode_fields!(
                 fields =>
                     exec_id @ 2: String,
