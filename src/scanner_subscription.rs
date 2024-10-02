@@ -1,13 +1,15 @@
 #![allow(dead_code)]
 #![allow(unused)]
 use super::*;
+use serde::{Deserialize, Serialize};
+use serde_json;
 
 // === TODO ===
 // impl BondStkSymbols{} for BOND_STK_SYMBOL
 // impl BondIssuers{} for BOND_ISSUER
 // impl scannerSubscriptionOptions? (codes?)
 // impl skip() for scanCode?
-// impl ScannerSubscription: scanner_setting_pairs? 
+// impl ScannerSubscription: scanner_setting_pairs?
 // xmllint command? remove? comments?
 // Errors review/rewrite
 // move string case manipulation to utils.rs/str_utils file ?
@@ -17,7 +19,6 @@ use super::*;
 // 	<InstrumentGroupList varName="instrumentGroupList"> ?
 // Global Stock/Futures/Index ?
 // task has warning and the output is cut in half(VScode) ?
-
 
 #[derive(Debug, Clone)]
 pub struct ScannerContract {
@@ -40,7 +41,6 @@ pub struct ScannerContract {
     pub legs_str: String,
 }
 
-
 const NO_ROW_NUMBER_SPECIFIED: i32 = -1;
 
 /// Defines a market scanner request, including its filters.
@@ -51,20 +51,18 @@ const NO_ROW_NUMBER_SPECIFIED: i32 = -1;
 /// The `ScannerSubscription` struct represents a market scanner subscription,
 /// containing filters that refine the scanning results. It allows specifying the
 /// instrument type, location, market scan parameters, price, volume, ratings, and more.
-/// 
+///
 /// # Usage
 /// ```rust
 /// ScannerSubscription::select_instrument_type().select_location().select_scanner_code().select_filter().select_filter();
 /// ```
-/// 
+///
 /// # Example
 /// ```rust
-/// let scanner_wo_filters = ScannerSubscription::us_stocks().us_major().top_perc_gain(); 
+/// let scanner_wo_filters = ScannerSubscription::us_stocks().us_major().top_perc_gain();
 /// let scanner_w_filters = scanner_wo_filters.clone().number_of_result_rows(100).market_cap_above1e6(1000.0).price_below(100.0);
 /// client.req_scanner_subscription(scanner_w_filters).await;
 /// ```
-
-
 #[derive(Debug, Clone)]
 pub struct ScannerSubscription {
     // // For example, a pairing "Annual, true" used on the "top Option Implied Vol % Gainers" scan would return annualized volatilities.
@@ -160,8 +158,6 @@ macro_rules! impl_select_location {
     };
 }
 
-
-
 impl_select_location![ USStocksSelectLocation, USStocksSelectScanCode  =>
 ("US Stocks",us_stocks,"STK.US"),
 ("Listed/NASDAQ",us_major,"STK.US.MAJOR"),
@@ -174,28 +170,25 @@ impl_select_location![ USStocksSelectLocation, USStocksSelectScanCode  =>
 ("BATS",bats,"STK.BATS"),
 ("OTCMarkets",otcmarkets,"STK.US.MINOR"),
 ("Pink Sheets",pink_sheets,"STK.PINK"),
-]; 
+];
 
-
- impl_select_location![ USEquityETFsSelectLocation, USEquityETFsSelectScanCode  =>
+impl_select_location![ USEquityETFsSelectLocation, USEquityETFsSelectScanCode  =>
 ("US ETFs",us_etfs,"ETF.EQ.US"),
 ("Listed/NASDAQ",us_major,"ETF.EQ.US.MAJOR"),
 ("ARCA",arca,"ETF.EQ.ARCA"),
 ("NASDAQ",nasdaq,"ETF.EQ.NASDAQ.NMS"),
 ("BATS",bats,"ETF.EQ.BATS"),
-]; 
+];
 
-
- impl_select_location![ USFixedIncomeETFsSelectLocation, USFixedIncomeETFsSelectScanCode  =>
+impl_select_location![ USFixedIncomeETFsSelectLocation, USFixedIncomeETFsSelectScanCode  =>
 ("US ETFs",us_etfs,"ETF.FI.US"),
 ("Listed/NASDAQ",us_major,"ETF.FI.US.MAJOR"),
 ("ARCA",arca,"ETF.FI.ARCA"),
 ("NASDAQ",nasdaq,"ETF.FI.NASDAQ.NMS"),
 ("BATS",bats,"ETF.FI.BATS"),
-]; 
+];
 
-
- impl_select_location![ USFuturesSelectLocation, USFuturesSelectScanCode  =>
+impl_select_location![ USFuturesSelectLocation, USFuturesSelectScanCode  =>
 ("US Futures",us_futures,"FUT.US"),
 ("CME",cme,"FUT.CME"),
 ("CBOT",cbot,"FUT.CBOT"),
@@ -207,84 +200,71 @@ impl_select_location![ USStocksSelectLocation, USStocksSelectScanCode  =>
 ("NYSELIFFE",nyseliffe,"FUT.NYSELIFFE"),
 ("CFE",cfe,"FUT.CFE"),
 ("ICECRYPTO",icecrypto,"FUT.ICECRYPTO"),
-]; 
+];
 
-
- impl_select_location![ USIndexesSelectLocation, USIndexesSelectScanCode  =>
+impl_select_location![ USIndexesSelectLocation, USIndexesSelectScanCode  =>
 ("US Indexes",us_indexes,"IND.US"),
-]; 
+];
 
-
- impl_select_location![ CorporateBondsSelectLocation, CorporateBondsSelectScanCode  =>
+impl_select_location![ CorporateBondsSelectLocation, CorporateBondsSelectScanCode  =>
 ("WW Corp Bonds",ww_corp_bonds,"BOND.WW"),
 ("US Corporate Bonds",us_corporate_bonds,"BOND.US"),
 ("EURONEXT Corporate Bonds",euronext_corporate_bonds,"BOND.EU.EURONEXT"),
-]; 
+];
 
-
- impl_select_location![ USCDsSelectLocation, USCDsSelectScanCode  =>
+impl_select_location![ USCDsSelectLocation, USCDsSelectScanCode  =>
 ("US CDs",us_cds,"BOND.CD.US"),
-]; 
+];
 
-
- impl_select_location![ USAgencyBondsSelectLocation, USAgencyBondsSelectScanCode  =>
+impl_select_location![ USAgencyBondsSelectLocation, USAgencyBondsSelectScanCode  =>
 ("US Agency Bonds",us_agency_bonds,"BOND.AGNCY.US"),
-]; 
+];
 
-
- impl_select_location![ USTreasuriesSelectLocation, USTreasuriesSelectScanCode  =>
+impl_select_location![ USTreasuriesSelectLocation, USTreasuriesSelectScanCode  =>
 ("US Treasuries",us_treasuries,"BOND.GOVT.US"),
-]; 
+];
 
-
- impl_select_location![ USMunicipalBondsSelectLocation, USMunicipalBondsSelectScanCode  =>
+impl_select_location![ USMunicipalBondsSelectLocation, USMunicipalBondsSelectScanCode  =>
 ("US Municipal Bonds",us_municipal_bonds,"BOND.MUNI.US"),
-]; 
+];
 
-
- impl_select_location![ NonUSSovereignBondsSelectLocation, NonUSSovereignBondsSelectScanCode  =>
+impl_select_location![ NonUSSovereignBondsSelectLocation, NonUSSovereignBondsSelectScanCode  =>
 ("Non-US Sovereign Bonds",non_us_sovereign_bonds,"BOND.GOVT.NON-US"),
 ("Non-US Govt Bonds",non_us_govt_bonds,"BOND.GOVT.US.NON-US"),
 ("EURONEXT Govt Bonds",euronext_govt_bonds,"BOND.GOVT.EU.EURONEXT"),
 ("SEHK Bonds",sehk_bonds,"BOND.GOVT.HK.SEHK"),
-]; 
+];
 
-
- impl_select_location![ USSBLsSelectLocation, USSBLsSelectScanCode  =>
+impl_select_location![ USSBLsSelectLocation, USSBLsSelectScanCode  =>
 ("US SBLs",us_sbls,"SLB.PREBORROW"),
-]; 
+];
 
-
- impl_select_location![ MutualFundsSelectLocation, MutualFundsSelectScanCode  =>
+impl_select_location![ MutualFundsSelectLocation, MutualFundsSelectScanCode  =>
 ("Mutual Funds",mutual_funds,"FUND.ALL"),
 ("US Mutual Funds",us_mutual_funds,"FUND.US"),
 ("Non-US Mutual Funds",non_us_mutual_funds,"FUND.NON-US"),
-]; 
+];
 
-
- impl_select_location![ AmericaNonUSStocksSelectLocation, AmericaNonUSStocksSelectScanCode  =>
+impl_select_location![ AmericaNonUSStocksSelectLocation, AmericaNonUSStocksSelectScanCode  =>
 ("America Non-US Stocks",america_non_us_stocks,"STK.NA"),
 ("Canada",canada,"STK.NA.CANADA"),
 ("TSE",tse,"STK.NA.TSE"),
 ("VENTURE",venture,"STK.NA.VENTURE"),
 ("Mexico (MEXI)",mexico_mexi,"STK.NA.MEXI"),
-]; 
+];
 
-
- impl_select_location![ AmericaNonUSFuturesSelectLocation, AmericaNonUSFuturesSelectScanCode  =>
+impl_select_location![ AmericaNonUSFuturesSelectLocation, AmericaNonUSFuturesSelectScanCode  =>
 ("America Non-US Futures",america_non_us_futures,"FUT.NA"),
 ("Canada (CDE)",canada_cde,"FUT.NA.CDE"),
 ("Mexico (MEXDER)",mexico_mexder,"FUT.NA.MEXDER"),
-]; 
+];
 
-
- impl_select_location![ AmericaNonUSSSFsSelectLocation, AmericaNonUSSSFsSelectScanCode  =>
+impl_select_location![ AmericaNonUSSSFsSelectLocation, AmericaNonUSSSFsSelectScanCode  =>
 ("America Non-US SSFs",america_non_us_ssfs,"SSF.NA"),
 ("Mexico (MEXDER)",mexico_mexder,"SSF.NA.MEXDER"),
-]; 
+];
 
-
- impl_select_location![ EuropeStocksSelectLocation, EuropeStocksSelectScanCode  =>
+impl_select_location![ EuropeStocksSelectLocation, EuropeStocksSelectScanCode  =>
 ("Europe Stocks",europe_stocks,"STK.EU"),
 ("Austria (VSE)",austria_vse,"STK.EU.VSE"),
 ("France (SBF)",france_sbf,"STK.EU.SBF"),
@@ -307,10 +287,9 @@ impl_select_location![ USStocksSelectLocation, USStocksSelectScanCode  =>
 ("Norway (OSE)",norway_ose,"STK.EU.OSE"),
 ("Portugal (BVL)",portugal_bvl,"STK.EU.BVL"),
 ("Russia (MOEX)",russia_moex,"STK.EU.MOEX"),
-]; 
+];
 
-
- impl_select_location![ EuropeFuturesSelectLocation, EuropeFuturesSelectScanCode  =>
+impl_select_location![ EuropeFuturesSelectLocation, EuropeFuturesSelectScanCode  =>
 ("Europe Futures",europe_futures,"FUT.EU"),
 ("Belgium (BELFOX)",belgium_belfox,"FUT.EU.BELFOX"),
 ("Germany (EUREX)",germany_eurex,"FUT.EU.EUREX"),
@@ -323,36 +302,32 @@ impl_select_location![ USStocksSelectLocation, USStocksSelectScanCode  =>
 ("France (MONEP)",france_monep,"FUT.EU.MONEP"),
 ("Sweden (OMS)",sweden_oms,"FUT.EU.OMS"),
 ("CBOE Europe (CEDX)",cboe_europe_cedx,"FUT.EU.CEDX"),
-]; 
+];
 
-
- impl_select_location![ EuropeIndexesSelectLocation, EuropeIndexesSelectScanCode  =>
+impl_select_location![ EuropeIndexesSelectLocation, EuropeIndexesSelectScanCode  =>
 ("Europe Indexes",europe_indexes,"IND.EU"),
 ("Belgium (BELFOX)",belgium_belfox,"IND.EU.BELFOX"),
 ("Germany (EUREX)",germany_eurex,"IND.EU.EUREX"),
 ("Netherlands (FTA)",netherlands_fta,"IND.EU.FTA"),
 ("United Kingdom (ICEEU)",united_kingdom_iceeu,"IND.EU.ICEEU"),
 ("France (MONEP)",france_monep,"IND.EU.MONEP"),
-]; 
+];
 
-
- impl_select_location![ EuropeSSFsSelectLocation, EuropeSSFsSelectScanCode  =>
+impl_select_location![ EuropeSSFsSelectLocation, EuropeSSFsSelectScanCode  =>
 ("Europe SSF",europe_ssf,"SSF.EU"),
 ("Germany (EUREX)",germany_eurex,"SSF.EU.EUREX"),
 ("Italy (IDEM)",italy_idem,"SSF.EU.IDEM"),
 ("United Kingdom (ICEEU)",united_kingdom_iceeu,"SSF.EU.ICEEU"),
 ("Spain (MEFFRV)",spain_meffrv,"SSF.EU.MEFFRV"),
 ("Sweden (OMS)",sweden_oms,"SSF.EU.OMS"),
-]; 
+];
 
-
- impl_select_location![ MidEastStocksSelectLocation, MidEastStocksSelectScanCode  =>
+impl_select_location![ MidEastStocksSelectLocation, MidEastStocksSelectScanCode  =>
 ("MidEast Stocks",mid_east_stocks,"STK.ME"),
 ("Israel (TASE)",israel_tase,"STK.ME.TASE"),
-]; 
+];
 
-
- impl_select_location![ AsiaStocksSelectLocation, AsiaStocksSelectScanCode  =>
+impl_select_location![ AsiaStocksSelectLocation, AsiaStocksSelectScanCode  =>
 ("Asia Stocks",asia_stocks,"STK.HK"),
 ("Japan (TSEJ)",japan_tsej,"STK.HK.TSE_JPN"),
 ("Hong Kong (SEHK)",hong_kong_sehk,"STK.HK.SEHK"),
@@ -363,10 +338,9 @@ impl_select_location![ USStocksSelectLocation, USStocksSelectScanCode  =>
 ("India (NSE)",india_nse,"STK.HK.NSE"),
 ("Singapore (SGX)",singapore_sgx,"STK.HK.SGX"),
 ("Taiwan (TWSE)",taiwan_twse,"STK.HK.TWSE"),
-]; 
+];
 
-
- impl_select_location![ AsiaFuturesSelectLocation, AsiaFuturesSelectScanCode  =>
+impl_select_location![ AsiaFuturesSelectLocation, AsiaFuturesSelectScanCode  =>
 ("Asia Futures",asia_futures,"FUT.HK"),
 ("Hong Kong (HKFE)",hong_kong_hkfe,"FUT.HK.HKFE"),
 ("South Korea (KSE)",south_korea_kse,"FUT.HK.KSE"),
@@ -375,10 +349,9 @@ impl_select_location![ USStocksSelectLocation, USStocksSelectScanCode  =>
 ("Singapore (SGX)",singapore_sgx,"FUT.HK.SGX"),
 ("Australia (SNFE)",australia_snfe,"FUT.HK.SNFE"),
 ("Malaysia (BURSAMY)",malaysia_bursamy,"FUT.HK.BURSAMY"),
-]; 
+];
 
-
- impl_select_location![ AsiaIndexesSelectLocation, AsiaIndexesSelectScanCode  =>
+impl_select_location![ AsiaIndexesSelectLocation, AsiaIndexesSelectScanCode  =>
 ("Asia Indexes",asia_indexes,"IND.HK"),
 ("Hong Kong (HKFE)",hong_kong_hkfe,"IND.HK.HKFE"),
 ("South Korea (KSE)",south_korea_kse,"IND.HK.KSE"),
@@ -386,19 +359,17 @@ impl_select_location![ USStocksSelectLocation, USStocksSelectScanCode  =>
 ("Japan (OSE.JPN)",japan_ose_jpn,"IND.HK.OSE_JPN"),
 ("Singapore (SGX)",singapore_sgx,"IND.HK.SGX"),
 ("Australia (SNFE)",australia_snfe,"IND.HK.SNFE"),
-]; 
+];
 
-
- impl_select_location![ AsiaSSFsSelectLocation, AsiaSSFsSelectScanCode  =>
+impl_select_location![ AsiaSSFsSelectLocation, AsiaSSFsSelectScanCode  =>
 ("Asia SSFs",asia_ssfs,"SSF.HK"),
 ("Hong Kong (HKFE)",hong_kong_hkfe,"SSF.HK.HKFE"),
 ("South Korea (KSE)",south_korea_kse,"SSF.HK.KSE"),
 ("India (NSE)",india_nse,"SSF.HK.NSE"),
 ("Singapore (SGX)",singapore_sgx,"SSF.HK.SGX"),
-]; 
+];
 
-
- impl_select_location![ NativeCombosSelectLocation, NativeCombosSelectScanCode  =>
+impl_select_location![ NativeCombosSelectLocation, NativeCombosSelectScanCode  =>
 ("Native Combos",native_combos,"NATCOMB"),
 ("Option Combos (SMART)",option_combos_smart,"NATCOMB.OPT.US"),
 ("Option Combos (AMEX)",option_combos_amex,"NATCOMB.OPT.AMEX"),
@@ -407,8 +378,7 @@ impl_select_location![ USStocksSelectLocation, USStocksSelectScanCode  =>
 ("Option Combos (PHLX)",option_combos_phlx,"NATCOMB.OPT.PHLX"),
 ("Option Combos (PSE)",option_combos_pse,"NATCOMB.OPT.PSE"),
 ("CME Combos",cme_combos,"NATCOMB.CME"),
-]; 
-
+];
 
 macro_rules! impl_select_scan_code {
     [ $old_struct_name:ident, $new_struct_name:ident => $(($doc:expr, $func_name:ident, $code:expr),)+  $(,)?  ] => {
@@ -421,9 +391,9 @@ macro_rules! impl_select_scan_code {
             number_of_rows: i32,
             filters: Vec<(String, String)>
         }
-        
 
-        
+
+
         $(
 
             impl $old_struct_name {
@@ -439,7 +409,7 @@ macro_rules! impl_select_scan_code {
                         filters: Vec::new(),
                     }
                 }
-                                
+
             }
 
         )+
@@ -2382,7 +2352,7 @@ impl_select_scan_code![ NativeCombosSelectScanCode, NativeCombosSelectFilters =>
 //
 // ─── WE CREATE ENUMERATIONS FOR PARAMETERS IN FILTER FUNCTIONS ──────────────────
 //
-    
+
 macro_rules! create_enums_for_filters {
     [$enum_name:ident => $( ($enum_variant:ident, $code:expr) ),* $(,)? ] => {
 
@@ -2397,91 +2367,91 @@ macro_rules! create_enums_for_filters {
    };
 }
 
-create_enums_for_filters![ HaltedIs  => 
+create_enums_for_filters![ HaltedIs  =>
 (Halted, "true"),(NotHalted, "false"),];
 
-create_enums_for_filters![ ShortSaleRestrictionIs  => 
+create_enums_for_filters![ ShortSaleRestrictionIs  =>
 (Restricted, "true"),(NotRestricted, "false"),];
 
-create_enums_for_filters![ IssuerCountryIs  => 
+create_enums_for_filters![ IssuerCountryIs  =>
 (Afghanistan, "AF"),(AlandIslands, "AX"),(Albania, "AL"),(Algeria, "DZ"),(AmericanSamoa, "AS"),(Andorra, "AD"),(Angola, "AO"),(Anguilla, "AI"),(Antarctica, "AQ"),(AntiguaAndBarbuda, "AG"),(Argentina, "AR"),(Armenia, "AM"),(Aruba, "AW"),(Australia, "AU"),(Austria, "AT"),(Azerbaijan, "AZ"),(Bahamas, "BS"),(Bahrain, "BH"),(Bangladesh, "BD"),(Barbados, "BB"),(Belarus, "BY"),(Belgium, "BE"),(Belize, "BZ"),(Benin, "BJ"),(Bermuda, "BM"),(Bhutan, "BT"),(BoliviaPlurinationalStateOf, "BO"),(BonaireSintEustatiusAndSaba, "BQ"),(BosniaAndHerzegovina, "BA"),(Botswana, "BW"),(BouvetIsland, "BV"),(Brazil, "BR"),(BritishIndianOceanTerritory, "IO"),(BruneiDarussalam, "BN"),(Bulgaria, "BG"),(BurkinaFaso, "BF"),(Burundi, "BI"),(CaboVerde, "CV"),(Cambodia, "KH"),(Cameroon, "CM"),(Canada, "CA"),(CaymanIslands, "KY"),(CentralAfricanRepublic, "CF"),(Chad, "TD"),(Chile, "CL"),(China, "CN"),(ChristmasIsland, "CX"),(CocosKeelingIslands, "CC"),(Colombia, "CO"),(Comoros, "KM"),(Congo, "CG"),(CongoTheDemocraticRepublicOfThe, "CD"),(CookIslands, "CK"),(CostaRica, "CR"),(CoteDAposIvoire, "CI"),(Croatia, "HR"),(Cuba, "CU"),(Curacao, "CW"),(Cyprus, "CY"),(CzechRepublic, "CZ"),(Denmark, "DK"),(Djibouti, "DJ"),(Dominica, "DM"),(DominicanRepublic, "DO"),(Ecuador, "EC"),(Egypt, "EG"),(ElSalvador, "SV"),(EquatorialGuinea, "GQ"),(Eritrea, "ER"),(Estonia, "EE"),(Ethiopia, "ET"),(FalklandIslandsMalvinas, "FK"),(FaroeIslands, "FO"),(Fiji, "FJ"),(Finland, "FI"),(France, "FR"),(FrenchGuiana, "GF"),(FrenchPolynesia, "PF"),(FrenchSouthernTerritories, "TF"),(Gabon, "GA"),(Gambia, "GM"),(Georgia, "GE"),(Germany, "DE"),(Ghana, "GH"),(Gibraltar, "GI"),(Greece, "GR"),(Greenland, "GL"),(Grenada, "GD"),(Guadeloupe, "GP"),(Guam, "GU"),(Guatemala, "GT"),(Guernsey, "GG"),(Guinea, "GN"),(GuineaminusBissau, "GW"),(Guyana, "GY"),(Haiti, "HT"),(HeardIslandAndMcDonaldIslands, "HM"),(HolySee, "VA"),(Honduras, "HN"),(HongKong, "HK"),(Hungary, "HU"),(Iceland, "IS"),(India, "IN"),(Indonesia, "ID"),(IranIslamicRepublicOf, "IR"),(Iraq, "IQ"),(Ireland, "IE"),(IsleOfMan, "IM"),(Israel, "IL"),(Italy, "IT"),(Jamaica, "JM"),(Japan, "JP"),(Jersey, "JE"),(Jordan, "JO"),(Kazakhstan, "KZ"),(Kenya, "KE"),(Kiribati, "KI"),(KoreaDemocraticPeopleAposSRepublicOf, "KP"),(KoreaRepublicOf, "KR"),(Kuwait, "KW"),(Kyrgyzstan, "KG"),(LaoPeopleAposSDemocraticRepublic, "LA"),(Latvia, "LV"),(Lebanon, "LB"),(Lesotho, "LS"),(Liberia, "LR"),(Libya, "LY"),(Liechtenstein, "LI"),(Lithuania, "LT"),(Luxembourg, "LU"),(Macao, "MO"),(MacedoniaTheFormerYugoslavRepublicOf, "MK"),(Madagascar, "MG"),(Malawi, "MW"),(Malaysia, "MY"),(Maldives, "MV"),(Mali, "ML"),(Malta, "MT"),(MarshallIslands, "MH"),(Martinique, "MQ"),(Mauritania, "MR"),(Mauritius, "MU"),(Mayotte, "YT"),(Mexico, "MX"),(MicronesiaFederatedStatesOf, "FM"),(MoldovaRepublicOf, "MD"),(Monaco, "MC"),(Mongolia, "MN"),(Montenegro, "ME"),(Montserrat, "MS"),(Morocco, "MA"),(Mozambique, "MZ"),(Myanmar, "MM"),(Namibia, "NA"),(Nauru, "NR"),(Nepal, "NP"),(Netherlands, "NL"),(NewCaledonia, "NC"),(NewZealand, "NZ"),(Nicaragua, "NI"),(Niger, "NE"),(Nigeria, "NG"),(Niue, "NU"),(NorfolkIsland, "NF"),(NorthernMarianaIslands, "MP"),(Norway, "NO"),(Oman, "OM"),(Pakistan, "PK"),(Palau, "PW"),(PalestineStateOf, "PS"),(Panama, "PA"),(PapuaNewGuinea, "PG"),(Paraguay, "PY"),(Peru, "PE"),(Philippines, "PH"),(Pitcairn, "PN"),(Poland, "PL"),(Portugal, "PT"),(PuertoRico, "PR"),(Qatar, "QA"),(Reunion, "RE"),(Romania, "RO"),(RussianFederation, "RU"),(Rwanda, "RW"),(SaintBartholemy, "BL"),(SaintHelenaAscensionAndTristanDaCunha, "SH"),(SaintKittsAndNevis, "KN"),(SaintLucia, "LC"),(SaintMartinFrenchPart, "MF"),(SaintPierreAndMiquelon, "PM"),(SaintVincentAndTheGrenadines, "VC"),(Samoa, "WS"),(SanMarino, "SM"),(SaoTomeAndPrincipe, "ST"),(SaudiArabia, "SA"),(Senegal, "SN"),(Serbia, "RS"),(Seychelles, "SC"),(SierraLeone, "SL"),(Singapore, "SG"),(SintMaartenDutchPart, "SX"),(Slovakia, "SK"),(Slovenia, "SI"),(SolomonIslands, "SB"),(Somalia, "SO"),(SouthAfrica, "ZA"),(SouthGeorgiaAndTheSouthSandwichIslands, "GS"),(SouthSudan, "SS"),(Spain, "ES"),(SriLanka, "LK"),(Sudan, "SD"),(Suriname, "SR"),(SvalbardAndJanMayen, "SJ"),(Swaziland, "SZ"),(Sweden, "SE"),(Switzerland, "CH"),(SyrianArabRepublic, "SY"),(TaiwanProvinceOfChina, "TW"),(Tajikistan, "TJ"),(TanzaniaUnitedRepublicOf, "TZ"),(Thailand, "TH"),(TimorminusLeste, "TL"),(Togo, "TG"),(Tokelau, "TK"),(Tonga, "TO"),(TrinidadAndTobago, "TT"),(Tunisia, "TN"),(Turkey, "TR"),(Turkmenistan, "TM"),(TurksAndCaicosIslands, "TC"),(Tuvalu, "TV"),(Uganda, "UG"),(Ukraine, "UA"),(UnitedArabEmirates, "AE"),(UnitedKingdomOfGreatBritainAndNorthernIreland, "GB"),(UnitedStatesMinorOutlyingIslands, "UM"),(UnitedStatesOfAmerica, "US"),(Uruguay, "UY"),(Uzbekistan, "UZ"),(Vanuatu, "VU"),(VenezuelaBolivarianRepublicOf, "VE"),(VietNam, "VN"),(VirginIslandsBritish, "VG"),(VirginIslandsUS, "VI"),(WallisAndFutuna, "WF"),(WesternSahara, "EH"),(Yemen, "YE"),(Zambia, "ZM"),(Zimbabwe, "ZW"),];
 
-create_enums_for_filters![ StkTypes  => 
+create_enums_for_filters![ StkTypes  =>
 (Corporation, "inc:CORP"),(AmericanDepositaryReceipt, "inc:ADR"),(ExchangeTradedFund, "inc:ETF"),(ExchangeTradedNote, "inc:ETN"),(RealEstateInvestmentTrust, "inc:REIT"),(ClosedEndFund, "inc:CEF"),(ExchangeTradedManagedFund, "inc:ETMF"),(AllExcludingCorporation, "exc:CORP"),(AllExcludingAmericanDepositaryReceipt, "exc:ADR"),(AllExcludingExchangeTradedFund, "exc:ETF"),(AllExcludingExchangeTradedNote, "exc:ETN"),(AllExcludingRealEstateInvestmentTrust, "exc:REIT"),(AllExcludingClosedEndFund, "exc:CEF"),(AllExcludingExchangeTradedManagedFund, "exc:ETMF"),];
 
-create_enums_for_filters![ UnshortableIs  => 
+create_enums_for_filters![ UnshortableIs  =>
 (Unshortable, "true"),(Shortable, "false"),];
 
-create_enums_for_filters![ ProdCatIs  => 
+create_enums_for_filters![ ProdCatIs  =>
 (Agriculture, "Agriculture"),(CommodityIndex, "Commodity Index"),(Dairy, "Dairy"),(Energy, "Energy"),(Equity, "Equity"),(EquityIndex, "Equity Index"),(EquityIndexVolatility, "Equity Index Volatility"),(FixedIncome, "Fixed Income"),(ForeignExchange, "Foreign Exchange"),(Forest, "Forest"),(Housing, "Housing"),(Meat, "Meat"),(Metal, "Metal"),(MoneyMarket, "Money Market"),(Weather, "Weather"),];
 
-create_enums_for_filters![ MoodyRating  => 
+create_enums_for_filters![ MoodyRating  =>
 (AAA, "AAA"),(AA1, "AA1"),(AA2, "AA2"),(AA3, "AA3"),(A1, "A1"),(A2, "A2"),(A3, "A3"),(BAA1, "BAA1"),(BAA2, "BAA2"),(BAA3, "BAA3"),(BA1, "BA1"),(BA2, "BA2"),(BA3, "BA3"),(B1, "B1"),(B2, "B2"),(B3, "B3"),(CAA1, "CAA1"),(CAA2, "CAA2"),(CAA3, "CAA3"),(CA, "CA"),(C, "C"),(NR, "NR"),];
 
-create_enums_for_filters![ SpRating  => 
+create_enums_for_filters![ SpRating  =>
 (AAA, "AAA"),(AAplus, "AA+"),(AA, "AA"),(AAminus, "AA-"),(Aplus, "A+"),(A, "A"),(Aminus, "A-"),(BBBplus, "BBB+"),(BBB, "BBB"),(BBBminus, "BBB-"),(BBplus, "BB+"),(BB, "BB"),(BBminus, "BB-"),(Bplus, "B+"),(B, "B"),(Bminus, "B-"),(CCCplus, "CCC+"),(CCC, "CCC"),(CCCminus, "CCC-"),(CCplus, "CC+"),(CC, "CC"),(CCminus, "CC-"),(Cplus, "C+"),(C, "C"),(Cminus, "C-"),(D, "D"),(NR, "NR"),];
 
-create_enums_for_filters![ RatingsRelation  => 
+create_enums_for_filters![ RatingsRelation  =>
 (Or, "or"),(And, "and"),(Xand, "xand"),];
 
-create_enums_for_filters![ CurrencyLike  => 
+create_enums_for_filters![ CurrencyLike  =>
 (USD, "USD"),(CAD, "CAD"),(GBP, "GBP"),(EUR, "EUR"),(CHF, "CHF"),(BRL, "BRL"),(HKD, "HKD"),];
 
-create_enums_for_filters![ BondCreditRating  => 
+create_enums_for_filters![ BondCreditRating  =>
 (HighGrade, "highGrade"),(HighYield, "highYield"),];
 
-create_enums_for_filters![ BondPaymentFreqIs  => 
+create_enums_for_filters![ BondPaymentFreqIs  =>
 (Monthly, "12"),(Quarterly, "4"),(SemiminusAnnual, "2"),(Annual, "1"),(AtMaturity, "0"),];
 
-create_enums_for_filters![ BondDefaultedIs  => 
+create_enums_for_filters![ BondDefaultedIs  =>
 (Only, "true"),(Exclude, "false"),];
 
-create_enums_for_filters![ BondTradingFlatIs  => 
+create_enums_for_filters![ BondTradingFlatIs  =>
 (Only, "true"),(Exclude, "false"),];
 
-create_enums_for_filters![ BondExchListedIs  => 
+create_enums_for_filters![ BondExchListedIs  =>
 (Only, "true"),(Exclude, "false"),];
 
-create_enums_for_filters![ BondCallableIs  => 
+create_enums_for_filters![ BondCallableIs  =>
 (Only, "true"),(Exclude, "false"),];
 
-create_enums_for_filters![ BondFdicInsIs  => 
+create_enums_for_filters![ BondFdicInsIs  =>
 (Only, "true"),(Exclude, "false"),];
 
-create_enums_for_filters![ BondVarCouponRateIs  => 
+create_enums_for_filters![ BondVarCouponRateIs  =>
 (Only, "true"),(Exclude, "false"),];
 
-create_enums_for_filters![ BondAssetSubTypeStr  => 
+create_enums_for_filters![ BondAssetSubTypeStr  =>
 (TBill, "Bill"),(TNote, "Note"),(TBond, "Bond"),];
 
-create_enums_for_filters![ BondUSState  => 
+create_enums_for_filters![ BondUSState  =>
 (Alabama, "AL"),(Alaska, "AK"),(Arizona, "AZ"),(Arkansas, "AR"),(California, "CA"),(Colorado, "CO"),(Connecticut, "CT"),(DistrictOfColumbia, "DC"),(Delaware, "DE"),(Florida, "FL"),(Georgia, "GA"),(Guam, "GU"),(Hawaii, "HI"),(Idaho, "ID"),(Illinois, "IL"),(Indiana, "IN"),(Iowa, "IA"),(Kansas, "KS"),(Kentucky, "KY"),(Louisiana, "LA"),(Maine, "ME"),(Maryland, "MD"),(Massachusetts, "MA"),(Michigan, "MI"),(Minnesota, "MN"),(Mississippi, "MS"),(Missouri, "MO"),(Montana, "MT"),(Nebraska, "NE"),(Nevada, "NV"),(NewHampshire, "NH"),(NewJersey, "NJ"),(NewMexico, "NM"),(NewYork, "NY"),(NorthCarolina, "NC"),(NorthDakota, "ND"),(Ohio, "OH"),(Oklahoma, "OK"),(Oregon, "OR"),(Pennsylvania, "PA"),(PuertoRico, "PR"),(RhodeIsland, "RI"),(SouthCarolina, "SC"),(SouthDakota, "SD"),(Tennessee, "TN"),(Texas, "TX"),(Utah, "UT"),(Vermont, "VT"),(Virginia, "VA"),(VirginIslands, "VI"),(Washington, "WA"),(WestVirginia, "WV"),(Wisconsin, "WI"),(Wyoming, "WY"),];
 
-create_enums_for_filters![ BondInsuredIs  => 
+create_enums_for_filters![ BondInsuredIs  =>
 (Only, "true"),(Exclude, "false"),];
 
-create_enums_for_filters![ BondGeneralObligationIs  => 
+create_enums_for_filters![ BondGeneralObligationIs  =>
 (Only, "true"),(Exclude, "false"),];
 
-create_enums_for_filters![ BondRevenueIs  => 
+create_enums_for_filters![ BondRevenueIs  =>
 (Only, "true"),(Exclude, "false"),];
 
-create_enums_for_filters![ BondSubjectToAmtIs  => 
+create_enums_for_filters![ BondSubjectToAmtIs  =>
 (Only, "true"),(Exclude, "false"),];
 
-create_enums_for_filters![ BondRefundedIs  => 
+create_enums_for_filters![ BondRefundedIs  =>
 (Only, "true"),(Exclude, "false"),];
 
-create_enums_for_filters![ BondNoFederalTaxIs  => 
+create_enums_for_filters![ BondNoFederalTaxIs  =>
 (Only, "true"),(Exclude, "false"),];
 
-create_enums_for_filters![ BondBankQualifiedIs  => 
+create_enums_for_filters![ BondBankQualifiedIs  =>
 (Only, "true"),(Exclude, "false"),];
 
-create_enums_for_filters![ BondBuildAmericaIs  => 
+create_enums_for_filters![ BondBuildAmericaIs  =>
 (Only, "true"),(Exclude, "false"),];
 
-#[derive(Default,Clone, Hash, Eq, PartialEq ,  Serialize, Deserialize)]
+#[derive(Default, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ScannerDate {
     dd: u8,
     mm: u8,
@@ -2490,7 +2460,6 @@ pub struct ScannerDate {
 
 impl ScannerDate {
     pub fn new_mm_yyyy(mm: u8, yyyy: u16) -> Result<Self, ScannerParametersError> {
-
         if mm > 12 {
             return Err(ScannerParametersError::IncorrectMonthNumberInDate(mm));
         }
@@ -2505,11 +2474,7 @@ impl ScannerDate {
             ..Default::default()
         })
     }
-    pub fn new_yyyy_mm_dd(
-        yyyy: u16,
-        mm: u8,
-        dd: u8,
-    ) -> Result<Self, ScannerParametersError> {
+    pub fn new_yyyy_mm_dd(yyyy: u16, mm: u8, dd: u8) -> Result<Self, ScannerParametersError> {
         let mm_yyyy = ScannerDate::new_mm_yyyy(mm, yyyy)?;
 
         if dd > 31 {
@@ -2518,7 +2483,6 @@ impl ScannerDate {
         Ok(ScannerDate { dd, ..mm_yyyy })
     }
 }
-
 
 // TODO!
 // MANUAL CREATE STRUCT
@@ -2539,13 +2503,13 @@ impl ScannerDate {
 
 static BOND_STK_SYMBOLS_SEPARATOR: &str = "|";
 
-#[derive(Default,Clone, Hash, Eq, PartialEq ,  Serialize, Deserialize)]
-pub struct BondStkSymbols{
-    symbols: Vec<String>
+#[derive(Default, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub struct BondStkSymbols {
+    symbols: Vec<String>,
 }
 
-impl BondStkSymbols{
-    pub fn add_symbol(&self, symbol: String){
+impl BondStkSymbols {
+    pub fn add_symbol(&self, symbol: String) {
         unimplemented!()
     }
 }
@@ -2553,7 +2517,7 @@ impl BondStkSymbols{
 // TODO!
 // MANUAL CREATE STRUCT
 // <SimpleFilter>
-// <id>BOND_ISSUER</id>
+// <id>usdPriceAbove</id>
 // <category>Attributes</category>
 // <access>unrestricted</access>
 // <AbstractField type="scanner.filter.SubstrListField" varName="field">
@@ -2569,17 +2533,16 @@ impl BondStkSymbols{
 
 static BOND_ISSUERS_SEPARATOR: &str = "|";
 
-#[derive(Default,Clone, Hash, Eq, PartialEq,  Serialize, Deserialize )]
-pub struct BondIssuers{
-    symbols: Vec<String>
+#[derive(Default, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub struct BondIssuers {
+    symbols: Vec<String>,
 }
 
-impl BondIssuers{
-    pub fn add_issuer(&self, issuer: String){
+impl BondIssuers {
+    pub fn add_issuer(&self, issuer: String) {
         unimplemented!()
     }
 }
-
 
 macro_rules! impl_select_filters {
     [$struct_name:ident => $( ($func_name:ident, $code:expr, $parameter_type: ty, $doc:expr) ),* $(,)? ] => {
@@ -2604,7 +2567,6 @@ macro_rules! impl_select_filters {
 
    };
 }
-
 
 impl_select_filters![ USStocksSelectFilters =>
   (after_hours_change_above,"afterHoursChangeAbove",f64,"After-Hours Change Above"),
@@ -4954,10 +4916,6 @@ impl_select_filters![ NativeCombosSelectFilters =>
   (under_con_id,"underConID",u64,"Underlying Contract"),
 ];
 
-
-
-
-
 macro_rules! impl_number_of_rows {
     [ $struct_name:ident, $parameter_type: ty, $doc: expr => ($($enum_name:ident),+ $(,)?)] => {
         $(
@@ -5010,17 +4968,17 @@ impl_number_of_rows![ number_of_result_rows, i32, "Selecting the maximum number 
     NativeCombosSelectFilters,)
 ];
 
-pub trait ScannerSubscriptionIsComplete{
-	fn get_instrument_type(&self) -> &String;
-	fn get_location_code(&self)-> &String;
-	fn get_scan_code(&self)-> &String;
-	fn get_number_of_rows(&self) -> &i32; 
-	fn get_filters(&self) -> &Vec<(String, String)> ;
+pub trait ScannerSubscriptionIsComplete {
+    fn get_instrument_type(&self) -> &String;
+    fn get_location_code(&self) -> &String;
+    fn get_scan_code(&self) -> &String;
+    fn get_number_of_rows(&self) -> &i32;
+    fn get_filters(&self) -> &Vec<(String, String)>;
 }
 
 macro_rules! impl_number_of_rows {
     [ ($($enum_name:ident),+ $(,)?) ] => {
-    
+
         $(
         		#[doc=concat!("The implementation of ScannerSubscriptionIsComplete indicates that the structure", stringify!($enum_name), "is ready to create a call to req_scanner_subscription.")]
             impl ScannerSubscriptionIsComplete for $enum_name {
@@ -5045,9 +5003,8 @@ macro_rules! impl_number_of_rows {
    };
 }
 
-
-impl_number_of_rows![
-    (USStocksSelectFilters,
+impl_number_of_rows![(
+    USStocksSelectFilters,
     USEquityETFsSelectFilters,
     USFixedIncomeETFsSelectFilters,
     USFuturesSelectFilters,
@@ -5072,5 +5029,5 @@ impl_number_of_rows![
     AsiaFuturesSelectFilters,
     AsiaIndexesSelectFilters,
     AsiaSSFsSelectFilters,
-    NativeCombosSelectFilters,)
-];
+    NativeCombosSelectFilters,
+)];

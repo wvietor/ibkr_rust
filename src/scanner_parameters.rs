@@ -4,67 +4,7 @@ use quick_xml::Reader;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
-
-// At the moment, parsing is only available to developers to create a ScannerSubsctiption.
-
-// Some commands for manual search:
-
-// === instrumentList === //
-// xmllint --xpath '//ScanParameterResponse/InstrumentList[@varName="instrumentList"]/Instrument' ./resp_scan_param_rust.xml
-
-// === fullInstrumentList === //
-// xmllint --xpath '//ScanParameterResponse/InstrumentList[@varName="fullInstrumentList"]/Instrument' ./resp_scan_param_rust.xml
-// xmllint --xpath '//ScanParameterResponse/InstrumentList[@varName="fullInstrumentList"]/Instrument/name | //ScanParameterResponse/InstrumentList[@varName="fullInstrumentList"]/Instrument/type' ./resp_scan_param_rust.xml
-
-// === locationTree === //
-// xmllint --xpath '//ScanParameterResponse/LocationTree[@varName="locationTree"]/Location' ./resp_scan_param_rust.xml
-// xmllint --xpath '//ScanParameterResponse/LocationTree[@varName="locationTree"]/Location/@*' ./resp_scan_param_rust.xml
-
-// === ScanType === //
-// xmllint --xpath '//ScanParameterResponse/ScanTypeList[@varName="scanTypeList"]/ScanType/scanCode/text()' ./resp_scan_param_rust.xml
-
-// xmllint --xpath '//ScanParameterResponse/ScanTypeList[@varName="scanTypeList"]/ScanType/scanCode/text() | //ScanParameterResponse/ScanTypeList[@varName="scanTypeList"]/ScanType/displayName/text() | //ScanParameterResponse/ScanTypeList[@varName="scanTypeList"]/ScanType/instruments/text() ' ./resp_scan_param_rust.xml
-
-// === filterList === //
-// xmllint --xpath '//ScanParameterResponse/FilterList/@*' ./resp_scan_param_rust.xml
-// xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/*' ./resp_scan_param_rust.xml
-
-// xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/RangeFilter/id/text()' ./resp_scan_param_rust.xml
-// xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/SimpleFilter/id/text()' ./resp_scan_param_rust.xml
-// xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/TripleComboFilter/id/text()' ./resp_scan_param_rust.xml
-
-// xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/RangeFilter/id/text() | //ScanParameterResponse/FilterList[@varName="filterList"]/SimpleFilter/id/text() | //ScanParameterResponse/FilterList[@varName="filterList"]/TripleComboFilter/id/text()' ./resp_scan_param_rust.xml
-
-// xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/RangeFilter/AbstractField/@*' ./resp_scan_param_rust.xml | sort | uniq
-
-// xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/SimpleFilter/AbstractField/@*' ./resp_scan_param_rust.xml
-
-// xmllint --xpath '//ScanParameterResponse/FilterList[@varName="filterList"]/RangeFilter/AbstractField/@* | //ScanParameterResponse/FilterList[@varName="filterList"]/SimpleFilter/AbstractField/@*' ./resp_scan_param_rust.xml | sort | uniq
-
-// // === Other === //
-// xmllint --xpath '//ScanParameterResponse/SettingList[@varName="settingList"]' ./resp_scan_param_rust.xml
-
-// xmllint --xpath '//ScanParameterResponse/ScannerLayoutList[@varName="scannerLayoutList"]/ScannerLayout' ./resp_scan_param_rust.xml
-
-// xmllint --xpath '//ScanParameterResponse/InstrumentGroupList[@varName="instrumentGroupList"]/InstrumentGroup' ./resp_scan_param_rust.xml
-
-// xmllint --xpath '//ScanParameterResponse/InstrumentGroupList[@varName="instrumentGroupList"]/InstrumentGroup' ./resp_scan_param_rust.xml
-
-// xmllint --xpath '//ScanParameterResponse/SimilarProductsDefaults[@varName="similarProductsDefaults"]' ./resp_scan_param_rust.xml
-
-// xmllint --xpath '//ScanParameterResponse/MainScreenDefaultTickers[@varName="mainScreenDefaultTickers"]' ./resp_scan_param_rust.xml
-
-// xmllint --xpath '//ScanParameterResponse/MainScreenDefaultTickers[@varName="mainScreenDefaultTickers"]' ./resp_scan_param_rust.xml
-
-// xmllint --xpath '//ScanParameterResponse/ColumnSets[@varName="columnSets"]' ./resp_scan_param_rust.xml
-
-// xmllint --xpath '//ScanParameterResponse/SidecarScannerDefaults[@varName="sidecarScannerDefaults"]' ./resp_scan_param_rust.xml
-
-// xmllint --xpath '//ScanParameterResponse/SidecarScannerTemplateList[@varName="scannerTemplateList"]/SidecarScannerTemplate' ./resp_scan_param_rust.xml
-
-// xmllint --xpath '//ScanParameterResponse/ScannerProductTypeList[@varName="scannerProductTypeList"]' ./resp_scan_param_rust.xml
-
-// xmllint --xpath '//ScanParameterResponse/FilterList[@varName="uiFilters"]' ./resp_scan_param_rust.xml
+use tracing::warn;
 
 #[derive(Debug, Clone)]
 struct Instrument {
@@ -280,117 +220,8 @@ pub fn capitalize_first_letter(s: &str) -> String {
     }
 }
 
-#[traced_test]
-#[tokio::test]
-async fn test_case_manipulation() {
-    // println!("camel_to_snake_case:");
-    // println!("{}", camel_to_snake_case("bondNextCallDateAbove"));
-    // println!("{}", camel_to_snake_case("marketCapBelow1e6"));
-    // println!("{}", camel_to_snake_case("esgControversiesScoreAbove"));
-
-    // println!("{}", camel_to_snake_case("esgCorpGovPillarScoreAbove"));
-
-    // println!("\n capitalize_first_letter:");
-    // println!("{}", capitalize_first_letter("bondNextCallDateAbove"));
-    // println!("{}", capitalize_first_letter("marketCapBelow1e6"));
-    // println!("{}", capitalize_first_letter("esgControversiesScoreAbove"));
-    // println!("{}", capitalize_first_letter("esgCorpGovPillarScoreAbove"));
-
-    // println!("\n to_snake_case:");
-    // let inputs = vec![
-    //     "US Stocks",
-    //     "US Equity ETFs",
-    //     "US Fixed Income ETFs",
-    //     "US Futures",
-    //     "US Indexes",
-    //     "Corporate Bonds",
-    //     "US CDs",
-    //     "US Agency Bonds",
-    //     "US Treasuries",
-    //     "US Municipal Bonds",
-    //     "Non-US Sovereign Bonds",
-    //     "US SBLs",
-    //     "Mutual Funds",
-    //     "America Non-US Stocks",
-    //     "America Non-US Futures",
-    //     "America Non-US SSFs",
-    //     "Europe Stocks",
-    //     "Europe Futures",
-    //     "Europe Indexes",
-    //     "Europe SSFs",
-    //     "MidEast Stocks",
-    //     "Asia Stocks",
-    //     "Asia Futures",
-    //     "Asia Indexes",
-    //     "Asia SSFs",
-    //     "Native Combos",
-    //     "Global Futures",
-    //     "Global Indexes",
-    //     "Global SSFs",
-    //     "Global Stocks",
-    // ];
-
-    // for input in inputs {
-    //     println!("{}: {}", input, to_snake_case(input));
-    // }
-
-    // println!("camel_to_snake_case:");
-    // println!("{}", "bondNextCallDateAbove".to_case(Case::Snake));
-    // println!("{}", "marketCapBelow1e6".to_case(Case::Snake));
-    // println!("{}", "esgControversiesScoreAbove".to_case(Case::Snake));
-    // println!("{}", "esgCorpGovPillarScoreAbove".to_case(Case::Snake));
-
-    // println!("\n capitalize_first_letter:");
-    // println!("{}", "marketCapBelow1e6".to_case(Case::UpperCamel));
-    // println!("{}", "esgControversiesScoreAbove".to_case(Case::UpperCamel));
-    // println!("{}", "esgCorpGovPillarScoreAbove".to_case(Case::UpperCamel));
-
-    println!("\n to_snake_case:");
-    let inputs = vec![
-        "US Stocks",
-        "US Equity ETFs",
-        "US Fixed Income ETFs",
-        "US Futures",
-        "US Indexes",
-        "Corporate Bonds",
-        "US CDs",
-        "US Agency Bonds",
-        "US Treasuries",
-        "US Municipal Bonds",
-        "Non-US Sovereign Bonds",
-        "US SBLs",
-        "Mutual Funds",
-        "America Non-US Stocks",
-        "America Non-US Futures",
-        "America Non-US SSFs",
-        "Europe Stocks",
-        "Europe Futures",
-        "Europe Indexes",
-        "Europe SSFs",
-        "MidEast Stocks",
-        "Asia Stocks",
-        "Asia Futures",
-        "Asia Indexes",
-        "Asia SSFs",
-        "Native Combos",
-        "Global Stocks",
-        "Global Futures",
-        "Global Indexes",
-        "Global SSFs",
-    ];
-
-    for input in inputs {
-        println!(
-            "{} - {} - {}",
-            input,
-            to_snake_case(input),
-            to_camel_case_save_acronyms(input)
-        );
-    }
-}
-
 #[test]
-fn test_gen_data_for_macros_input() {
+fn print_data_for_macros_input() {
     let GenDataForMacrosInput {
         gen_instrument,
         gen_location,
@@ -631,7 +462,7 @@ fn gen_data_for_macros_input() -> Result<GenDataForMacrosInput, ScannerParameter
 
                     // === GEN COMBO ENUMS ===
 
-                    if check_if_enum_name_created.get(&parameter_type).is_none() {
+                    if !check_if_enum_name_created.contains(&parameter_type) {
                         if abstract_field.combo_values.len() > 0 {
                             gen_enums.push(format!(
                                 r#"create_enums_for_filters![ {}  => "#,

@@ -130,6 +130,9 @@ impl std::fmt::Display for Currency {
             Self::SwedishKrona => "SEK",
             Self::SwissFranc => "CHF",
             Self::UsDollar => "USD",
+            Self::CzechKoruny => "CZK",
+            Self::SingaporeDollars => "SGD",
+            Self::NewTaiwanDollar => "TWD",
         };
         write!(f, "{s}")
     }

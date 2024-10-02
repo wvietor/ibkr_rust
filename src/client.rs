@@ -3,20 +3,11 @@ use std::fmt::Formatter;
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
 use tokio::net::tcp::OwnedReadHalf;
 use tokio::task::JoinHandle;
+use tokio::{io::AsyncReadExt, net::TcpStream, sync::mpsc};
 use tracing::{error, info};
 
-use crate::{
-    account::Tag,
-    comm::Writer,
-    constants, decode,
-    execution::Filter,
-    order::{Executable, Order},
-    payload::ExchangeId,
-    reader::Reader,
-};
 use crate::contract::{ContractId, Query, Security};
 use crate::decode::DecodeError;
 use crate::exchange::Routing;
@@ -25,8 +16,18 @@ use crate::market_data::{
     updating_historical_bar,
 };
 use crate::message::{In, Out, ToClient, ToWrapper};
+use crate::scanner_subscription::ScannerSubscriptionIsComplete;
 use crate::wrapper::{
     CancelToken, Initializer, LocalInitializer, LocalWrapper, Recurring, Wrapper,
+};
+use crate::{
+    account::Tag,
+    comm::Writer,
+    constants, decode,
+    execution::Filter,
+    order::{Executable, Order},
+    payload::ExchangeId,
+    reader::Reader,
 };
 
 // ======================================
@@ -267,11 +268,15 @@ impl Builder {
             .ok_or(ConnectionError::ServerVersion)?
             .parse()
             .map_err(|_| ConnectionError::ServerVersion)?;
-        let (conn_time, tz) = chrono::NaiveDateTime::parse_and_remainder(
+        let (conn_time, mut tz) = chrono::NaiveDateTime::parse_and_remainder(
             params.next().ok_or(ConnectionError::DateTime)?,
             "%Y%m%d %T",
         )
         .map_err(|_| ConnectionError::DateTime)?;
+
+        if tz.trim().eq("MSK") {
+            tz = "Europe/Moscow";
+        }
         let conn_time = conn_time
             .and_local_timezone(
                 tz.trim()
@@ -1773,6 +1778,68 @@ impl Client<indicators::Active> {
         self.writer.add_body((Out::ReqUserInfo, req_id))?;
         self.writer.send().await?;
         Ok(req_id)
+    }
+
+    // === Scanner Parameters ===
+    ///	Requests scanner parameters.
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
+    pub async fn req_scanner_parameters(&mut self) -> ReqResult {
+        const VERSION: u8 = 1;
+
+        self.writer.add_body((Out::ReqScannerParameters, VERSION))?;
+        self.writer.send().await
+    }
+
+    // === Scanner Subscription ===
+    /// Subscribes to a scanner subscription.
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
+    ///
+    /// # Returns
+    /// The unique ID associated with the request.
+    pub async fn req_scanner_subscription<T: ScannerSubscriptionIsComplete>(
+        &mut self,
+        subsctiption: &T,
+    ) -> IdResult {
+        let req_id = self.get_next_req_id();
+
+        self.writer.add_body((
+            Out::ReqScannerSubscription,
+            req_id,
+            subsctiption.get_number_of_rows(),
+            subsctiption.get_instrument_type(),
+            subsctiption.get_location_code(),
+            subsctiption.get_scan_code(),
+            [""; 18],
+            subsctiption
+                .get_filters()
+                .iter()
+                .fold(String::new(), |mut output, (tag, value)| {
+                    output += &format!("{}={};", tag, value);
+                    output
+                }),
+            "",
+        ))?;
+
+        let _ = self.writer.send().await;
+        Ok(req_id)
+    }
+
+    /// Cancel a scanner subscription previously established with `Client::req_scanner_subscription`.
+    ///
+    /// # Arguments
+    /// * `req_id` - The ID associated with the scanner subscription request to cancel.
+    ///
+    /// # Errors
+    /// Returns any error encountered while writing the outgoing message.
+    pub async fn cancel_scanner_subscription(&mut self, req_id: i64) -> ReqResult {
+        const VERSION: u8 = 1;
+        self.writer
+            .add_body((Out::CancelScannerSubscription, VERSION, req_id))?;
+        self.writer.send().await
     }
 
     // === Historical Market Data ===
