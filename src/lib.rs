@@ -76,6 +76,9 @@ pub mod tick;
 /// type allows users to customize callback behavior.
 pub mod wrapper;
 
+pub mod scanner_parameters;
+pub mod scanner_subscription;
+
 #[macro_export]
 /// Match across typed variant values
 macro_rules! match_poly {

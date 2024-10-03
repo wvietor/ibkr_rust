@@ -2,7 +2,7 @@ macro_rules! make_valid {
     ($($name: ident),*) => {
         pub(crate) mod indicators {
             use serde::Serialize;
-use super::{$($name,)*};
+            use super::{$($name,)*};
 
             /// A simple indicator trait to ensure that no foreign types can be implemented as valid data types.
             pub trait Valid: Serialize + Copy + Clone {}

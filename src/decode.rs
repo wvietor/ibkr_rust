@@ -4,12 +4,6 @@ use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 use thiserror::Error;
 use tracing::warn;
 
-use crate::{
-    currency::Currency,
-    exchange::Routing,
-    message::{ToClient, ToWrapper},
-    wrapper,
-};
 use crate::account::{self, ParseAttributeError, Tag, TagValue};
 use crate::contract::{
     Commodity, Contract, ContractId, ContractType, Crypto, Forex, Index, Proxy, SecFuture,
@@ -18,15 +12,22 @@ use crate::contract::{
 use crate::exchange::Primary;
 use crate::execution::{CommissionReport, Exec, Execution, OrderSide, ParseOrderSideError};
 use crate::payload::{
-    Bar,
-    BarCore, BidAsk, ExchangeId, Fill, HistogramEntry, Last, market_depth::{CompleteEntry, Entry, Operation}, MarketDataClass, Midpoint,
+    market_depth::{CompleteEntry, Entry, Operation},
+    Bar, BarCore, BidAsk, ExchangeId, Fill, HistogramEntry, Last, MarketDataClass, Midpoint,
     ParsePayloadError, Pnl, PnlSingle, Position, PositionSummary, TickData, Trade,
 };
+use crate::scanner_subscription::ScannerContract;
 use crate::tick::{
     Accessibility, AuctionData, CalculationResult, Class, Dividends, EtfNav, ExtremeValue, Ipo,
     MarkPrice, OpenInterest, Period, Price, PriceFactor, QuotingExchanges, Rate, RealTimeVolume,
-    RealTimeVolumeBase, SecOptionCalculationResults, SecOptionCalculations,
-    SecOptionCalculationSource, SecOptionVolume, Size, SummaryVolume, TimeStamp, Volatility, Yield,
+    RealTimeVolumeBase, SecOptionCalculationResults, SecOptionCalculationSource,
+    SecOptionCalculations, SecOptionVolume, Size, SummaryVolume, TimeStamp, Volatility, Yield,
+};
+use crate::{
+    currency::Currency,
+    exchange::Routing,
+    message::{ToClient, ToWrapper},
+    wrapper,
 };
 
 type Tx = tokio::sync::mpsc::Sender<ToClient>;
@@ -903,16 +904,16 @@ pub trait Local: wrapper::LocalWrapper {
                     end_date_str @ 0: String,
                     count @ 0: usize
             );
-            let start_datetime = parse_historical_datetime(&start_date_str)
-                .map_err(|e| ("start_datetime", e))?;
-            let end_datetime = parse_historical_datetime(&end_date_str)
-                .map_err(|e| ("end_datetime", e))?;
+            let start_datetime =
+                parse_historical_datetime(&start_date_str).map_err(|e| ("start_datetime", e))?;
+            let end_datetime =
+                parse_historical_datetime(&end_date_str).map_err(|e| ("end_datetime", e))?;
 
             let mut bars = Vec::with_capacity(count);
             for chunk in fields.collect::<Vec<String>>().chunks(8) {
                 if let [datetime_str, open, high, low, close, volume, wap, trade_count] = chunk {
-                    let datetime = parse_historical_datetime(datetime_str)
-                        .map_err(|e| ("datetime", e))?;
+                    let datetime =
+                        parse_historical_datetime(datetime_str).map_err(|e| ("datetime", e))?;
 
                     let core = BarCore {
                         datetime,
@@ -967,7 +968,14 @@ pub trait Local: wrapper::LocalWrapper {
         wrapper: &mut Self,
     ) -> impl Future<Output = DecodeResult> {
         async move {
-            warn!("Unimplemented incoming message. Fields: {:?}", &fields);
+            decode_fields!(
+                fields =>
+                    req_id @ 1: i64,
+                    xml @ 0: String
+            );
+
+            let _ = xml.replace("\\n", "\n").replace("\\t", "\t"); // Temporary solution
+            wrapper.scanner_parameters(req_id, xml).await;
             Ok(())
         }
     }
@@ -978,7 +986,66 @@ pub trait Local: wrapper::LocalWrapper {
         wrapper: &mut Self,
     ) -> impl Future<Output = DecodeResult> {
         async move {
-            warn!("Unimplemented incoming message. Fields: {:?}", &fields);
+            // println!("scanner_data_msg: {:?}", &fields);
+
+            decode_fields!(
+                fields =>
+                    msg_code @ 0: i64,
+                    who_knows @ 0: i64,
+                    req_id @ 0: i64,
+                    number_of_elements @ 0: i32,
+            );
+
+            println!("scanner_data_msg: req_id done:: {:?}", &req_id);
+
+            let mut results = Vec::with_capacity(number_of_elements as usize);
+
+            for index in 0..number_of_elements {
+                decode_fields!(
+                    fields =>
+                        result_number @ 0: i32,
+                        contract_id @ 0: ContractId,
+                        symbol @ 0: String,
+                        sec_type @ 0: ContractType,
+                        expiration_date @ 0: String,
+                        strike @ 0: String,
+                        class @ 0: String, // right
+                        exchange @ 0: Routing,
+                        currency @ 0: Currency,
+                        local_symbol @ 0: String,
+                        market_name @ 0: String,
+                        trading_class @ 0: String,
+
+                        distance @ 0: String,
+                        benchmark @ 0: String,
+                        projection @ 0: String,
+                        legs_str @ 0: String,
+
+                );
+                let sc = ScannerContract {
+                    result_number,
+                    contract_id,
+                    symbol,
+                    sec_type,
+                    expiration_date,
+                    strike,
+                    class, // right
+                    exchange,
+                    currency,
+                    local_symbol,
+                    market_name,
+                    trading_class,
+
+                    distance,
+                    benchmark,
+                    projection,
+                    legs_str,
+                };
+                results.push(sc)
+            }
+
+            wrapper.scanner_data(req_id, results).await;
+            wrapper.scanner_data_end(req_id).await;
             Ok(())
         }
     }
@@ -1410,8 +1477,15 @@ pub trait Local: wrapper::LocalWrapper {
                     currency,
                     realized_pnl,
                     yld: if yld.eq(&f64::MAX) { None } else { Some(yld) },
-                    yld_redemption_date: if yld_redemption_date.is_empty() { None } else { Some(NaiveDate::parse_from_str(&yld_redemption_date, "%Y%m%d")
-                        .map_err(|e| ("yld_redemption_date", ParseDateTimeError::Parse(e)))?) },
+                    yld_redemption_date: if yld_redemption_date.is_empty() {
+                        None
+                    } else {
+                        Some(
+                            NaiveDate::parse_from_str(&yld_redemption_date, "%Y%m%d").map_err(
+                                |e| ("yld_redemption_date", ParseDateTimeError::Parse(e)),
+                            )?,
+                        )
+                    },
                 })
                 .await;
 
