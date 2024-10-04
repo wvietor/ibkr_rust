@@ -58,6 +58,13 @@ impl Writer {
                 .to_be_bytes(),
         );
 
+        let result: String = self.buf[4..]
+            .iter()
+            .map(|&b| if b == 0 { '-' } else { b as char })
+            .collect();
+
+        // println!("add_body: {}", result);
+
         Ok(())
     }
 

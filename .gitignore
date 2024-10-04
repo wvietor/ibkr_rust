@@ -4,3 +4,6 @@ target/
 
 # macos files
 .DS_Store
+
+# VScode stuff
+.history/

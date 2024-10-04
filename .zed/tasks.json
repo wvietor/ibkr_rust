@@ -1,0 +1,81 @@
+// Static tasks configuration.
+//
+// Example:
+[
+  {
+    "label": "Example task",
+    "command": "for i in {1..5}; do echo \"Hello $i/5\"; sleep 1; done",
+    //"args": [],
+    // Env overrides for the command, will be appended to the terminal's environment from the settings.
+    "env": { "foo": "bar" },
+    // Current working directory to spawn the command into, defaults to current project root.
+    //"cwd": "/path/to/working/directory",
+    // Whether to use a new terminal tab or reuse the existing one to spawn the process, defaults to `false`.
+    "use_new_terminal": false,
+    // Whether to allow multiple instances of the same task to be run, or rather wait for the existing ones to finish, defaults to `false`.
+    "allow_concurrent_runs": false,
+    // What to do with the terminal pane and tab, after the command was started:
+    // * `always` — always show the terminal pane, add and focus the corresponding task's tab in it (default)
+    // * `never` — avoid changing current terminal pane focus, but still add/reuse the task's tab there
+    "reveal": "always",
+    // What to do with the terminal pane and tab, after the command had finished:
+    // * `never` — Do nothing when the command finishes (default)
+    // * `always` — always hide the terminal tab, hide the pane also if it was the last tab in it
+    // * `on_success` — hide the terminal tab on task success only, otherwise behaves similar to `always`
+    "hide": "never",
+    // Which shell to use when running a task inside the terminal.
+    // May take 3 values:
+    // 1. (default) Use the system's default terminal configuration in /etc/passwd
+    //      "shell": "system"
+    // 2. A program:
+    //      "shell": {
+    //        "program": "sh"
+    //      }
+    // 3. A program with arguments:
+    //     "shell": {
+    //         "with_arguments": {
+    //           "program": "/bin/bash",
+    //           "arguments": ["--login"]
+    //         }
+    //     }
+    "shell": "system"
+  },
+
+  //
+  // ─── IBKR_RUST ──────────────────────────────────────────────────────────────────────
+  //
+
+  {
+    "label": "IBKR_RUST TEST ACCOUNT account_summary",
+    "command": "RUSTFLAGS=-Awarnings cargo test -- --nocapture account_summary",
+    // "env": { "foo": "bar" },
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "IBKR_RUST TEST SCANNER req_scanner_parameters",
+    "command": "RUSTFLAGS=-Awarnings cargo test -- --nocapture req_scanner_parameters",
+    // "env": { "foo": "bar" },
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "IBKR_RUST TEST SCANNER req_scanner_subscription_and_cancel_it",
+    "command": "RUSTFLAGS=-Awarnings cargo test -- --nocapture req_scanner_subscription_and_cancel_it",
+    // "env": { "foo": "bar" },
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+
+  {
+    "label": "IBKR_RUST TEST SCANNER print_data_for_macros_input",
+    "command": "RUSTFLAGS=-Awarnings cargo test -- --nocapture print_data_for_macros_input",
+    // "env": { "foo": "bar" },
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  }
+]

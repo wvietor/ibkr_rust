@@ -207,6 +207,8 @@ pub enum Primary {
     HeadlandsTechnologiesMunis,
     #[serde(rename = "HEX")]
     HelsinkiStockExchange,
+    #[serde(rename = "HKFE-IND")]
+    HangSengIndices,
     #[serde(rename = "HKFE")]
     HongKongFuturesExchange,
     #[serde(rename = "HSBC2FX")]
@@ -277,6 +279,8 @@ pub enum Primary {
     KoreaStockExchange,
     #[serde(rename = "LTSE")]
     LongTermStockExchange,
+    #[serde(rename = "TWSE")]
+    TaiwanStockExchange,
     #[serde(rename = "MATIF")]
     MarcheATermeDInstrumentsFinanciers,
     #[serde(rename = "MEFFRV")]
@@ -379,6 +383,8 @@ pub enum Primary {
     StockExchangeOfHongKong,
     #[serde(rename = "SEHKNTL")]
     StockExchangeHongKongNorthboundTradingLink,
+    #[serde(rename = "SEHKSTAR")]
+    ShanghaiStockExchangeSTARMarket,
     #[serde(rename = "SEHKSZSE")]
     HongKongShenzhenStockExchangeNorthboundTradingLink,
     #[serde(rename = "SFB")]
@@ -551,6 +557,7 @@ impl FromStr for Primary {
             "HEADLAND" => Self::HeadlandsTechnologies,
             "HEADLANDM" => Self::HeadlandsTechnologiesMunis,
             "HEX" => Self::HelsinkiStockExchange,
+            "HKFE-IND" => Self::HangSengIndices,
             "HKFE" => Self::HongKongFuturesExchange,
             "HSBC2FX" => Self::HsbcCurrencyDealing2,
             "HSBCFX" => Self::HsbcCurrencyDealing,
@@ -586,6 +593,7 @@ impl FromStr for Primary {
             "JPNNEXT" => Self::Japannext,
             "KSE" => Self::KoreaStockExchange,
             "LTSE" => Self::LongTermStockExchange,
+            "TWSE" => Self::TaiwanStockExchange,
             "MATIF" => Self::MarcheATermeDInstrumentsFinanciers,
             "MEFFRV" => Self::MercadoEspanolDeFuturosFinancierosRentaVariableProxy,
             "MEMX" => Self::MembersExchange,
@@ -637,6 +645,7 @@ impl FromStr for Primary {
             "SAPPHIRE" => Self::Sapphire,
             "SEHK" => Self::StockExchangeOfHongKong,
             "SEHKNTL" => Self::StockExchangeHongKongNorthboundTradingLink,
+            "SEHKSTAR" => Self::ShanghaiStockExchangeSTARMarket,
             "SEHKSZSE" => Self::HongKongShenzhenStockExchangeNorthboundTradingLink,
             "SFB" => Self::StockholmFondbors,
             "SGX" => Self::SingaporeExchange,
@@ -761,6 +770,7 @@ impl std::fmt::Display for Primary {
             Self::HeadlandsTechnologies => "HEADLAND",
             Self::HeadlandsTechnologiesMunis => "HEADLANDM",
             Self::HelsinkiStockExchange => "HEX",
+            Self::HangSengIndices => "HKFE-IND",
             Self::HongKongFuturesExchange => "HKFE",
             Self::HsbcCurrencyDealing2 => "HSBC2FX",
             Self::HsbcCurrencyDealing => "HSBCFX",
@@ -796,6 +806,7 @@ impl std::fmt::Display for Primary {
             Self::Japannext => "JPNNEXT",
             Self::KoreaStockExchange => "KSE",
             Self::LongTermStockExchange => "LTSE",
+            Self::TaiwanStockExchange => "TWSE",
             Self::MarcheATermeDInstrumentsFinanciers => "MATIF",
             Self::MercadoEspanolDeFuturosFinancierosRentaVariableProxy => "MEFFRV",
             Self::MembersExchange => "MEMX",
@@ -847,6 +858,7 @@ impl std::fmt::Display for Primary {
             Self::Sapphire => "SAPPHIRE",
             Self::StockExchangeOfHongKong => "SEHK",
             Self::StockExchangeHongKongNorthboundTradingLink => "SEHKNTL",
+            Self::ShanghaiStockExchangeSTARMarket => "SEHKSTAR",
             Self::HongKongShenzhenStockExchangeNorthboundTradingLink => "SEHKSZSE",
             Self::StockholmFondbors => "SFB",
             Self::SingaporeExchange => "SGX",

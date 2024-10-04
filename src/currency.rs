@@ -23,9 +23,18 @@ pub enum Currency {
     #[serde(rename = "DKK")]
     /// The Danish Krone (DKK) is the currency of Denmark.
     DanishKrone,
+    #[serde(rename = "CZK")]
+    /// The Czech Koruny is the currency of most countries in the Czech Republic.
+    CzechKoruny,
     #[serde(rename = "EUR")]
     /// The Euro (EUR) is the currency of most countries in the European Union
     Euro,
+    #[serde(rename = "SGD")]
+    /// The Singapore Dollars (SGD) is the currency of Singapore.
+    SingaporeDollars,
+    #[serde(rename = "TWD")]
+    /// The New Taiwan Dollar (TWD) is the currency of Taiwan.
+    NewTaiwanDollar,
     #[serde(rename = "HKD")]
     /// The Hong Kong Dollar (HKD) is the currency of Hong Kong.
     HongKongDollar,
@@ -81,7 +90,10 @@ impl FromStr for Currency {
             "CAD" => Self::CanadianDollar,
             "CNH" => Self::ChineseYuan,
             "DKK" => Self::DanishKrone,
+            "CZK" => Self::CzechKoruny,
             "EUR" => Self::Euro,
+            "SGD" => Self::SingaporeDollars,
+            "TWD" => Self::NewTaiwanDollar,
             "HKD" => Self::HongKongDollar,
             "INR" => Self::IndianRupee,
             "ILS" => Self::IsraeliNewShekel,
@@ -118,6 +130,9 @@ impl std::fmt::Display for Currency {
             Self::SwedishKrona => "SEK",
             Self::SwissFranc => "CHF",
             Self::UsDollar => "USD",
+            Self::CzechKoruny => "CZK",
+            Self::SingaporeDollars => "SGD",
+            Self::NewTaiwanDollar => "TWD",
         };
         write!(f, "{s}")
     }

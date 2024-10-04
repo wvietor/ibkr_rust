@@ -1503,8 +1503,9 @@ pub enum ContractType {
     #[serde(rename = "OPT")]
     /// A [`SecOption`] contract.
     SecOption,
+    // #[serde(rename = "BOND")]
+    // Bond,
     //FutureSecOption,
-    //Bond,
     //MutualFund,
     #[serde(rename = "CMDTY")]
     /// A [`Commodity`] contract.
@@ -1531,6 +1532,7 @@ impl FromStr for ContractType {
             "IND" => Self::Index,
             "FUT" => Self::SecFuture,
             "OPT" => Self::SecOption,
+            // "BOND" => Self::Bond,
             "CMDTY" => Self::Commodity,
             v => return Err(ParseContractTypeError(v.to_owned())),
         })
