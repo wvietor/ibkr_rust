@@ -279,6 +279,8 @@ pub enum Primary {
     KoreaStockExchange,
     #[serde(rename = "LTSE")]
     LongTermStockExchange,
+    #[serde(rename = "TWSE")]
+    TaiwanStockExchange,
     #[serde(rename = "MATIF")]
     MarcheATermeDInstrumentsFinanciers,
     #[serde(rename = "MEFFRV")]
@@ -591,6 +593,7 @@ impl FromStr for Primary {
             "JPNNEXT" => Self::Japannext,
             "KSE" => Self::KoreaStockExchange,
             "LTSE" => Self::LongTermStockExchange,
+            "TWSE" => Self::TaiwanStockExchange,
             "MATIF" => Self::MarcheATermeDInstrumentsFinanciers,
             "MEFFRV" => Self::MercadoEspanolDeFuturosFinancierosRentaVariableProxy,
             "MEMX" => Self::MembersExchange,
@@ -803,6 +806,7 @@ impl std::fmt::Display for Primary {
             Self::Japannext => "JPNNEXT",
             Self::KoreaStockExchange => "KSE",
             Self::LongTermStockExchange => "LTSE",
+            Self::TaiwanStockExchange => "TWSE",
             Self::MarcheATermeDInstrumentsFinanciers => "MATIF",
             Self::MercadoEspanolDeFuturosFinancierosRentaVariableProxy => "MEFFRV",
             Self::MembersExchange => "MEMX",

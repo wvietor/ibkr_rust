@@ -1,15 +1,9 @@
-use ibapi::client::{ActiveClient, Builder, Host, Mode};
+use ibapi::client::{Builder, Host, Mode};
 use ibapi::scanner_subscription::{ScannerContract, ScannerSubscription};
-use ibapi::wrapper::{CancelToken, Initializer, Wrapper};
+use ibapi::wrapper::Wrapper;
 use std::future::Future;
-use std::sync::atomic::AtomicI32;
 use std::time::Duration;
-use tokio::time::sleep;
-
-// const COMPLITED_REQUEST_COUNT: AtomicI32 = AtomicI32::new(REQUESTS_COUNT / 2);
-// static TOTAL_REQUESTS: AtomicI32 = AtomicI32::new(0);
-
-// static TOTAL_RESPONCES: AtomicI32 = AtomicI32::new(0);
+use tokio::time::{sleep, Instant};
 
 #[derive(Debug, Clone)]
 struct ScannerWrapper {
@@ -17,12 +11,6 @@ struct ScannerWrapper {
         tokio::sync::mpsc::Sender<(i64, Vec<ibapi::scanner_subscription::ScannerContract>)>,
     tx_scanner_end: tokio::sync::mpsc::Sender<i64>,
 }
-
-// impl Recurring for ScannerWrapper {
-//     fn cycle(&mut self) -> impl Future<Output = ()> + Send {
-//         async { () }
-//     }
-// }
 
 impl Wrapper for ScannerWrapper {
     fn error(
@@ -81,57 +69,56 @@ async fn req_scanner_subscription_and_cancel_it() -> Result<(), Box<dyn std::err
             tx_scanner_data,
             tx_scanner_end,
         })
-        // .remote(ScannerWrapper)
         .await;
 
     const REQUESTS_COUNT: i32 = 9;
-    const ROWS: i32 = 1;
+    const ROWS: i32 = 10;
 
     let mut result_count = REQUESTS_COUNT as usize;
     let mut cancel_count = REQUESTS_COUNT as usize;
 
-    let mut prev = 0.0; //it.next().unwrap().clone();
+    let mut prev = 0.0;
 
     for _i in 0..=REQUESTS_COUNT {
         let new = _i * 10;
 
         let subscription = ScannerSubscription::asia_stocks()
             .asia_stocks()
-            .top_perc_gain()
+            .hot_by_volume()
             .number_of_result_rows(ROWS)
             .usd_price_above(prev)
             .usd_price_below(new as f64);
 
         prev = new as f64;
 
-        let req_id = client
+        let _req_id = client
             .req_scanner_subscription(&subscription)
             .await
             .unwrap();
     }
 
+    let start_time = Instant::now();
     loop {
-        tokio::select! {
-            Some((req_id, _result)) = rx_scanner_data.recv() => {
-                result_count -= 1;
-                println!("Scanner subscription (req_id: {req_id}) is done");
-                // println!("{:?}", _result);
+        if let Ok((req_id, _result)) = rx_scanner_data.try_recv() {
+            result_count -= 1;
+            println!(
+                "Scanner subscription (req_id: {req_id}) is done; contracts count: {}",
+                _result.len()
+            );
+            // _result.iter().for_each(|x| println!("{:?}", x));
+        }
+        if let Ok(req_id) = rx_scanner_end.try_recv() {
+            cancel_count -= 1;
+            client.cancel_scanner_subscription(req_id).await.unwrap();
+        }
+        if result_count == 0 && cancel_count == 0 {
+            break;
+        }
+        sleep(Duration::from_millis(100)).await;
 
-            },
-            Some(req_id) = rx_scanner_end.recv() => {
-                cancel_count -= 1;
-                println!("Scanner subscription (req_id: {req_id}) end");
-                client.cancel_scanner_subscription(req_id).await.unwrap();
-            },
-            _ = sleep(Duration::from_millis(100)) => {
-                if result_count == 0 && cancel_count == 0{
-                    break;
-                }
-            }
-            _ = sleep(Duration::from_secs(10)) => {
-                println!("Timeout");
-                break;
-            }
+        if start_time.elapsed() >= Duration::from_secs(10) {
+            println!("Timeout");
+            break;
         }
     }
 
