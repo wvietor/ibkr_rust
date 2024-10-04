@@ -1813,7 +1813,9 @@ impl Client<indicators::Active> {
             subsctiption.get_instrument_type(),
             subsctiption.get_location_code(),
             subsctiption.get_scan_code(),
-            [""; 18],
+            [""; 13],
+            0,
+            [""; 3],
             subsctiption
                 .get_filters()
                 .iter()
@@ -1821,6 +1823,7 @@ impl Client<indicators::Active> {
                     output += &format!("{}={};", tag, value);
                     output
                 }),
+            "",
             "",
         ))?;
 

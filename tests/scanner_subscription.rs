@@ -67,7 +67,7 @@ impl Wrapper for ScannerWrapper {
 
 #[tokio::test]
 async fn req_scanner_subscription_and_cancel_it() -> Result<(), Box<dyn std::error::Error>> {
-    const CLIENT_ID: i64 = 0;
+    const CLIENT_ID: i64 = 6;
     const CHANNEL_SIZE: usize = 50;
     let (tx_scanner_data, mut rx_scanner_data) = tokio::sync::mpsc::channel(CHANNEL_SIZE);
     let (tx_scanner_end, mut rx_scanner_end) = tokio::sync::mpsc::channel(CHANNEL_SIZE);
@@ -84,23 +84,23 @@ async fn req_scanner_subscription_and_cancel_it() -> Result<(), Box<dyn std::err
         // .remote(ScannerWrapper)
         .await;
 
-    let number_of_result_rows = 5;
-    let requests_count: i32 = 9;
-    let mut result_count: usize = (requests_count as f64 / 2.0).round() as usize;
-    let mut cancel_count: usize = requests_count as usize - result_count;
+    const REQUESTS_COUNT: i32 = 9;
+    const ROWS: i32 = 1;
+
+    let mut result_count = REQUESTS_COUNT as usize;
+    let mut cancel_count = REQUESTS_COUNT as usize;
 
     let mut prev = 0.0; //it.next().unwrap().clone();
 
-    for _i in 0..=requests_count {
-        let new = _i * 5;
+    for _i in 0..=REQUESTS_COUNT {
+        let new = _i * 10;
 
         let subscription = ScannerSubscription::asia_stocks()
             .asia_stocks()
-            .hot_by_price()
-            .number_of_result_rows(number_of_result_rows)
-            .avg_usd_volume_below(2_000_000.0);
-        // .usd_price_above(prev)
-        // .usd_price_below(new as f64);
+            .top_perc_gain()
+            .number_of_result_rows(ROWS)
+            .usd_price_above(prev)
+            .usd_price_below(new as f64);
 
         prev = new as f64;
 
@@ -108,39 +108,35 @@ async fn req_scanner_subscription_and_cancel_it() -> Result<(), Box<dyn std::err
             .req_scanner_subscription(&subscription)
             .await
             .unwrap();
-
-        if req_id % 2 == 0 {
-            let _ = client.cancel_scanner_subscription(req_id).await;
-        }
     }
 
     loop {
         tokio::select! {
             Some((req_id, _result)) = rx_scanner_data.recv() => {
                 result_count -= 1;
-                println!("Scanner subscription req_id: {req_id} is  done, {result_count}");
-                if result_count == 0 && cancel_count == 0 {
-                    break;
-                }
+                println!("Scanner subscription (req_id: {req_id}) is done");
+                // println!("{:?}", _result);
+
             },
             Some(req_id) = rx_scanner_end.recv() => {
                 cancel_count -= 1;
-                println!("Scanner subscription req_id: {req_id} end, {cancel_count}");
+                println!("Scanner subscription (req_id: {req_id}) end");
                 client.cancel_scanner_subscription(req_id).await.unwrap();
-                if result_count == 0 && cancel_count == 0 {
+            },
+            _ = sleep(Duration::from_millis(100)) => {
+                if result_count == 0 && cancel_count == 0{
                     break;
                 }
-            },
+            }
             _ = sleep(Duration::from_secs(10)) => {
-                println!("Таймаут: операция не завершилась за 10 секунд");
+                println!("Timeout");
+                break;
             }
         }
     }
 
     assert!(result_count == 0);
     assert!(cancel_count == 0);
-
-    println!("requests done: {}, {}", result_count, cancel_count);
 
     let _ = client.disconnect().await;
     Ok(())

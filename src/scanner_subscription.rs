@@ -2464,7 +2464,7 @@ impl ScannerDate {
             return Err(ScannerParametersError::IncorrectMonthNumberInDate(mm));
         }
 
-        if &yyyy > &3000 || &yyyy < &1500 {
+        if yyyy > 3000 || yyyy < 1500 {
             return Err(ScannerParametersError::IncorrectYearNumberInDate(yyyy));
         }
 

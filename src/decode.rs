@@ -996,8 +996,6 @@ pub trait Local: wrapper::LocalWrapper {
                     number_of_elements @ 0: i32,
             );
 
-            println!("scanner_data_msg: req_id done:: {:?}", &req_id);
-
             let mut results = Vec::with_capacity(number_of_elements as usize);
 
             for index in 0..number_of_elements {
